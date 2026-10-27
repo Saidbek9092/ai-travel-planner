@@ -26,3 +26,18 @@ export const STATUS_LABELS: Record<TripStatus, string> = {
   completed: 'Done',
   failed: 'Something went wrong',
 };
+
+/** Day colours 1–5, cycled for longer trips; map pins also carry the stop number. */
+export const DAY_COLORS = ['#0F7B5F', '#2952CC', '#C46A00', '#7A4CD9', '#C2361F'] as const;
+
+export function dayColor(day: number): string {
+  return DAY_COLORS[(day - 1) % DAY_COLORS.length] ?? DAY_COLORS[0];
+}
+
+/** Rating word shown next to the 0–10 hotel score. */
+export function ratingWord(rating: number): string {
+  if (rating >= 9) return 'Superb';
+  if (rating >= 8) return 'Very good';
+  if (rating >= 7) return 'Good';
+  return 'Fair';
+}

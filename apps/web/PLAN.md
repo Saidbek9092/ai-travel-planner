@@ -11,8 +11,8 @@
 | Milestone | Tickets | Outcome | Status |
 | --- | --- | --- | --- |
 | **M1 · Foundation** | T1 – T4 | Monorepo, shared contracts, empty Next.js app with UI kit running on `pnpm dev` | ✅ Done (2026-10-27) |
-| **M2 · Data layer** | T5 – T7 | Mock agent, SSE parser and `useAgentStream` hook, fully tested without any UI | ⏳ Next |
-| **M3 · UI** | T8 – T13 | Dashboard and all its components, driven by the mock agent | — |
+| **M2 · Data layer** | T5 – T7 | Mock agent, SSE parser and `useAgentStream` hook, fully tested without any UI | ✅ Done (2026-10-27) |
+| **M3 · UI** | T8 – T13 | Dashboard and all its components, driven by the mock agent | ✅ Done (2026-10-27) |
 | **M4 · Resilience & ship** | T14 – T17 | Failure/resume/deep links, polish, end-to-end tests, CI and Vercel deploy | — |
 | **M5 · Chat & top bar** | T18 – T20 | `MESSAGE` packets in the hook, `AgentChat` with "Confirmed" decisions, destination bar with weather, rate and local time | — |
 | **M6 · Design v2** | T21 – T26 | The design's look and live Trip Overview: tokens and layout, `DRAFT` handling, agent board and banners, reconnect / cancel / countdown, mobile layouts, My trips | — |
