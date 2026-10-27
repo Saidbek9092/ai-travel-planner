@@ -1,0 +1,33 @@
+# Keep Claude out of generated, bulky or irrelevant files.
+# (Enforced via permissions.deny in .claude/settings.json — Claude Code reads that file.)
+
+# dependencies
+node_modules/
+
+# build output & caches
+dist/
+build/
+out/
+.next/
+.turbo/
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+*.tsbuildinfo
+next-env.d.ts
+
+# lockfile (≈260 KB, never useful to read)
+pnpm-lock.yaml
+
+# logs & uploads
+*.log
+logs/
+uploads/
+
+# OS / certificates
+.DS_Store
+*.pem
+.vercel/
+
+# NOTE: the two design PNGs at the repo root are intentionally NOT ignored.

@@ -1,6 +1,6 @@
 # ai-travel-agent — Implementation Plan
 
-> Step-by-step plan for building the backend described in [`CLAUDE.md`](./CLAUDE.md)
+> Step-by-step plan for building the backend described in [`SPEC.md`](./SPEC.md)
 > (agent spec) and [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) (system design).
 > Each ticket is one branch / one PR, small enough to review on its own.
 
@@ -63,7 +63,7 @@ pipe end to end on day 3, gives the frontend a real server to talk to, and lets 
 replace its stub without touching anything else.
 
 **Shared with the web plan:** B1 and B2 are the same work as web T1 and T2
-([`../web/CLAUDE.md`](../web/CLAUDE.md) §12). They landed on `main` through the web branch (PR #1), so the
+([`../web/SPEC.md`](../web/SPEC.md) §12). They landed on `main` through the web branch (PR #1), so the
 backend builds on that setup. Shared files follow the ownership rules in ARCHITECTURE.md §12.6.
 
 ### Definition of done (every ticket)
@@ -73,7 +73,7 @@ backend builds on that setup. Shared files follow the ownership rules in ARCHITE
 - No test calls Anthropic, SerpAPI, Tavily or a real database (fake `LlmFactory`, `TOOLS_MODE=mock`, `MemorySaver`).
 - Relative imports use the `.js` extension (ESM + `NodeNext`).
 - New behaviour has tests as listed in the ticket.
-- If the implementation has to deviate from `CLAUDE.md`, the spec is updated in the same PR.
+- If the implementation has to deviate from `SPEC.md`, the spec is updated in the same PR.
 
 Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
@@ -118,7 +118,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 **Tasks**
 - `packages/contracts/package.json`: name `@ai-travel/contracts`, `"type": "module"`, `exports` → `dist/index.js` + `.d.ts`, scripts `build: tsc`, `dev: tsc --watch`, `test`, `typecheck`.
-- `src/trip.ts`, `src/sse-events.ts`, `src/index.ts` exactly as in CLAUDE.md §5.1 / §5.2.
+- `src/trip.ts`, `src/sse-events.ts`, `src/index.ts` exactly as in SPEC.md §5.1 / §5.2.
 - **Zod 4 check:** confirm the pinned `zod` version works with `@langchain/core` / `@langchain/anthropic` `withStructuredOutput` (a 10-line spike is enough). If not, pin the catalog to a compatible version now — both apps depend on this choice.
 - Tests: blueprint example packets parse; malformed packets rejected (wrong `type`, missing fields, percent > 100, bad coordinates, non-UUID `threadId`); `TripRequestSchema` bounds.
 
@@ -129,15 +129,15 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B3 — Agent scaffold + validated config · M
 
-**Goal:** an empty `ai-travel-agent` that builds, starts on the right port and refuses bad env (CLAUDE.md §1–§4).
+**Goal:** an empty `ai-travel-agent` that builds, starts on the right port and refuses bad env (SPEC.md §1–§4).
 
 **Depends on:** B1, B2
 
 **Tasks**
-- `apps/agent/package.json`: name `ai-travel-agent`, `"type": "module"`, dependencies and scripts from CLAUDE.md §3, `@ai-travel/contracts: workspace:*`.
+- `apps/agent/package.json`: name `ai-travel-agent`, `"type": "module"`, dependencies and scripts from SPEC.md §3, `@ai-travel/contracts: workspace:*`.
 - `tsconfig.json` extending the base with `module`/`moduleResolution: NodeNext`, `outDir: dist`.
 - ESLint flat config (`typescript-eslint`), Vitest config (`environment: node`, `NODE_ENV=test`).
-- `src/config.ts`: Zod schema for every variable in CLAUDE.md §4 — `PORT` derived from `CONDUCTOR_PORT + 1` / 4000, `WEB_ORIGIN` comma list with the localhost default (required in `production`), `TOOLS_MODE`, `RUN_TIMEOUT_MS`, rate-limit values, optional keys. Print issues and `process.exit(1)` on failure. Export a pure `parseConfig(env)` for tests.
+- `src/config.ts`: Zod schema for every variable in SPEC.md §4 — `PORT` derived from `CONDUCTOR_PORT + 1` / 4000, `WEB_ORIGIN` comma list with the localhost default (required in `production`), `TOOLS_MODE`, `RUN_TIMEOUT_MS`, rate-limit values, optional keys. Print issues and `process.exit(1)` on failure. Export a pure `parseConfig(env)` for tests.
 - `.env.example` with every variable and a one-line comment each.
 - Placeholder `src/server.ts` that logs the port and listens.
 - Tests: `test/config.test.ts` — defaults, `CONDUCTOR_PORT` derivation, `PORT` wins, `WEB_ORIGIN` list parsing, production without `WEB_ORIGIN` fails, missing `ANTHROPIC_API_KEY` fails.
@@ -150,7 +150,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B4 — HTTP skeleton: middlewares, errors, `/health` · M
 
-**Goal:** the Express app with everything except the trip routes (CLAUDE.md §5.1, §5.3, §5.4).
+**Goal:** the Express app with everything except the trip routes (SPEC.md §5.1, §5.3, §5.4).
 
 **Depends on:** B3
 
@@ -172,7 +172,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B5 — `SseStreamer` · S
 
-**Goal:** the only way packets reach the wire (CLAUDE.md §6, ARCHITECTURE.md §6.1).
+**Goal:** the only way packets reach the wire (SPEC.md §6, ARCHITECTURE.md §6.1).
 
 **Depends on:** B4
 
@@ -189,13 +189,13 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B6 — State, graph wiring and stub nodes · M
 
-**Goal:** the real `StateGraph` with real routers and loop, running on placeholder nodes (CLAUDE.md §8.1–§8.3).
+**Goal:** the real `StateGraph` with real routers and loop, running on placeholder nodes (SPEC.md §8.1–§8.3).
 
 **Depends on:** B3
 
 **Tasks**
 - `agent/state.ts`: `TravelAgentStateAnnotation` (replace / append reducers), `MAX_BUDGET_RETRIES`, `initialState(request)`, `nextStep(state)`, `log(state, agent, message, level?)`.
-- `agent/graph.ts`: `buildGraph(deps)` with the five nodes, edges and the two pure routers exactly as in CLAUDE.md §8.2; `retryPolicy` on supervisor and planner; export `CompiledTravelGraph` type.
+- `agent/graph.ts`: `buildGraph(deps)` with the five nodes, edges and the two pure routers exactly as in SPEC.md §8.2; `retryPolicy` on supervisor and planner; export `CompiledTravelGraph` type.
 - `createCheckpointer(config)` returning `MemorySaver` for now (Postgres in B16).
 - Stub node factories in `agent/nodes/*.node.ts` that return canned, contract-valid data and logs — each later ticket replaces one stub.
 - Tests: `test/graph.routes.test.ts` — every router for every relevant status / itinerary combination; `test/state.test.ts` — reducers (logs/warnings append, others replace), `nextStep` across re-plans; a compile test proving no node name collides with a state key.
@@ -207,7 +207,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B7 — `runTrip` stream controller + `POST /api/trips` · M
 
-**Goal:** a real SSE stream from the API, end to end (CLAUDE.md §5.2, §7; ARCHITECTURE.md §6.3).
+**Goal:** a real SSE stream from the API, end to end (SPEC.md §5.2, §7; ARCHITECTURE.md §6.3).
 
 **Depends on:** B5, B6
 
@@ -228,7 +228,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B8 — Tool layer + mock travel engine · M
 
-**Goal:** a `TravelSearchTool` the nodes can call, working fully offline (CLAUDE.md §10).
+**Goal:** a `TravelSearchTool` the nodes can call, working fully offline (SPEC.md §10).
 
 **Depends on:** B6
 
@@ -245,7 +245,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B9 — SerpAPI tool (live flights & hotels) · L
 
-**Goal:** real prices from Google Flights / Google Hotels with safe degradation (CLAUDE.md §10).
+**Goal:** real prices from Google Flights / Google Hotels with safe degradation (SPEC.md §10).
 
 **Depends on:** B8
 
@@ -265,7 +265,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B10 — LLM factory + fake factory · S
 
-**Goal:** one place that builds structured-output models with fallback (CLAUDE.md §9).
+**Goal:** one place that builds structured-output models with fallback (SPEC.md §9).
 
 **Depends on:** B6
 
@@ -282,7 +282,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B11 — Budget Auditor node · S
 
-**Goal:** the deterministic cost check and re-plan decision (CLAUDE.md §8.4, ARCHITECTURE.md §4.3), including transfers, per-pass records and over-budget suggestions.
+**Goal:** the deterministic cost check and re-plan decision (SPEC.md §8.4, ARCHITECTURE.md §4.3), including transfers, per-pass records and over-budget suggestions.
 
 **Depends on:** B6
 
@@ -300,7 +300,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B12 — Flight Agent + Hotel Agent nodes · M
 
-**Goal:** search, sort and select flights and hotels, honouring cheaper mode (CLAUDE.md §8.4).
+**Goal:** search, sort and select flights and hotels, honouring cheaper mode (SPEC.md §8.4).
 
 **Depends on:** B8
 
@@ -319,7 +319,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B13 — Supervisor node · M
 
-**Goal:** turn free text into a structured trip, safely (CLAUDE.md §8.4, ARCHITECTURE.md §9).
+**Goal:** turn free text into a structured trip, safely (SPEC.md §8.4, ARCHITECTURE.md §9).
 
 **Depends on:** B10
 
@@ -339,7 +339,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B14 — Planner node (transfers, forecast, day by day) · L
 
-**Goal:** airport transfers, a per-day forecast, and a day-by-day plan with real coordinates and a daily spend estimate, produced one day at a time (CLAUDE.md §8.4).
+**Goal:** airport transfers, a per-day forecast, and a day-by-day plan with real coordinates and a daily spend estimate, produced one day at a time (SPEC.md §8.4).
 
 **Depends on:** B10, B8 (weather client in B23 provides `getForecast`; stub it until then)
 
@@ -362,7 +362,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B15 — Full-graph integration tests · M
 
-**Goal:** prove the real graph behaves as the architecture says, with no network (CLAUDE.md §13).
+**Goal:** prove the real graph behaves as the architecture says, with no network (SPEC.md §13).
 
 **Depends on:** B7, B11, B12, B13, B14
 
@@ -384,7 +384,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B16 — PostgreSQL checkpointer, resume and trip lookup · L
 
-**Goal:** runs survive failures and reloads (CLAUDE.md §5.2, §11; ARCHITECTURE.md §4.5).
+**Goal:** runs survive failures and reloads (SPEC.md §5.2, §11; ARCHITECTURE.md §4.5).
 
 **Depends on:** B15
 
@@ -420,7 +420,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B18 — Observability · S
 
-**Goal:** every run is traceable by `threadId` (CLAUDE.md §12, ARCHITECTURE.md §10).
+**Goal:** every run is traceable by `threadId` (SPEC.md §12, ARCHITECTURE.md §10).
 
 **Depends on:** B15
 
@@ -498,7 +498,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B22 — Chat messages and confirmed decisions from the nodes · M
 
-**Goal:** every node speaks to the user in plain language, and final choices are flagged (CLAUDE.md §8.5, ARCHITECTURE.md §4.6).
+**Goal:** every node speaks to the user in plain language, and final choices are flagged (SPEC.md §8.5, ARCHITECTURE.md §4.6).
 
 **Depends on:** B15, B21
 
@@ -517,7 +517,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B23 — Trip context endpoint (weather + exchange rate) · M
 
-**Goal:** `GET /api/trip-context` for the web destination bar, and the forecast the Planner uses (CLAUDE.md §10.1, ARCHITECTURE.md §7.1).
+**Goal:** `GET /api/trip-context` for the web destination bar, and the forecast the Planner uses (SPEC.md §10.1, ARCHITECTURE.md §7.1).
 
 **Depends on:** B4, B21
 
@@ -545,7 +545,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B24 — `DRAFT` packet, progress detail, checkpoint rows and log kinds · M
 
-**Goal:** the browser can show the trip as it takes shape (CLAUDE.md §7, ARCHITECTURE.md §6.2–§6.3).
+**Goal:** the browser can show the trip as it takes shape (SPEC.md §7, ARCHITECTURE.md §6.2–§6.3).
 
 **Depends on:** B15, B21
 
@@ -562,7 +562,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ### B25 — Run registry, reconnect, cancel and rate-limit countdown · L
 
-**Goal:** a run survives its connection; the user can reconnect or stop it (CLAUDE.md §7, ARCHITECTURE.md §6.5, §7).
+**Goal:** a run survives its connection; the user can reconnect or stop it (SPEC.md §7, ARCHITECTURE.md §6.5, §7).
 
 **Depends on:** B7, B15
 

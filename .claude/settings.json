@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./node_modules/**)",
+      "Read(./**/node_modules/**)",
+      "Read(./**/dist/**)",
+      "Read(./**/build/**)",
+      "Read(./**/out/**)",
+      "Read(./**/.next/**)",
+      "Read(./**/.turbo/**)",
+      "Read(./**/coverage/**)",
+      "Read(./**/test-results/**)",
+      "Read(./**/playwright-report/**)",
+      "Read(./**/*.tsbuildinfo)",
+      "Read(./**/*.log)",
+      "Read(./**/uploads/**)",
+      "Read(./pnpm-lock.yaml)"
+    ]
+  }
+}
