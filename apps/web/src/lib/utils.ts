@@ -41,3 +41,19 @@ export function formatDate(iso: string, options: { locale?: string; timeZone?: s
     ...(timeZone ? { timeZone } : {}),
   }).format(new Date(iso));
 }
+
+/** `2026-11-12T06:40:00+05:00` → `06:40`: the clock time in the timestamp's own offset. */
+export function formatLegTime(iso: string): string {
+  return iso.slice(11, 16);
+}
+
+/** Whole days between the calendar dates of two ISO timestamps (ignoring offsets). */
+export function dayDifference(fromIso: string, toIso: string): number {
+  return Math.round((Date.parse(`${toIso.slice(0, 10)}T00:00:00Z`) - Date.parse(`${fromIso.slice(0, 10)}T00:00:00Z`)) / 86_400_000);
+}
+
+export function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return [h ? `${h} h` : '', m ? `${m} m` : ''].filter(Boolean).join(' ') || '0 m';
+}

@@ -4,6 +4,7 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     // shadcn/ui generated components (components/ui, not hand-edited) don't compile with it.
     "exactOptionalPropertyTypes": false,
     "declaration": false,
