@@ -1,3 +1,4 @@
+import { buildGraph, createCheckpointer } from './agent/graph.js';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createLogger } from './utils/logger.js';
@@ -6,7 +7,8 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 const config = loadConfig();
 const logger = createLogger();
-const app = createApp({ config, logger });
+const graph = buildGraph({ checkpointer: createCheckpointer(config) });
+const app = createApp({ config, logger, graph });
 
 const server = app.listen(config.PORT, (error) => {
   if (error) {
