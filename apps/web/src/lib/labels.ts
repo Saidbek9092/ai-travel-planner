@@ -1,4 +1,14 @@
-import type { AgentName, LogLevel, TripStatus } from '@ai-travel/contracts';
+import type { AgentName, DecisionTopic, LogLevel, TripStatus, WeatherIcon } from '@ai-travel/contracts';
+import {
+  CloudFogIcon,
+  CloudIcon,
+  CloudLightningIcon,
+  CloudRainIcon,
+  CloudSnowIcon,
+  CloudSunIcon,
+  SunIcon,
+  type LucideIcon,
+} from 'lucide-react';
 
 /** Agent name colours for the dark terminal panel (bg-zinc-950). */
 export const AGENT_COLORS: Record<AgentName, string> = {
@@ -40,4 +50,56 @@ export function ratingWord(rating: number): string {
   if (rating >= 8) return 'Very good';
   if (rating >= 7) return 'Good';
   return 'Fair';
+}
+
+/** Topic names on the "Confirmed" badge in the chat. */
+export const decisionLabels: Record<DecisionTopic, string> = {
+  trip: 'Brief',
+  itinerary: 'Itinerary',
+  flight: 'Flight',
+  hotel: 'Hotel',
+  transfers: 'Transfers',
+  budget: 'Budget',
+};
+
+/** Agent names as people read them (the contract names are identifiers). */
+export const agentDisplayNames: Record<AgentName, string> = {
+  System: 'System',
+  Supervisor: 'Supervisor',
+  FlightAgent: 'Flight Agent',
+  HotelAgent: 'Hotel Agent',
+  Planner: 'Itinerary Planner',
+  BudgetAuditor: 'Budget Auditor',
+};
+
+/** Agent name colours on the light chat background. */
+export const AGENT_CHAT_COLORS: Record<AgentName, string> = {
+  System: 'text-zinc-600',
+  Supervisor: 'text-sky-700',
+  FlightAgent: 'text-violet-700',
+  HotelAgent: 'text-emerald-700',
+  Planner: 'text-fuchsia-700',
+  BudgetAuditor: 'text-cyan-700',
+};
+
+export const WEATHER_ICONS: Record<WeatherIcon, LucideIcon> = {
+  clear: SunIcon,
+  'partly-cloudy': CloudSunIcon,
+  cloudy: CloudIcon,
+  fog: CloudFogIcon,
+  rain: CloudRainIcon,
+  snow: CloudSnowIcon,
+  storm: CloudLightningIcon,
+};
+
+const celsius = new Intl.NumberFormat('en-US', { style: 'unit', unit: 'celsius', maximumFractionDigits: 0 });
+const rateFormat = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 4 });
+
+export function formatTemperature(value: number): string {
+  return celsius.format(value);
+}
+
+/** `1 USD = 0.92 EUR` */
+export function formatRate(rate: number, quote: string): string {
+  return `1 USD = ${rateFormat.format(rate)} ${quote}`;
 }

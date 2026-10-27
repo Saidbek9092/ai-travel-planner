@@ -8,13 +8,15 @@
 
 ## Overview
 
+> **No tests for now.** Test tasks, "Tests:" lines and test-only tickets (T16) are out of scope until the user brings tests back.
+
 | Milestone | Tickets | Outcome | Status |
 | --- | --- | --- | --- |
 | **M1 · Foundation** | T1 – T4 | Monorepo, shared contracts, empty Next.js app with UI kit running on `pnpm dev` | ✅ Done (2026-10-27) |
 | **M2 · Data layer** | T5 – T7 | Mock agent, SSE parser and `useAgentStream` hook, fully tested without any UI | ✅ Done (2026-10-27) |
 | **M3 · UI** | T8 – T13 | Dashboard and all its components, driven by the mock agent | ✅ Done (2026-10-27) |
-| **M4 · Resilience & ship** | T14 – T17 | Failure/resume/deep links, polish, end-to-end tests, CI and Vercel deploy | — |
-| **M5 · Chat & top bar** | T18 – T20 | `MESSAGE` packets in the hook, `AgentChat` with "Confirmed" decisions, destination bar with weather, rate and local time | — |
+| **M4 · Resilience & ship** | T14 – T17 | Failure/resume/deep links, polish, end-to-end tests, CI and Vercel deploy | ✅ Done in code (2026-10-27); T16 dropped (no tests); the Vercel project itself is a manual step, see `DEPLOY.md` |
+| **M5 · Chat & top bar** | T18 – T20 | `MESSAGE` packets in the hook, `AgentChat` with "Confirmed" decisions, destination bar with weather, rate and local time | ✅ Done (2026-10-27) |
 | **M6 · Design v2** | T21 – T26 | The design's look and live Trip Overview: tokens and layout, `DRAFT` handling, agent board and banners, reconnect / cancel / countdown, mobile layouts, My trips | — |
 
 ### Dependency graph
@@ -367,7 +369,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ## M4 · Resilience & ship
 
-### T14 — Failure, resume and deep links · M
+### T14 — Failure, resume and deep links · M · ✅ Done
 
 **Depends on:** T9–T13 · Spec: SPEC.md §5.3, §6
 
@@ -383,7 +385,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-### T15 — Polish, accessibility and performance · M
+### T15 — Polish, accessibility and performance · M · ✅ Done (axe: 0 serious at 375/768/1280/1536 px and Lighthouse idle page perf 93 / a11y 100 / best-practices 100 / SEO 100, both checked before the tests were removed)
 
 **Depends on:** T14
 
@@ -398,7 +400,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-### T16 — End-to-end tests (Playwright) · M
+### T16 — End-to-end tests (Playwright) · M · ⏹ Dropped (the app has no tests for now)
 
 **Depends on:** T15
 
@@ -413,7 +415,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-### T17 — CI and Vercel deployment · S
+### T17 — CI and Vercel deployment · S · ✅ CI + `vercel.json` done; creating the Vercel project and env vars is manual (`DEPLOY.md`)
 
 **Depends on:** T16
 
@@ -452,7 +454,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-### T19 — `AgentChat` + `MESSAGE` handling · M
+### T19 — `AgentChat` + `MESSAGE` handling · M · ✅ Done
 
 **Goal:** a conversation view where agents talk in plain language and confirmed decisions stand out (SPEC.md §7, ARCHITECTURE.md §4.6).
 
@@ -470,7 +472,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-### T20 — Top bar: weather, currency and local time · M
+### T20 — Top bar: weather, currency and local time · M · ✅ Done
 
 **Goal:** show the destination, current weather, currency rate and local time under the header (SPEC.md §5.4, §7; ARCHITECTURE.md §7.1).
 

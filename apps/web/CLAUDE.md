@@ -7,7 +7,7 @@ Read on demand, only the § the task names: `SPEC.md` (this app), `PLAN.md` (tic
 `../../ARCHITECTURE.md` (system design, SSE protocol, contracts — source of truth).
 
 ## Commands
-- From this folder: `pnpm dev` (port `${CONDUCTOR_PORT:-3000}`) · `pnpm build` · `pnpm lint` · `pnpm typecheck`
+- From this folder: `pnpm dev` (port `${CONDUCTOR_PORT:-3000}`) · `pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm mock-agent` (fake agent on `CONDUCTOR_PORT + 1`)
 - Before calling a task done: `pnpm lint && pnpm typecheck`
 
 ## Conventions
@@ -25,9 +25,13 @@ Visual design: `../../design-agents-planning.png` (live run) and `../../design-t
 (finished trip). "Check the design" (or any UI task): open BOTH, then use the `design-check` skill.
 The design wins over the spec; report mismatches.
 
-## TEMPORARY — no tests
-Do NOT write, add or edit tests (unit, component, e2e) or test tickets. Existing tests may be run.
-Remove this section when the user lifts the rule.
+## No tests in this app
+This app has no tests, test runner or test configuration (unit, component and e2e were removed to save time).
+- Do NOT write, add or restore tests, test dependencies (vitest, Testing Library, jsdom, Playwright, axe) or test configs.
+- Skip "Tests:" lines in tickets and the test sections of `SPEC.md` / `PLAN.md`; they are out of scope.
+- Verify by running the app (`pnpm dev` + `pnpm mock-agent`) and by `pnpm lint && pnpm typecheck && pnpm build`.
+- `test/mock-agent/` and `test/fixtures/` are dev tooling for `pnpm mock-agent`, not tests; keep them.
+- Remove this section only when the user brings tests back.
 
 ## Workflow
 Implementing a PLAN ticket → `implement-ticket` skill.

@@ -219,8 +219,10 @@ export function useAgentStream(initial?: InitialRun) {
   const start = useCallback((request: TripRequest) => void run('/api/trips', request, request), [run]);
 
   const resume = useCallback(() => {
-    const { threadId, status } = stateRef.current;
-    if (threadId && status === 'failed') void run(`/api/trips/${threadId}/resume`, null, null);
+    const { threadId, status, result } = stateRef.current;
+    // `idle` with a thread id = a deep link to a trip that never finished.
+    const resumable = status === 'failed' || (status === 'idle' && result === null);
+    if (threadId && resumable) void run(`/api/trips/${threadId}/resume`, null, null);
   }, [run]);
 
   const cancel = useCallback(() => {
