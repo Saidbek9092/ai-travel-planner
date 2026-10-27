@@ -2,6 +2,9 @@ import { Annotation, type LangGraphRunnableConfig } from '@langchain/langgraph';
 import type {
   AgentName,
   BudgetPass,
+  Callout,
+  DecisionTopic,
+  DraftPayload,
   Flight,
   Hotel,
   ItineraryDay,
@@ -21,6 +24,17 @@ export interface LogEntry {
   step: number;
   level: LogLevel;
   kind: LogKind;
+}
+
+/** Friendly chat sentence (ARCHITECTURE.md §4.6); shares the `step` of the node's logs. */
+export interface ChatMessage {
+  timestamp: string;
+  agent: AgentName;
+  text: string;
+  step: number;
+  /** A topic marks a confirmed decision; `null` is an ordinary update. */
+  decision: DecisionTopic | null;
+  callout: Callout | null;
 }
 
 /** Maximum number of cheaper-mode re-plans before the Budget Auditor gives up. */
@@ -56,7 +70,10 @@ export const TravelAgentStateAnnotation = Annotation.Root({
   status: replace<TripStatus>(() => 'parsing'),
   error: replace<string | null>(() => null),
   warnings: append<string>(),
+  /** Topics the agents have confirmed so far; the Budget Auditor confirms whatever is missing at the end. */
+  confirmed: append<DecisionTopic>(),
   logs: append<LogEntry>(),
+  messages: append<ChatMessage>(),
 });
 
 export type TravelAgentState = typeof TravelAgentStateAnnotation.State;
@@ -84,6 +101,33 @@ export function log(
   kind: LogKind = 'log',
 ): LogEntry {
   return { timestamp: new Date().toISOString(), agent, message, step: nextStep(state), level, kind };
+}
+
+/** Builds a chat `ChatMessage` for the current step. Pass the node's `logs` so it shares their `step`. */
+export function say(
+  state: Pick<TravelAgentState, 'logs'>,
+  agent: AgentName,
+  text: string,
+  { decision = null, callout = null }: { decision?: DecisionTopic | null; callout?: Callout | null } = {},
+): ChatMessage {
+  return { timestamp: new Date().toISOString(), agent, text, step: nextStep(state), decision, callout };
+}
+
+/** The `DRAFT` packet for the state so far: only fields an agent has already produced. */
+export function toDraft(values: Partial<TravelAgentState>): DraftPayload {
+  const draft: DraftPayload = {};
+  if (values.destination) draft.destination = values.destination;
+  if (values.origin) draft.origin = values.origin;
+  if (values.budget) draft.budget = values.budget;
+  if (values.durationDays) draft.durationDays = values.durationDays;
+  if (values.startDate) draft.startDate = values.startDate;
+  if (values.flights?.length) draft.flights = values.flights;
+  if (values.hotels?.length) draft.hotels = values.hotels;
+  if (values.transfers?.length) draft.transfers = values.transfers;
+  if (values.itinerary?.length) draft.itinerary = values.itinerary;
+  if (values.dailyExpensesEstimate) draft.dailyExpensesEstimate = values.dailyExpensesEstimate;
+  if (values.totalCost) draft.totalCost = values.totalCost;
+  return draft;
 }
 
 /** "$1,000" — whole dollars with thousands separators; cents only when present. */

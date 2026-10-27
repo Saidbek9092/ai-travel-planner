@@ -2,7 +2,7 @@ import type { ResultPayload } from '@ai-travel/contracts';
 import { AlertTriangleIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn, formatUsd } from '@/lib/utils';
+import { cn, formatUsd, nightsFor } from '@/lib/utils';
 
 export function BudgetSummary({ result }: { result: ResultPayload }) {
   const { totalCost, budget, durationDays, flights, hotels, transfers, dailyExpensesEstimate, warnings } = result;
@@ -10,7 +10,7 @@ export function BudgetSummary({ result }: { result: ResultPayload }) {
   const scale = Math.max(budget, totalCost) || 1;
   const parts = [
     { label: 'Flights', amount: flights[0]?.price ?? 0 },
-    { label: 'Hotel', amount: (hotels[0]?.pricePerNight ?? 0) * durationDays },
+    { label: 'Hotel', amount: (hotels[0]?.pricePerNight ?? 0) * nightsFor(durationDays) },
     { label: 'Transfers', amount: transfers.reduce((sum, t) => sum + t.priceUsd, 0) },
     { label: 'Daily spend', amount: dailyExpensesEstimate * durationDays },
   ];

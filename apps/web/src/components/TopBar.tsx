@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { TripContextStatus } from '@/hooks/useTripContext';
 import { WEATHER_ICONS, formatRate, formatTemperature } from '@/lib/labels';
 import { localTime } from '@/lib/time';
+import { nightsFor } from '@/lib/utils';
 
 interface TopBarProps {
   status: TripContextStatus;
@@ -33,8 +34,8 @@ const Sub = ({ children }: { children: ReactNode }) => <p className="text-xs tex
 function dateRange(startDate: string, durationDays: number): string {
   const fmt = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   const start = new Date(`${startDate}T00:00:00Z`);
-  const end = new Date(start.getTime() + durationDays * 86_400_000);
-  const nights = durationDays;
+  const nights = nightsFor(durationDays);
+  const end = new Date(start.getTime() + nights * 86_400_000);
   return `${fmt.format(start)} – ${fmt.format(end)} · ${nights} ${nights === 1 ? 'night' : 'nights'}`;
 }
 

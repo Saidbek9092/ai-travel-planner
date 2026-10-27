@@ -9,3 +9,8 @@ export function addDays(isoDate: string, days: number): string {
 export function today(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
+
+/** Hotel nights for a trip of `durationDays` days: the last day is the departure day (at least one night). */
+export function nightsFor(durationDays: number): number {
+  return Math.max(1, durationDays - 1);
+}

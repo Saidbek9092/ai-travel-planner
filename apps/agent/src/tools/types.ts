@@ -21,11 +21,16 @@ export interface HotelQuery {
   maxPricePerNight?: number;
 }
 
-export interface TravelSearchTool {
+/** Flight and hotel search: what SerpAPI and the mock engine implement. */
+export interface SearchTool {
   readonly name: 'serpapi' | 'mock';
   searchFlights(query: FlightQuery, signal?: AbortSignal): Promise<Flight[]>;
   searchHotels(query: HotelQuery, signal?: AbortSignal): Promise<Hotel[]>;
-  /** One entry per trip day; `null` when no forecast is available (filled in by B23). */
+}
+
+/** What the nodes see: search plus the daily forecast (Open-Meteo, independent of the search provider). */
+export interface TravelSearchTool extends SearchTool {
+  /** One entry per trip day; `null` when no forecast is available. */
   getForecast(
     destination: string,
     startDate: string | null,

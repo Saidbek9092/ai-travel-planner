@@ -1,11 +1,12 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
-import type { ActiveRuns } from './agent/activeRuns.js';
+import type { RunRegistry } from './agent/runRegistry.js';
 import type { CompiledTravelGraph } from './agent/graph.js';
 import type { Config } from './config.js';
 import { createErrorHandler } from './middlewares/errorHandler.js';
 import { createRateLimiters, type RateLimiters } from './middlewares/rateLimiter.js';
+import { createTripContextRouter } from './routes/tripContext.js';
 import { createTripsRouter } from './routes/trips.js';
 import { notFound } from './utils/errors.js';
 import type { Logger } from './utils/logger.js';
@@ -14,7 +15,7 @@ export interface AppDeps {
   config: Config;
   logger: Logger;
   graph: CompiledTravelGraph;
-  activeRuns: ActiveRuns;
+  registry: RunRegistry;
   /** Injected by tests to use low limits; built from `config` otherwise. */
   rateLimiters?: RateLimiters;
 }
@@ -27,7 +28,7 @@ export function createApp({
   config,
   logger,
   graph,
-  activeRuns,
+  registry,
   rateLimiters = createRateLimiters(config),
 }: AppDeps): Express {
   const app = express();
@@ -41,7 +42,7 @@ export function createApp({
     cors({
       origin: config.WEB_ORIGIN,
       methods: ['GET', 'POST'],
-      exposedHeaders: ['X-Thread-Id'],
+      exposedHeaders: ['X-Thread-Id', 'Retry-After'],
     }),
   );
   app.use(express.json({ limit: '10kb' }));
@@ -59,7 +60,8 @@ export function createApp({
   });
 
   app.use('/api', rateLimiters.generalLimiter);
-  app.use('/api', createTripsRouter({ config, graph, logger, activeRuns, runLimiter: rateLimiters.runLimiter }));
+  app.use('/api', createTripsRouter({ graph, registry, runLimiter: rateLimiters.runLimiter }));
+  app.use('/api', createTripContextRouter({ config }));
 
   app.use((req, _res, next) => {
     next(notFound(`Route ${req.method} ${req.path} not found`));

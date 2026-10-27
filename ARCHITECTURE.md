@@ -1138,5 +1138,5 @@ them to work; review them before implementation.
 | `RunRegistry`, `GET …/stream`, `POST …/cancel`, `retryAfterSeconds` | Reconnect-and-catch-up, "Stop run", and the rate-limit countdown from the design's resilience states |
 | Trip context: currency, time zone, outlook, optional `origin` | The destination bar shows currency, local time and the difference to the traveller's home time |
 | `AgentName` `Planner` (was `ItineraryPlanner`) | The design's log lines and agent colours use `Planner`; the display name stays "Itinerary Planner" |
-| Hotel cost uses `durationDays` nights | Blueprint formula, kept as is (one night per day). Switch to `durationDays - 1` if trips should end on a departure day |
+| Hotel cost uses `durationDays − 1` nights (min. 1) | The last day is the departure day; flight return date and hotel check-out are `startDate + nights` |
 | Single traveller, USD only | Not specified in the blueprint; easy to extend later via `TripRequest` |

@@ -13,7 +13,8 @@ import type { TravelSearchTool } from '../../tools/index.js';
 import { addDays } from '../../utils/dates.js';
 import { dropOutliers } from '../../utils/geo.js';
 import type { LlmFactory, StructuredResult } from '../llm.js';
-import { formatUsd, llmFallbackLog, log, type LogEntry, type TravelNode } from '../state.js';
+import { itineraryReady, transferProposal, transfersConfirmed, weatherPrep } from '../messages.js';
+import { formatUsd, llmFallbackLog, log, say, type ChatMessage, type LogEntry, type TravelNode } from '../state.js';
 
 export interface PlannerNodeDeps {
   tools: TravelSearchTool;
@@ -65,6 +66,8 @@ export const plannerNode =
     const cheaper = state.searchMode === 'cheaper';
     const startDate = state.startDate;
     const logs: LogEntry[] = [];
+    const messages: ChatMessage[] = [];
+    const confirmed: ('transfers' | 'itinerary')[] = [];
     const used = new Set<string>();
     const ask = async <T>(call: Promise<StructuredResult<T>>): Promise<T> => {
       const { data, model } = await call;
@@ -112,6 +115,12 @@ export const plannerNode =
     logs.push(
       log(state, 'Planner', `Transfers: ${transfers.map((t) => `${t.mode} ${formatUsd(t.priceUsd)}`).join(' in, ')} out. Daily spend ~${formatUsd(dailyExpensesEstimate)}.`),
     );
+
+    if (!replan) messages.push(say(state, 'Planner', transferProposal(flight, transfers)));
+    else if (cheaper) {
+      messages.push(say(state, 'Planner', transfersConfirmed(transfers), { decision: 'transfers' }));
+      confirmed.push('transfers');
+    }
 
     // 2. Days, one call each. On a re-plan only hotel-anchored days (first and last) are re-routed, and only when the hotel changed.
     const hotelChanged = state.itineraryHotel !== hotel.name;
@@ -168,14 +177,28 @@ export const plannerNode =
         }),
       );
 
-      if (indoor) logs.push(log(state, 'Planner', `Day ${day} moved indoors (${weather.condition.toLowerCase()} forecast).`));
+      if (indoor) {
+        logs.push(log(state, 'Planner', `Day ${day} moved indoors (${weather.condition.toLowerCase()} forecast).`));
+        if (!replan) {
+          const prep = weatherPrep(day, weather.condition);
+          messages.push(say(state, 'Planner', prep.text, { callout: { tone: 'info', label: prep.label } }));
+        }
+      }
       writer?.({ kind: 'day', day, of: last, itinerary: [...days, ...(replan ? state.itinerary.slice(day) : [])] });
     }
 
     for (const model of used) if (model !== llm.primaryModel) logs.push(llmFallbackLog(state, 'Planner', model));
     logs.push(log(state, 'Planner', `Itinerary ready: ${days.length} days in ${state.destination}.`));
 
+    // The itinerary decision is made once per run; a re-plan only re-routes it.
+    if (!replan) {
+      messages.push(say(state, 'Planner', itineraryReady(days), { decision: 'itinerary' }));
+      confirmed.push('itinerary');
+    }
+
     return {
+      messages,
+      ...(confirmed.length > 0 && { confirmed }),
       itinerary: days,
       transfers,
       dailyExpensesEstimate,

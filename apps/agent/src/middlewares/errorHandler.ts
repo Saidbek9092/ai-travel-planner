@@ -50,7 +50,13 @@ export function createErrorHandler(logger: Logger): ErrorRequestHandler {
       return;
     }
 
-    const body: ErrorBody = { error: { code: appError.code, message: appError.message } };
+    const body: ErrorBody = {
+      error: {
+        code: appError.code,
+        message: appError.message,
+        ...(appError.retryAfterSeconds !== undefined && { retryAfterSeconds: appError.retryAfterSeconds }),
+      },
+    };
     res.status(appError.status).json(body);
   };
 }

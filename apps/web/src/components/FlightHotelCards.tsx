@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ratingWord } from '@/lib/labels';
-import { cn, dayDifference, formatDuration, formatLegTime, formatUsd } from '@/lib/utils';
+import { cn, dayDifference, formatDuration, formatLegTime, formatUsd, nightsFor } from '@/lib/utils';
 
 function EstimateBadge() {
   return (
@@ -93,7 +93,8 @@ function FlightCard({ flight, selected, transfers }: { flight: Flight; selected:
 }
 
 function HotelCard({ hotel, selected, durationDays }: { hotel: Hotel; selected: boolean; durationDays: number }) {
-  const total = hotel.pricePerNight * durationDays;
+  const nights = nightsFor(durationDays);
+  const total = hotel.pricePerNight * nights;
   return (
     <Card className={cn(selected && 'ring-2 ring-primary')}>
       <CardHeader>
@@ -120,7 +121,7 @@ function HotelCard({ hotel, selected, durationDays }: { hotel: Hotel; selected: 
         )}
         {hotel.transit && <p className="text-muted-foreground">{hotel.transit}</p>}
         <p className="font-mono">
-          {formatUsd(hotel.pricePerNight)} × {durationDays} night{durationDays === 1 ? '' : 's'} = {formatUsd(total)}
+          {formatUsd(hotel.pricePerNight)} × {nights} night{nights === 1 ? '' : 's'} = {formatUsd(total)}
         </p>
         {hotel.bookingUrl && (
           <a href={hotel.bookingUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">

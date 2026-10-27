@@ -1,18 +1,34 @@
-import type { ProgressPayload, ResultPayload, SseEventInput, TripRequest, TripStatus } from '@ai-travel/contracts';
+import type { ItineraryDay, ProgressPayload, ResultPayload, RunInfo, SseEventInput, TripRequest, TripStatus } from '@ai-travel/contracts';
 import type { CompiledTravelGraph } from './graph.js';
-import { initialState, log, MAX_BUDGET_RETRIES, type LogEntry, type TravelAgentState } from './state.js';
-import { abortMessage } from './activeRuns.js';
+import { initialState, log, MAX_BUDGET_RETRIES, toDraft, type ChatMessage, type LogEntry, type TravelAgentState } from './state.js';
+import { abortMessage } from './runAbort.js';
 import type { Logger } from '../utils/logger.js';
 
 const GENERIC_ERROR = 'Something went wrong while planning your trip. Please try again.';
 const INTERRUPTED_ERROR = 'Trip planning was interrupted before it finished.';
 
 /** The part of a node's state update that the stream controller reads. */
-interface NodeUpdate {
+interface NodeUpdate extends Partial<TravelAgentState> {
   logs?: LogEntry[];
+  messages?: ChatMessage[];
   retryCount?: number;
   status?: TripStatus;
 }
+
+/** Event the Planner writes after each finished day (`config.writer`). */
+interface DayEvent {
+  kind: 'day';
+  day: number;
+  of: number;
+  itinerary: ItineraryDay[];
+}
+
+const isDayEvent = (chunk: unknown): chunk is DayEvent =>
+  typeof chunk === 'object' && chunk !== null && (chunk as { kind?: unknown }).kind === 'day';
+
+/** The Planner's days move the bar from the hotel step (55) towards the audit step (75). */
+const PLANNER_START_PERCENT = 55;
+const PLANNER_END_PERCENT = 75;
 
 /** Progress after a node finishes (ARCHITECTURE.md §6.3); `null` keeps the current percentage. */
 function progressAfter(node: string, update: NodeUpdate): { status: TripStatus; percent: number | null } | null {
@@ -70,6 +86,8 @@ export interface RunTripArgs {
   /** Receives every packet in order; the HTTP route wires it to one `SseStreamer`. */
   emit: (event: SseEventInput) => void;
   threadId: string;
+  /** Model and checkpointer shown in the web app's "Run details" panel. */
+  run: Pick<RunInfo, 'model' | 'checkpointer'>;
   /** Required for a new run; ignored when `resume` is set. */
   request?: TripRequest;
   /** Continue from the last checkpoint instead of starting over. */
@@ -83,7 +101,7 @@ export interface RunTripArgs {
  * Runs the graph and turns its stream into packets: node logs → `LOG`, node + status → `PROGRESS`,
  * then exactly one `RESULT`. Never throws; failures end the stream with `RESULT failed`.
  */
-export async function runTrip({ graph, emit, threadId, request, resume = false, signal, logger }: RunTripArgs): Promise<void> {
+export async function runTrip({ graph, emit, threadId, run, request, resume = false, signal, logger }: RunTripArgs): Promise<void> {
   const config = { configurable: { thread_id: threadId }, recursionLimit: 20, ...(signal && { signal }) };
   const emitLog = (entry: LogEntry) => emit({ type: 'LOG', payload: entry });
   const emitProgress = (payload: Pick<ProgressPayload, 'progressPercent' | 'currentStatus'> & Partial<ProgressPayload>) =>
@@ -95,24 +113,57 @@ export async function runTrip({ graph, emit, threadId, request, resume = false, 
   let toolFallbackUsed = false;
   let retryCount = 0;
   let lastPercent = 5;
+  let lastCheckpointStep: number | null = null;
+  let merged: Partial<TravelAgentState> = {};
 
   try {
-    emitProgress({ progressPercent: lastPercent, currentStatus: 'parsing' });
+    emitProgress({ progressPercent: lastPercent, currentStatus: 'parsing', pass: 1, run: { ...run, lastCheckpointStep } });
 
-    // `custom` carries the Planner's per-day events; they are mapped in B24.
+    // `custom` carries the Planner's per-day events.
     const input = resume || request === undefined ? null : initialState(request);
     const stream = await graph.stream(input, { ...config, streamMode: ['updates', 'custom'] });
     for await (const [mode, chunk] of stream) {
+      if (mode === 'custom') {
+        if (!isDayEvent(chunk)) continue;
+        const percent = PLANNER_START_PERCENT + Math.round(((PLANNER_END_PERCENT - PLANNER_START_PERCENT) * chunk.day) / chunk.of);
+        emitProgress({
+          progressPercent: percent,
+          currentStatus: 'planning',
+          detail: `Day ${chunk.day} of ${chunk.of}`,
+          pass: Math.min(retryCount + 1, 3),
+          run: { ...run, lastCheckpointStep },
+        });
+        emit({ type: 'DRAFT', payload: { itinerary: chunk.itinerary } });
+        continue;
+      }
       if (mode !== 'updates') continue;
 
       for (const [node, update] of Object.entries(chunk as Record<string, NodeUpdate | null>)) {
         if (update == null) continue;
         update.logs?.forEach(emitLog);
+        update.messages?.forEach((message) => emit({ type: 'MESSAGE', payload: message }));
+        merged = { ...merged, ...update };
+        const draft = toDraft(merged);
+        if (Object.keys(draft).length > 0) emit({ type: 'DRAFT', payload: draft });
         llmFallbackUsed ||= update.logs?.some((entry) => entry.kind === 'llm-fallback') ?? false;
         toolFallbackUsed ||= update.logs?.some((entry) => entry.kind === 'search-fallback') ?? false;
         logger?.info('node finished', { threadId, node, durationMs: Date.now() - nodeStartedAt });
         nodeStartedAt = Date.now();
         retryCount = update.retryCount ?? retryCount;
+
+        const step = update.logs?.at(-1)?.step ?? update.messages?.at(-1)?.step;
+        if (step !== undefined) {
+          lastCheckpointStep = step;
+          const saver = run.checkpointer === 'postgres' ? 'PostgresSaver' : 'MemorySaver';
+          emitLog({
+            timestamp: new Date().toISOString(),
+            agent: 'System',
+            message: `State saved after step ${step} · ${saver}`,
+            step,
+            level: 'info',
+            kind: 'checkpoint',
+          });
+        }
 
         const progress = progressAfter(node, update);
         if (progress === null) continue;
@@ -121,6 +172,7 @@ export async function runTrip({ graph, emit, threadId, request, resume = false, 
           progressPercent: lastPercent,
           currentStatus: progress.status,
           pass: Math.min(retryCount + 1, 3),
+          run: { ...run, lastCheckpointStep },
         });
       }
     }

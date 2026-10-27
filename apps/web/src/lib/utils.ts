@@ -57,3 +57,8 @@ export function formatDuration(minutes: number): string {
   const m = minutes % 60;
   return [h ? `${h} h` : '', m ? `${m} m` : ''].filter(Boolean).join(' ') || '0 m';
 }
+
+/** Hotel nights for a trip of `durationDays` days: the last day is the departure day (matches the agent). */
+export function nightsFor(durationDays: number): number {
+  return Math.max(1, durationDays - 1);
+}
