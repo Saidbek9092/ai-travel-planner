@@ -1,0 +1,3 @@
+# Gitignored files Conductor copies into every new workspace (.gitignore syntax).
+# Matches .env files at any depth, e.g. apps/agent/.env.
+**/.env*
