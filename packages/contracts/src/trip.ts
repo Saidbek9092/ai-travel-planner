@@ -3,20 +3,44 @@ import { z } from 'zod';
 /** Where an option came from. `mock` means live prices were unavailable. */
 export const DataSourceSchema = z.enum(['serpapi', 'mock']);
 
+/** Weather bucket the UI maps to an icon. Shared by the top bar and the per-day forecast. */
+export const WeatherIconSchema = z.enum(['clear', 'partly-cloudy', 'cloudy', 'fog', 'rain', 'snow', 'storm']);
+
+export const AirportSchema = z.object({
+  /** IATA code, e.g. "TAS". */
+  code: z.string().min(3).max(4),
+  /** e.g. "Tashkent International". */
+  name: z.string().min(1),
+});
+
+/** An intermediate stop of a flight leg. */
+export const FlightStopSchema = z.object({
+  airport: AirportSchema,
+  layoverMinutes: z.number().int().nonnegative(),
+});
+
+/** One direction of a round trip. */
+export const FlightLegSchema = z.object({
+  from: AirportSchema,
+  to: AirportSchema,
+  /** ISO 8601 date-time; airline-local offsets are allowed. */
+  departure: z.iso.datetime({ offset: true }),
+  arrival: z.iso.datetime({ offset: true }),
+  /** Arrival terminal, when the provider reports it. */
+  terminal: z.string().min(1).nullable(),
+  /** Empty array = direct. */
+  stops: z.array(FlightStopSchema),
+});
+
 export const FlightSchema = z.object({
   airline: z.string().min(1),
   /** USD, round trip, one traveller. */
   price: z.number().nonnegative(),
-  /** ISO 8601 date-time; airline-local offsets are allowed. */
-  departure: z.iso.datetime({ offset: true }),
-  source: DataSourceSchema,
-});
-
-export const HotelSchema = z.object({
-  name: z.string().min(1),
-  /** USD. */
-  pricePerNight: z.number().nonnegative(),
-  rating: z.number().min(0).max(5),
+  outbound: FlightLegSchema,
+  /** `null` when the provider returned the outbound leg only. */
+  return: FlightLegSchema.nullable(),
+  /** "View fare" link, when the provider gives one. */
+  bookingUrl: z.url().nullable(),
   source: DataSourceSchema,
 });
 
@@ -24,11 +48,62 @@ export const PlaceSchema = z.object({
   name: z.string().min(1),
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
+  /** Short hint shown next to the stop, e.g. "Morning". */
+  note: z.string().min(1).nullable(),
+});
+
+export const HotelSchema = z.object({
+  name: z.string().min(1),
+  /** Neighbourhood, e.g. "11th arrondissement". */
+  area: z.string().min(1).nullable(),
+  /** USD. */
+  pricePerNight: z.number().nonnegative(),
+  /** 0–10 (Google Hotels' 0–5 is doubled by the tool). */
+  rating: z.number().min(0).max(10),
+  photoUrl: z.url().nullable(),
+  /** HH:mm, 24 h. */
+  checkInTime: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
+  checkOutTime: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
+  /** Nearest public transport, e.g. "République · lines 3, 5, 8, 9, 11". */
+  transit: z.string().min(1).nullable(),
+  /** For the hotel marker on the map. */
+  location: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).nullable(),
+  bookingUrl: z.url().nullable(),
+  source: DataSourceSchema,
+});
+
+export const TransferModeSchema = z.enum(['taxi', 'train', 'metro', 'bus', 'shuttle', 'walk']);
+
+/** Airport ↔ hotel leg chosen by the Planner. */
+export const TransferSchema = z.object({
+  /** Itinerary day the transfer happens on (arrival day, departure day). */
+  day: z.number().int().min(1),
+  mode: TransferModeSchema,
+  /** e.g. "CDG Terminal 1 → hotel". */
+  description: z.string().min(1),
+  /** USD, whole leg. */
+  priceUsd: z.number().nonnegative(),
+  durationMinutes: z.number().int().positive().nullable(),
+  /** e.g. "Fixed fare €56" or "Leave the hotel by 16:00". */
+  note: z.string().min(1).nullable(),
+});
+
+/** Forecast for one itinerary day. */
+export const DayWeatherSchema = z.object({
+  highC: z.number(),
+  lowC: z.number(),
+  /** Short label for display, e.g. "Partly cloudy". */
+  condition: z.string().min(1),
+  icon: WeatherIconSchema,
 });
 
 export const ItineraryDaySchema = z.object({
   day: z.number().int().min(1),
+  /** YYYY-MM-DD; `null` when the trip has no start date. */
+  date: z.iso.date().nullable(),
   title: z.string().min(1),
+  /** `null` when the date is beyond the forecast range or the lookup failed. */
+  weather: DayWeatherSchema.nullable(),
   places: z.array(PlaceSchema),
 });
 
@@ -46,9 +121,12 @@ export const AgentNameSchema = z.enum([
   'Supervisor',
   'FlightAgent',
   'HotelAgent',
-  'ItineraryPlanner',
+  'Planner',
   'BudgetAuditor',
 ]);
+
+/** What a confirmed decision is about. */
+export const DecisionTopicSchema = z.enum(['trip', 'flight', 'hotel', 'transfers', 'itinerary', 'budget']);
 
 /** POST /api/trips body. Explicit fields override what the Supervisor parses from `prompt`. */
 export const TripRequestSchema = z.object({
@@ -60,10 +138,18 @@ export const TripRequestSchema = z.object({
   startDate: z.iso.date().optional(),
 });
 
+export type DecisionTopic = z.infer<typeof DecisionTopicSchema>;
 export type DataSource = z.infer<typeof DataSourceSchema>;
+export type WeatherIcon = z.infer<typeof WeatherIconSchema>;
+export type Airport = z.infer<typeof AirportSchema>;
+export type FlightStop = z.infer<typeof FlightStopSchema>;
+export type FlightLeg = z.infer<typeof FlightLegSchema>;
 export type Flight = z.infer<typeof FlightSchema>;
 export type Hotel = z.infer<typeof HotelSchema>;
+export type TransferMode = z.infer<typeof TransferModeSchema>;
+export type Transfer = z.infer<typeof TransferSchema>;
 export type Place = z.infer<typeof PlaceSchema>;
+export type DayWeather = z.infer<typeof DayWeatherSchema>;
 export type ItineraryDay = z.infer<typeof ItineraryDaySchema>;
 export type TripStatus = z.infer<typeof TripStatusSchema>;
 export type AgentName = z.infer<typeof AgentNameSchema>;

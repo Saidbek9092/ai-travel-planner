@@ -6,7 +6,7 @@ export const AGENT_COLORS: Record<AgentName, string> = {
   Supervisor: 'text-sky-400',
   FlightAgent: 'text-violet-400',
   HotelAgent: 'text-emerald-400',
-  ItineraryPlanner: 'text-fuchsia-400',
+  Planner: 'text-fuchsia-400',
   BudgetAuditor: 'text-cyan-400',
 };
 
