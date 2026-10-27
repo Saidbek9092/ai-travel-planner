@@ -1,6 +1,6 @@
 # ai-travel-web — Implementation Plan
 
-> Step-by-step plan for building the frontend described in [`CLAUDE.md`](./CLAUDE.md)
+> Step-by-step plan for building the frontend described in [`SPEC.md`](./SPEC.md)
 > (web spec) and [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) (system design).
 > Each ticket is one branch / one PR, small enough to review on its own.
 
@@ -71,7 +71,7 @@ When the real agent lands, only the URL changes. The e2e suite then also runs ag
 - `pnpm --filter ai-travel-web typecheck lint test` passes (and `build` from T3 on).
 - Cross-service types come only from `@ai-travel/contracts`; `process.env` is read only in `lib/env.ts` / `next.config.ts`.
 - New behaviour has tests as listed in the ticket.
-- If the implementation has to deviate from `CLAUDE.md`, the spec is updated in the same PR.
+- If the implementation has to deviate from `SPEC.md`, the spec is updated in the same PR.
 
 Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
@@ -115,7 +115,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 **Tasks**
 - `packages/contracts/package.json`: name `@ai-travel/contracts`, `"type": "module"`, `exports` → `dist/index.js` + `dist/index.d.ts`, scripts `build: tsc`, `dev: tsc --watch`, `test`, `typecheck`.
-- `src/trip.ts`, `src/sse-events.ts`, `src/index.ts` exactly as specified in CLAUDE.md §5.1 / §5.2 (incl. the added RESULT fields `origin`, `destination`, `durationDays`, `startDate`).
+- `src/trip.ts`, `src/sse-events.ts`, `src/index.ts` exactly as specified in SPEC.md §5.1 / §5.2 (incl. the added RESULT fields `origin`, `destination`, `durationDays`, `startDate`).
 - `tsconfig.json` extending the base, `module`/`moduleResolution: NodeNext`.
 - Tests: blueprint example packets parse; malformed packets (wrong `type`, missing fields, percent > 100, bad coordinates, non-UUID `threadId`) are rejected; `TripRequestSchema` bounds.
 
@@ -135,7 +135,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 **Depends on:** T1 (T2 for the import check)
 
 **How:** generate with the official `create-next-app`, then adapt it to the monorepo. It can't run
-inside `apps/web/` (the folder already holds `CLAUDE.md`, `PLAN.md`, `.gitkeep`s), so generate into a
+inside `apps/web/` (the folder already holds `SPEC.md`, `PLAN.md`, `.gitkeep`s), so generate into a
 temporary folder and copy in without overwriting:
 
 ```bash
@@ -151,7 +151,7 @@ rm -rf .tmp-web
   (move any `onlyBuiltDependencies` entries to the root `pnpm-workspace.yaml`), generated `README.md`,
   any generated `AGENTS.md`, demo SVGs in `public/`, and the demo content of `page.tsx`.
 - `package.json`: name `ai-travel-web`, add `@ai-travel/contracts: workspace:*`, `zod: catalog:`,
-  remaining deps from CLAUDE.md §3, scripts from CLAUDE.md §3 (`dev` on `${CONDUCTOR_PORT:-3000}`, `lint: eslint .`, `typecheck`, `test`).
+  remaining deps from SPEC.md §3, scripts from SPEC.md §3 (`dev` on `${CONDUCTOR_PORT:-3000}`, `lint: eslint .`, `typecheck`, `test`).
 - `tsconfig.json` extends `../../tsconfig.base.json` with the options in §4.2.
 - `next.config.ts` as in §4.1 (phase-based `NEXT_PUBLIC_AGENT_URL` default for `next dev` only).
 - Keep the generated Tailwind v4 setup (`@tailwindcss/turbopack` loader, `globals.css`) and ESLint flat config.
@@ -177,7 +177,7 @@ rm -rf .tmp-web
 **Depends on:** T3
 
 **Decision:** no custom branding — shadcn defaults (`base-nova`, `neutral`, light theme), Geist fonts,
-text wordmark "AI Travel Planner" + lucide `Plane` icon (CLAUDE.md §8).
+text wordmark "AI Travel Planner" + lucide `Plane` icon (SPEC.md §8).
 
 **Commands**
 
@@ -229,7 +229,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T6 — SSE parser (`lib/sse.ts`) · S
 
-**Goal:** framework-free `readSseData()` (CLAUDE.md §5.1).
+**Goal:** framework-free `readSseData()` (SPEC.md §5.1).
 
 **Depends on:** T2
 
@@ -244,7 +244,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T7 — `useAgentStream` hook · L
 
-**Goal:** the single client-side source of run state (CLAUDE.md §5.2).
+**Goal:** the single client-side source of run state (SPEC.md §5.2).
 
 **Depends on:** T5, T6
 
@@ -268,7 +268,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T8 — Dashboard shell, page and progress · M
 
-**Goal:** the screen skeleton wired to the hook (CLAUDE.md §6, §9).
+**Goal:** the screen skeleton wired to the hook (SPEC.md §6, §9).
 
 **Depends on:** T4, T7
 
@@ -289,7 +289,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T9 — `TripInputForm` · M
 
-**Depends on:** T8 · Spec: CLAUDE.md §7
+**Depends on:** T8 · Spec: SPEC.md §7
 
 **Tasks**
 - `react-hook-form` + `zodResolver(TripRequestSchema)`; `prompt` textarea with 1,000-char counter; collapsible "Details": `origin`, `budget`, `durationDays`, `startDate` (≥ today).
@@ -303,7 +303,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T10 — `AgentTerminalLogs` · M
 
-**Depends on:** T8 · Spec: CLAUDE.md §7
+**Depends on:** T8 · Spec: SPEC.md §7
 
 **Tasks**
 - Dark terminal panel in `ScrollArea` (~320 px), line format `HH:mm:ss  [step]  Agent  message`, agent colours, `warn`/`error` colours **plus** an icon/prefix (not colour alone).
@@ -320,7 +320,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 > Design update: flight legs and layovers, transfer rows, hotel photo / area / check-in / 0–10 rating, and `BudgetMeter` with the passes table are specified in §7; build them here. Budget breakdown includes transfers.
 
-**Depends on:** T8 · Spec: CLAUDE.md §6, §7
+**Depends on:** T8 · Spec: SPEC.md §6, §7
 
 **Tasks**
 - Flight and hotel card grids; index `0` highlighted with "Selected" badge.
@@ -337,7 +337,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 > Design update: day tabs with date and weather, "drafting" / "waiting" days and per-day transfers (§7) replace the plain vertical timeline.
 
-**Depends on:** T8 · Spec: CLAUDE.md §7
+**Depends on:** T8 · Spec: SPEC.md §7
 
 **Tasks**
 - Vertical timeline "Day N — title" with places; day items are buttons; click toggles `activeDay`; active styling + focus ring.
@@ -351,7 +351,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 > Design update: add the hotel marker, faded markers for other days and the legend (§7).
 
-**Depends on:** T8 · Spec: CLAUDE.md §7
+**Depends on:** T8 · Spec: SPEC.md §7
 
 **Tasks**
 - `next/dynamic` with `ssr: false` + `Skeleton` fallback; `mapbox-gl` CSS imported in the component.
@@ -369,7 +369,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T14 — Failure, resume and deep links · M
 
-**Depends on:** T9–T13 · Spec: CLAUDE.md §5.3, §6
+**Depends on:** T9–T13 · Spec: SPEC.md §5.3, §6
 
 **Tasks**
 - `page.tsx`: skip the fetch in UI-only mode; otherwise read `searchParams` (Promise in Next.js 16 — must be awaited), `fetchTripResult(threadId)` → `GET /api/trips/:id` with `cache: 'no-store'`, `null` on any error; pass `initialThreadId` / `initialResult`.
@@ -433,7 +433,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 > Two features the original blueprint did not cover: a friendly chat with confirmed decisions, and a top bar
 > with the destination's weather and exchange rate. Design: ARCHITECTURE.md §4.6, §5.2–§5.3, §7.1. The agent
-> side is in [`../agent/CLAUDE.md`](../agent/CLAUDE.md) §15, tickets B21–B23. Both new components ship after the mock agent is extended,
+> side is in [`../agent/SPEC.md`](../agent/SPEC.md) §15, tickets B21–B23. Both new components ship after the mock agent is extended,
 > so they can be built before the backend work lands.
 
 ### T18 — Contracts: design alignment, chat messages and trip context · S · ✅ Contracts done
@@ -454,7 +454,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T19 — `AgentChat` + `MESSAGE` handling · M
 
-**Goal:** a conversation view where agents talk in plain language and confirmed decisions stand out (CLAUDE.md §7, ARCHITECTURE.md §4.6).
+**Goal:** a conversation view where agents talk in plain language and confirmed decisions stand out (SPEC.md §7, ARCHITECTURE.md §4.6).
 
 **Depends on:** T10, T18
 
@@ -462,7 +462,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 - Extend the mock agent (T5): `MESSAGE` packets in every scenario (`happy` confirms `trip, itinerary, flight, hotel, transfers, budget`; `overBudget` proposes flight/hotel/transfers in the first pass with an `Over budget` callout, then confirms them in the re-plan pass; `failed` has an ordinary "could you tell me…" message and no decision).
 - `lib/labels.ts`: `decisionLabels: Record<DecisionTopic, string>` and display names per `AgentName`.
 - `hooks/useStickToBottom.ts`: extract the auto-scroll / "Jump to latest" logic from `AgentTerminalLogs` and use it in both components.
-- `components/AgentChat.tsx` as specified in CLAUDE.md §7: agent name + time + text; `decision !== null` → "Confirmed" badge with the topic label, check icon and accent border (not colour alone); typing indicator while `streaming`; `role="log"` with `aria-label="Conversation"`.
+- `components/AgentChat.tsx` as specified in SPEC.md §7: agent name + time + text; `decision !== null` → "Confirmed" badge with the topic label, check icon and accent border (not colour alone); typing indicator while `streaming`; `role="log"` with `aria-label="Conversation"`.
 - `TripDashboard`: chat above the terminal in the left column; the terminal becomes a collapsed "Technical log" section (open by default in dev).
 - Tests: ordinary vs decision rendering, badge text per topic, indicator only while streaming, auto-scroll shared hook, reducer.
 
@@ -472,7 +472,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T20 — Top bar: weather, currency and local time · M
 
-**Goal:** show the destination, current weather, currency rate and local time under the header (CLAUDE.md §5.4, §7; ARCHITECTURE.md §7.1).
+**Goal:** show the destination, current weather, currency rate and local time under the header (SPEC.md §5.4, §7; ARCHITECTURE.md §7.1).
 
 **Depends on:** T8, T18
 
@@ -480,7 +480,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 - Extend the mock agent (T5): `GET /api/trip-context` with fixtures; keywords for `#noweather`, `#norate`, `#unknowncity` (404) scenarios.
 - `hooks/useTripContext.ts`: `fetch` + `TripContextSchema.safeParse`, `AbortController` per destination, module-level cache per destination + origin, silent on errors; guarded no-op when `env.agentUrl === null`.
 - `lib/labels.ts`: weather `icon` → lucide icon map; formatters for temperature (`Intl.NumberFormat` unit `celsius`) and rate (`1 USD = 0.92 EUR`). `lib/time.ts`: local time and the difference to the origin zone.
-- `components/TopBar.tsx` as specified in CLAUDE.md §7; rendered by `TripDashboard` under the header with `draft.destination ?? result?.destination` (so it appears during the run) and `draft.origin`.
+- `components/TopBar.tsx` as specified in SPEC.md §7; rendered by `TripDashboard` under the header with `draft.destination ?? result?.destination` (so it appears during the run) and `draft.origin`.
 - Tests: hook (loading → ready, error → hidden, 404, destination change aborts the previous call), component (a `null` chip is hidden, both `null` renders nothing, skeleton while loading, `aria-label`s).
 
 **Acceptance:** in the `happy` scenario the bar appears right after the first `DRAFT` and shows place, temperature, currency and local time; with `#noweather` only the other chips remain; the run is never affected by a failing lookup.
@@ -490,12 +490,12 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 ## M6 · Design v2
 
 > The look and the live behaviour from the design project (`.context/design`): Foundations, Components, Web-Live, Web-Trip, States, Mobile-Live,
-> Mobile-Result. The agent side is B24 – B25 in [`../agent/CLAUDE.md`](../agent/CLAUDE.md) §15. Extend the mock agent with `DRAFT`, `PROGRESS.detail` /
+> Mobile-Result. The agent side is B24 – B25 in [`../agent/SPEC.md`](../agent/SPEC.md) §15. Extend the mock agent with `DRAFT`, `PROGRESS.detail` /
 > `pass` / `run`, checkpoint log rows, a dropped-stream scenario (`#drop`) and a rate-limit scenario (`#ratelimit`) as each ticket needs them.
 
 ### T21 — Design tokens and layout shell · M
 
-**Goal:** the "Departure board" look and the two-column live layout (CLAUDE.md §6, §8).
+**Goal:** the "Departure board" look and the two-column live layout (SPEC.md §6, §8).
 
 **Depends on:** T4, T8
 
@@ -511,7 +511,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T22 — `DRAFT` handling and the live Trip Overview · L
 
-**Goal:** the right column fills in as agents decide (CLAUDE.md §6, §7).
+**Goal:** the right column fills in as agents decide (SPEC.md §6, §7).
 
 **Depends on:** T18, T21 (and T11 – T13 for the cards, timeline and map)
 
@@ -527,7 +527,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T23 — Agent board, run banners and run details · M
 
-**Goal:** the status furniture around the chat (CLAUDE.md §7).
+**Goal:** the status furniture around the chat (SPEC.md §7).
 
 **Depends on:** T21, T22
 
@@ -542,7 +542,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T24 — Reconnect, cancel and rate-limit countdown · M
 
-**Goal:** the resilience states from the design that depend on the connection (CLAUDE.md §5.2, §7).
+**Goal:** the resilience states from the design that depend on the connection (SPEC.md §5.2, §7).
 
 **Depends on:** T7, agent B25 (mock agent first)
 
@@ -558,7 +558,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T25 — Mobile layouts · M
 
-**Goal:** the Mobile-Live and Mobile-Result boards (CLAUDE.md §6).
+**Goal:** the Mobile-Live and Mobile-Result boards (SPEC.md §6).
 
 **Depends on:** T22, T23
 
@@ -574,7 +574,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ### T26 — My trips and share · S
 
-**Goal:** the header's "My trips" and "Share trip" (CLAUDE.md §7).
+**Goal:** the header's "My trips" and "Share trip" (SPEC.md §7).
 
 **Depends on:** T14, T22
 
