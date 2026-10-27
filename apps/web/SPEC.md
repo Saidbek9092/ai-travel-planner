@@ -163,8 +163,8 @@ Because `NEXT_PUBLIC_*` values are inlined at build time, they are listed under 
 **UI-only mode** (`env.agentUrl === null`) — used for Vercel previews and production until the agent
 is deployed:
 
-- `TripDashboard` shows an info `Alert`: "Preview — the planning agent isn't connected yet."
-- `TripInputForm` is fully usable for input and validation, but submit is disabled (with a tooltip).
+- `TripDashboard` shows an info `Alert` titled "Preview": "The planning agent isn't connected yet."
+- `TripInputForm` is disabled as a whole (fields and submit), not just submit.
 - `page.tsx` skips the deep-link fetch; `useAgentStream.start/resume` are guarded no-ops.
 - Everything else (layout, empty states, styling) renders normally.
 
@@ -571,24 +571,19 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 
 ## 10. Testing
 
-| File | What it proves |
-| --- | --- |
-| `test/sse.test.ts` | Parser: events split at every byte offset, `\r\n`, multi-line `data:`, heartbeat comments ignored, `id:` returned, UTF-8 split across chunks |
-| `test/useAgentStream.reducer.test.ts` | LOG and MESSAGE append, decisions keep the newest per topic, DRAFT merges, monotonic PROGRESS, RESULT completed/failed, stream end without RESULT → reconnecting |
-| `test/useAgentStream.test.tsx` | Mocked `fetch` with a `ReadableStream` fixture; invalid packet dropped; 429 sets `retryAt`; cancel calls the cancel route and → aborted; reconnect sends `Last-Event-ID` and ignores replayed ids; 404 or five failures → failed with Resume |
-| `test/TripInputForm.test.tsx` | Schema validation messages; optional empty fields omitted from payload |
-| `test/components.test.tsx` | Selected / Confirmed badges, flight legs and layover, transfer rows, hotel total and rating word, mock "Estimate" badge, day tabs selection and "drafting" / "waiting", logs `role="log"` and checkpoint rows, hotel marker in the placeholder |
-| `test/BudgetMeter.test.tsx` | Under / within / over wording, rescale past 100 %, passes table only after a re-plan |
-| `test/AgentBoard.test.tsx` | Status derivation per pass (waiting → running → done), "pass 2" tag, failed agent |
-| `test/RunBanners.test.tsx` | Each banner appears for its trigger only; over-budget buttons call `start` with the raised budget / fewer days; Resume and Reconnect now call their handlers |
-| `test/TripInputForm.countdown.test.tsx` | Button disabled and labelled "Plan trip in 0:42" until `retryAt`, then enabled (fake timers) |
-| `test/AgentChat.test.tsx` | "Confirmed" badge and topic label only for `decision !== null`, callout tones, `@Name` highlighting, typing indicator only while streaming, empty state, `role="log"` |
-| `test/useTripContext.test.tsx` | Mocked `fetch`: loading → ready, invalid body → error, 404 → error, destination change aborts the previous call, cache hit, no call in UI-only mode, starts from the draft destination |
-| `test/TopBar.test.tsx` | A `null` chip is hidden, all `null` renders nothing, skeleton while loading, today range and outlook, currency line, local time and difference to the origin, sentence-style `aria-label`s |
-| `test/useTripHistory.test.tsx` | Saves on `RESULT`, caps at 20, removes an entry |
-| `test/e2e/trip.spec.ts` | Playwright: agent in `TOOLS_MODE=mock` → submit → destination bar appears during the run → chat, board and logs fill → Trip Overview fills in → progress reaches 100 → cards, day tabs, map/placeholder render; a dropped stream reconnects; share copies the link |
+**There are no tests in this app for now** (unit, component and e2e removed; no runner or test dependencies).
+Verification is `pnpm lint && pnpm typecheck && pnpm build`, plus running the app against the mock agent
+(`pnpm mock-agent`, scenarios `happy`, `overBudget`, `mockData`, `failed`, `dropped`, `invalidPacket`, and the
+prompt tags `#rateLimited`, `#validationError`, `#unknowncity`, `#noweather`, `#norate`).
+`test/mock-agent/` and `test/fixtures/` stay: they are dev tooling, and fixtures are built with the contracts
+schemas so they cannot drift from the protocol. The test plan from earlier revisions of this spec is dropped.
 
-Fixtures for packets are built with the contracts schemas so they cannot drift from the protocol.
+**Deviations from the sections above (M4/M5):**
+- `lib/api.ts` (`fetchTripResult`) and `lib/time.ts` (`localTime`) were added; `hooks/useStickToBottom.ts`
+  is shared by the chat and the terminal log.
+- Pre-run failures show a destructive `Alert` ("Couldn't start the trip") instead of a toast.
+- The terminal log sits in a `<details>` "Technical log", open outside production.
+- When a run the user started completes, focus moves to the result heading.
 
 ---
 
