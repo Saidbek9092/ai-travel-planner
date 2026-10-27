@@ -1,0 +1,15 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Shared versions: reference them in a package.json as "<name>": "catalog:"
+catalog:
+  "@types/node": ^24.0.0
+  typescript: ^5.9.3
+  vitest: ^4.1.12
+  zod: ^4.6.7
+
+# Native postinstall scripts we don't need (same choice as the create-next-app template).
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
