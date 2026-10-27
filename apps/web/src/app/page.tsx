@@ -26,7 +26,7 @@ export default function Page() {
           </ul>
           <div className="rounded-lg bg-zinc-950 p-3 font-mono text-sm">
             <span className={cn(AGENT_COLORS.FlightAgent)}>FlightAgent</span>{' '}
-            <span className="text-zinc-100">Found a $500 flight on the Tashkent -&gt; Paris route.</span>
+            <span className="text-zinc-100">Found a $500 flight on the Tashkent -&gt; Tashkent route.</span>
           </div>
           <Button disabled className="self-start">
             Plan my trip
