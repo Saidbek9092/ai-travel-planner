@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# tooling caches
+.turbo/
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# env files (keep the examples)
+.env*
+!.env.example
+
+# logs & OS
+*.log
+.DS_Store
+
+# Conductor workspace scratch space
+.context/
+.conductor/settings.local.toml
+
+# Vercel / certificates
+.vercel
+*.pem

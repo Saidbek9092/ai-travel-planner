@@ -1,0 +1,33 @@
+import { z } from 'zod';
+
+const optional = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+
+const PublicEnvSchema = z.object({
+  NEXT_PUBLIC_AGENT_URL: optional(z.url({ protocol: /^https?$/ })),
+  NEXT_PUBLIC_MAPBOX_TOKEN: optional(z.string().trim().min(1)),
+});
+
+export interface PublicEnv {
+  /** Agent base URL without a trailing slash; `null` means UI-only mode. */
+  agentUrl: string | null;
+  /** Public Mapbox token; `null` means the map renders a placeholder. */
+  mapboxToken: string | null;
+}
+
+export function parsePublicEnv(raw: Record<string, string | undefined>): PublicEnv {
+  const result = PublicEnvSchema.safeParse(raw);
+  if (!result.success) {
+    throw new Error(`Invalid public environment variables:\n${z.prettifyError(result.error)}`);
+  }
+  return {
+    agentUrl: result.data.NEXT_PUBLIC_AGENT_URL?.replace(/\/+$/, '') ?? null,
+    mapboxToken: result.data.NEXT_PUBLIC_MAPBOX_TOKEN ?? null,
+  };
+}
+
+// Each variable is referenced literally so Next.js can inline it into the client bundle.
+export const env: PublicEnv = parsePublicEnv({
+  NEXT_PUBLIC_AGENT_URL: process.env.NEXT_PUBLIC_AGENT_URL,
+  NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
+});

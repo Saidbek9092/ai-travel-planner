@@ -1,0 +1,17 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+[scripts]
+# Corepack ships with Node 24 and provides the pnpm version pinned in package.json#packageManager.
+# `corepack enable pnpm` puts a `pnpm` shim on PATH, which Turborepo needs to spawn tasks.
+setup = "corepack enable pnpm && pnpm install"
+run_mode = "concurrent"
+
+[scripts.run.dev]
+available_in = [ "local" ]
+command = "pnpm dev"
+default = true
+icon = "play"
+
+[scripts.run.test]
+command = "pnpm test"
+icon = "test-tube"
