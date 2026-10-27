@@ -8,6 +8,7 @@ import { createRateLimiters } from '../src/middlewares/rateLimiter.js';
 import { AppError } from '../src/utils/errors.js';
 import { createLogger } from '../src/utils/logger.js';
 import { TEST_WEB_ORIGIN, testConfig } from './helpers/testConfig.js';
+import { testGraph } from './helpers/testGraph.js';
 
 const logger = createLogger({ silent: true });
 const makeApp = (generalMax?: number) => {
@@ -15,6 +16,7 @@ const makeApp = (generalMax?: number) => {
   return createApp({
     config,
     logger,
+    graph: testGraph(),
     rateLimiters: createRateLimiters(config, generalMax === undefined ? {} : { generalMax }),
   });
 };

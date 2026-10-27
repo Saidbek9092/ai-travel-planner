@@ -220,6 +220,7 @@ class SseStreamer {
 - Heartbeat: write `: ping\n\n` every 15 s.
 - `send` validates with `SseEventSchema.parse`. A validation failure is a server bug: it throws, and the run
   turns it into a failed `RESULT`.
+- *Until the registry lands (B25) the streamer numbers packets itself (one streamer per run) and keeps `PROGRESS` monotonic; `send(event)` then takes no `id`.*
 - `id` is the run's event sequence number (assigned by the registry), so `Last-Event-ID` means the same thing on
   every connection to that run.
 - `send` after close is a no-op (never throws on a closed socket).
@@ -705,7 +706,8 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 | --- | --- |
 | B1 – B2 | ✅ Done as web T1 / T2 (PR #1); the Zod 4 ↔ LangChain check from B2 was done here |
 | B3 – B4 | ✅ Done |
-| B5 – B20 | ⬜ Not started |
+| B5 – B7 | ✅ Done (M2): `SseStreamer`, state + graph on stub nodes, `runTrip` and `POST /api/trips` |
+| B8 – B20 | ⬜ Not started |
 | B21 | ✅ Contracts landed with the design alignment (`packages/contracts`: richer `Flight`/`Hotel`, `Transfer`, per-day weather, `MESSAGE`, `DRAFT`, trip context); the web reducer changes are web T18 |
 | B22 – B25 | ⬜ Not started (specified in ARCHITECTURE.md §4.6, §5, §6.5, §7) |
 
