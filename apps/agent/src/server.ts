@@ -1,3 +1,4 @@
+import { ActiveRuns } from './agent/activeRuns.js';
 import { buildGraph, createCheckpointer } from './agent/graph.js';
 import { createLlmFactory } from './agent/llm.js';
 import { createApp } from './app.js';
@@ -10,13 +11,15 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 const config = loadConfig();
 const logger = createLogger();
 const tools = createTravelTool(config, (reason) => logger.warn('live search unavailable, using mock data', { reason }));
+const checkpointer = await createCheckpointer(config, logger);
+const activeRuns = new ActiveRuns();
 const graph = buildGraph({
-  checkpointer: createCheckpointer(config),
+  checkpointer: checkpointer.saver,
   tools,
   llm: createLlmFactory(config),
   ...(config.TAVILY_API_KEY && { tavilyApiKey: config.TAVILY_API_KEY }),
 });
-const app = createApp({ config, logger, graph });
+const app = createApp({ config, logger, graph, activeRuns });
 
 const server = app.listen(config.PORT, (error) => {
   if (error) {
@@ -28,15 +31,27 @@ const server = app.listen(config.PORT, (error) => {
     env: config.NODE_ENV,
     webOrigin: config.WEB_ORIGIN,
     toolsMode: config.TOOLS_MODE,
+    checkpointer: checkpointer.kind,
   });
 });
 
-// Active trip streams are aborted here once runs exist (B17); for now just drain and exit.
+/** Stops accepting connections, fails open runs with a "resume" message, closes the pool, exits within 10 s. */
+let shuttingDown = false;
 function shutdown(signal: NodeJS.Signals) {
-  logger.info('shutting down', { signal });
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info('shutting down', { signal, activeRuns: activeRuns.size });
   setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS).unref();
-  server.close(() => process.exit(0));
+
+  server.close(() => {
+    checkpointer
+      .close()
+      .catch((error: unknown) => logger.error('closing checkpointer failed', { error: String(error) }))
+      .finally(() => process.exit(0));
+  });
   server.closeIdleConnections();
+  // Aborted runs still write their failed RESULT, then their streams end and the server can close.
+  activeRuns.abortAll();
 }
 
 process.once('SIGTERM', shutdown);

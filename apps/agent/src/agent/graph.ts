@@ -1,6 +1,8 @@
 import { END, MemorySaver, START, StateGraph, type BaseCheckpointSaver } from '@langchain/langgraph';
+import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import type { Config } from '../config.js';
 import type { TravelSearchTool } from '../tools/index.js';
+import type { Logger } from '../utils/logger.js';
 import type { LlmFactory } from './llm.js';
 import { budgetNode } from './nodes/budget.node.js';
 import { flightNode } from './nodes/flight.node.js';
@@ -37,7 +39,25 @@ export function buildGraph({ checkpointer, tools, llm, tavilyApiKey }: GraphDeps
 
 export type CompiledTravelGraph = ReturnType<typeof buildGraph>;
 
-/** In-memory checkpoints for now; PostgresSaver replaces it when `DATABASE_URL` is set (B16). */
-export function createCheckpointer(_config: Pick<Config, 'DATABASE_URL'>): BaseCheckpointSaver {
-  return new MemorySaver();
+export interface Checkpointer {
+  saver: BaseCheckpointSaver;
+  kind: 'memory' | 'postgres';
+  /** Releases the Postgres pool; a no-op for memory. */
+  close(): Promise<void>;
+}
+
+/** `PostgresSaver` when `DATABASE_URL` is set (tables created on boot), `MemorySaver` otherwise. */
+export async function createCheckpointer(
+  config: Pick<Config, 'DATABASE_URL' | 'NODE_ENV'>,
+  logger?: Logger,
+): Promise<Checkpointer> {
+  if (config.DATABASE_URL === undefined) {
+    if (config.NODE_ENV === 'production') {
+      logger?.warn('DATABASE_URL not set: runs are kept in memory and cannot be resumed after a restart');
+    }
+    return { saver: new MemorySaver(), kind: 'memory', close: async () => {} };
+  }
+  const saver = PostgresSaver.fromConnString(config.DATABASE_URL);
+  await saver.setup();
+  return { saver, kind: 'postgres', close: () => saver.end() };
 }

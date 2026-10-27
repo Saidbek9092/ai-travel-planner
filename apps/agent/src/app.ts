@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
+import type { ActiveRuns } from './agent/activeRuns.js';
 import type { CompiledTravelGraph } from './agent/graph.js';
 import type { Config } from './config.js';
 import { createErrorHandler } from './middlewares/errorHandler.js';
@@ -13,6 +14,7 @@ export interface AppDeps {
   config: Config;
   logger: Logger;
   graph: CompiledTravelGraph;
+  activeRuns: ActiveRuns;
   /** Injected by tests to use low limits; built from `config` otherwise. */
   rateLimiters?: RateLimiters;
 }
@@ -25,6 +27,7 @@ export function createApp({
   config,
   logger,
   graph,
+  activeRuns,
   rateLimiters = createRateLimiters(config),
 }: AppDeps): Express {
   const app = express();
@@ -42,13 +45,21 @@ export function createApp({
     }),
   );
   app.use(express.json({ limit: '10kb' }));
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.on('finish', () => {
+      if (req.path === '/health') return;
+      logger.info('request', { method: req.method, path: req.path, status: res.statusCode, durationMs: Date.now() - startedAt });
+    });
+    next();
+  });
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
   });
 
   app.use('/api', rateLimiters.generalLimiter);
-  app.use('/api', createTripsRouter({ config, graph, logger, runLimiter: rateLimiters.runLimiter }));
+  app.use('/api', createTripsRouter({ config, graph, logger, activeRuns, runLimiter: rateLimiters.runLimiter }));
 
   app.use((req, _res, next) => {
     next(notFound(`Route ${req.method} ${req.path} not found`));
