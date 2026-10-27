@@ -11,5 +11,6 @@ catalog:
 
 # Native postinstall scripts we don't need (same choice as the create-next-app template).
 ignoredBuiltDependencies:
+  - esbuild # binary ships via @esbuild/<platform>; postinstall only verifies it
   - sharp
   - unrs-resolver
