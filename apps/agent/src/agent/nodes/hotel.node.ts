@@ -1,6 +1,7 @@
 import type { Hotel } from '@ai-travel/contracts';
-import { formatUsd, log, searchFallbackLog, type TravelNode } from '../state.js';
-import { addDays } from '../../utils/dates.js';
+import { hotelConfirmed, hotelProposal } from '../messages.js';
+import { formatUsd, log, say, searchFallbackLog, type TravelNode } from '../state.js';
+import { addDays, nightsFor } from '../../utils/dates.js';
 import type { TravelSearchTool } from '../../tools/index.js';
 
 export interface HotelNodeDeps {
@@ -30,7 +31,7 @@ export const hotelNode =
       {
         destination: state.destination,
         checkIn,
-        checkOut: addDays(checkIn, state.durationDays),
+        checkOut: addDays(checkIn, nightsFor(state.durationDays)),
         mode: state.searchMode,
         ...(cheaper && { maxPricePerNight: previous.pricePerNight }),
       },
@@ -52,10 +53,21 @@ export const hotelNode =
     const estimated = tools.name !== 'mock' && found.some((hotel) => hotel.source === 'mock');
     if (estimated) logs.push(searchFallbackLog(state, 'HotelAgent', 'hotel'));
 
+    const pick = hotels[0];
+    const messages = [];
+    if (pick) {
+      if (state.retryCount === 0) messages.push(say(state, 'HotelAgent', hotelProposal(pick, nightsFor(state.durationDays), state.budget)));
+      else if (candidates.length > 0) {
+        messages.push(say(state, 'HotelAgent', hotelConfirmed(pick, previous, nightsFor(state.durationDays)), { decision: 'hotel' }));
+      }
+    }
+
     return {
       hotels,
       status: 'planning',
       logs,
+      messages,
+      ...(messages.some((message) => message.decision) && { confirmed: ['hotel' as const] }),
       ...(estimated && !state.warnings.includes(FALLBACK_WARNING) && { warnings: [FALLBACK_WARNING] }),
     };
   };

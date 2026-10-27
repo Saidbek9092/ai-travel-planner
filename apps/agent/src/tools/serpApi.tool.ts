@@ -1,7 +1,7 @@
 import { FlightSchema, HotelSchema, type Flight, type FlightLeg, type Hotel } from '@ai-travel/contracts';
 import { z } from 'zod';
 import { airportFor, iataFor } from './airports.js';
-import { ToolUnavailableError, type FlightQuery, type HotelQuery, type TravelSearchTool } from './types.js';
+import { ToolUnavailableError, type FlightQuery, type HotelQuery, type SearchTool } from './types.js';
 
 const ENDPOINT = 'https://serpapi.com/search.json';
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -69,7 +69,7 @@ export interface SerpApiOptions {
   fetch?: typeof fetch;
 }
 
-export function createSerpApiTool({ apiKey, fetch: fetchImpl = fetch }: SerpApiOptions): TravelSearchTool {
+export function createSerpApiTool({ apiKey, fetch: fetchImpl = fetch }: SerpApiOptions): SearchTool {
   /** GET with a per-request timeout, retrying network errors, 429 and 5xx; other 4xx fail at once. */
   async function request(params: Record<string, string>, runSignal?: AbortSignal): Promise<unknown> {
     const url = `${ENDPOINT}?${new URLSearchParams({ ...params, api_key: apiKey })}`;
@@ -157,11 +157,6 @@ export function createSerpApiTool({ apiKey, fetch: fetchImpl = fetch }: SerpApiO
         });
       if (hotels.length === 0) throw new ToolUnavailableError('SerpAPI returned no usable hotels');
       return hotels;
-    },
-
-    // Replaced by the Open-Meteo client in B23; no forecast means no weather callouts.
-    async getForecast(_destination, _startDate, days) {
-      return Array.from({ length: days }, () => null);
     },
   };
 }

@@ -25,7 +25,12 @@ export function createRateLimiters(
       limit,
       standardHeaders: 'draft-7',
       legacyHeaders: false,
-      handler: (_req, _res, next) => next(new AppError('RATE_LIMITED', message, 429)),
+      handler: (req, _res, next) => {
+        // Seconds until the window resets: the value the web form counts down from.
+        const resetTime = (req as { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime;
+        const retryAfterSeconds = Math.max(1, Math.ceil(((resetTime?.getTime() ?? Date.now() + windowMs) - Date.now()) / 1000));
+        next(new AppError('RATE_LIMITED', message, 429, retryAfterSeconds));
+      },
     });
 
   return {

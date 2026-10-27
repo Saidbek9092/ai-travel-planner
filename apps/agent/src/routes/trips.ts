@@ -2,61 +2,45 @@ import { TripRequestSchema } from '@ai-travel/contracts';
 import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import { z } from 'zod';
-import type { Config } from '../config.js';
 import type { CompiledTravelGraph } from '../agent/graph.js';
-import { ActiveRuns } from '../agent/activeRuns.js';
-import { buildResultPayload, runTrip } from '../agent/runTrip.js';
+import type { RunRegistry } from '../agent/runRegistry.js';
+import { buildResultPayload } from '../agent/runTrip.js';
 import type { RateLimiters } from '../middlewares/rateLimiter.js';
 import { conflict, notFound, validationError } from '../utils/errors.js';
-import type { Logger } from '../utils/logger.js';
 import { SseStreamer } from '../utils/sseStreamer.js';
 
 const ThreadIdSchema = z.uuid();
 const STOPPED_ERROR = 'Trip planning stopped before it finished, resume to continue';
 
 export interface TripsRouterDeps {
-  config: Pick<Config, 'RUN_TIMEOUT_MS'>;
   graph: CompiledTravelGraph;
-  logger: Logger;
-  activeRuns: ActiveRuns;
+  registry: RunRegistry;
   runLimiter: RateLimiters['runLimiter'];
 }
 
-/** Trip routes. Reconnect and cancel arrive with B25. */
-export function createTripsRouter({ config, graph, logger, activeRuns, runLimiter }: TripsRouterDeps): Router {
+/** Trip routes. A run belongs to the registry; each request only subscribes to it. */
+export function createTripsRouter({ graph, registry, runLimiter }: TripsRouterDeps): Router {
   const router = Router();
 
-  router.post('/trips', runLimiter, async (req, res) => {
+  function parseThreadId(raw: unknown): string {
+    const parsed = ThreadIdSchema.safeParse(raw);
+    if (!parsed.success) throw notFound('Trip not found');
+    return parsed.data;
+  }
+
+  router.post('/trips', runLimiter, (req, res) => {
     const parsed = TripRequestSchema.safeParse(req.body);
     if (!parsed.success) throw validationError(parsed.error);
 
     const threadId = randomUUID();
     const streamer = new SseStreamer(res);
     streamer.open(threadId);
-
-    // The run must not die with the connection (a closed streamer just drops packets); only the
-    // timeout and shutdown abort it. Cancel joins in B25.
-    const signal = activeRuns.start(threadId, config.RUN_TIMEOUT_MS);
-    try {
-      await runTrip({
-        graph,
-        emit: (event) => streamer.send(event),
-        threadId,
-        request: parsed.data,
-        signal,
-        logger,
-      });
-    } finally {
-      activeRuns.finish(threadId);
-      streamer.close();
-    }
+    registry.start({ threadId, request: parsed.data }).subscribe(streamer);
   });
 
-  /** Reads the latest checkpoint of a thread; `null` when the thread is unknown. */
+  /** Reads the latest checkpoint of a thread; 404 when the thread is unknown. */
   async function loadThread(rawId: unknown) {
-    const parsedId = ThreadIdSchema.safeParse(rawId);
-    if (!parsedId.success) throw notFound('Trip not found');
-    const threadId = parsedId.data;
+    const threadId = parseThreadId(rawId);
     const snapshot = await graph.getState({ configurable: { thread_id: threadId } });
     if (snapshot.config.configurable?.['checkpoint_id'] === undefined) throw notFound('Trip not found');
     return { threadId, snapshot, finished: snapshot.next.length === 0 };
@@ -69,23 +53,35 @@ export function createTripsRouter({ config, graph, logger, activeRuns, runLimite
 
   router.post('/trips/:threadId/resume', runLimiter, async (req, res) => {
     const { threadId, snapshot, finished } = await loadThread(req.params.threadId);
-    if (activeRuns.has(threadId)) throw conflict('This trip is still running');
+    if (registry.get(threadId)?.done === false) throw conflict('This trip is still running');
 
     const streamer = new SseStreamer(res);
     streamer.open(threadId);
     if (finished) {
-      streamer.send({ type: 'RESULT', payload: buildResultPayload(threadId, snapshot.values) });
+      streamer.send({ type: 'RESULT', payload: buildResultPayload(threadId, snapshot.values) }, 1);
       streamer.close();
       return;
     }
+    registry.start({ threadId, resume: true }).subscribe(streamer);
+  });
 
-    const signal = activeRuns.start(threadId, config.RUN_TIMEOUT_MS);
-    try {
-      await runTrip({ graph, emit: (event) => streamer.send(event), threadId, resume: true, signal, logger });
-    } finally {
-      activeRuns.finish(threadId);
-      streamer.close();
-    }
+  /** Reconnect: replays the packets after `Last-Event-ID`, then follows the live run until its `RESULT`. */
+  router.get('/trips/:threadId/stream', (req, res) => {
+    const run = registry.get(parseThreadId(req.params.threadId));
+    if (!run) throw notFound('Run not found or expired');
+
+    const lastEventId = Number.parseInt(req.get('Last-Event-ID') ?? '', 10);
+    const streamer = new SseStreamer(res);
+    streamer.open(req.params.threadId);
+    run.subscribe(streamer, Number.isNaN(lastEventId) ? 0 : lastEventId);
+  });
+
+  /** "Stop run". Idempotent: a finished run answers 204 too. */
+  router.post('/trips/:threadId/cancel', (req, res) => {
+    const run = registry.get(parseThreadId(req.params.threadId));
+    if (!run) throw notFound('Run not found or expired');
+    run.cancel();
+    res.status(204).end();
   });
 
   return router;

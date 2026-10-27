@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { formatUsd, llmFallbackLog, log, type TravelNode } from '../state.js';
+import { missingDetails, tripConfirmed } from '../messages.js';
+import { formatUsd, llmFallbackLog, log, say, type TravelNode } from '../state.js';
 import type { LlmFactory } from '../llm.js';
 import { addDays, today } from '../../utils/dates.js';
 
@@ -61,6 +62,7 @@ export const supervisorNode =
       status: 'failed' as const,
       error,
       logs: [...logs, log(state, 'Supervisor', error, 'warn')],
+      messages: [say(state, 'Supervisor', missingDetails(error))],
     });
 
     if (!destination || !origin || !budget || !durationDays) {
@@ -90,5 +92,9 @@ export const supervisorNode =
         ...logs,
         log(state, 'Supervisor', `Planning ${durationDays} days in ${destination} from ${origin}, budget ${formatUsd(budget)}.`),
       ],
+      messages: [
+        say(state, 'Supervisor', tripConfirmed({ destination, origin, durationDays, startDate, budget }), { decision: 'trip' }),
+      ],
+      confirmed: ['trip'],
     };
   };

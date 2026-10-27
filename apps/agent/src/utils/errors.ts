@@ -10,6 +10,8 @@ export class AppError extends Error {
     readonly code: ErrorCode,
     message: string,
     readonly status: number,
+    /** Seconds until the client may retry; set for `RATE_LIMITED`. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
   }
@@ -26,5 +28,5 @@ export const internalError = () => new AppError('INTERNAL', 'Something went wron
 
 /** Shape of every JSON error response. */
 export interface ErrorBody {
-  error: { code: ErrorCode; message: string };
+  error: { code: ErrorCode; message: string; retryAfterSeconds?: number };
 }

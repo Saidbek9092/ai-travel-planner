@@ -1,6 +1,6 @@
 import type { Flight, FlightLeg, Hotel } from '@ai-travel/contracts';
 import { airportFor } from './airports.js';
-import type { FlightQuery, HotelQuery, TravelSearchTool } from './types.js';
+import type { FlightQuery, HotelQuery, SearchTool } from './types.js';
 
 const DELAY_MS = 300;
 const CHEAPER_FACTOR = 0.85;
@@ -75,7 +75,7 @@ function leg(from: ReturnType<typeof airportFor>, to: ReturnType<typeof airportF
 }
 
 /** Deterministic offline engine. Same query, same options; `cheaper` mode lands at least 15% under the cap. */
-export function createMockTravelTool(options: { delayMs?: number } = {}): TravelSearchTool {
+export function createMockTravelTool(options: { delayMs?: number } = {}): SearchTool {
   const delayMs = options.delayMs ?? DELAY_MS;
 
   return {
@@ -130,10 +130,6 @@ export function createMockTravelTool(options: { delayMs?: number } = {}): Travel
           source: 'mock' as const,
         };
       });
-    },
-
-    async getForecast(_destination, _startDate, days) {
-      return Array.from({ length: days }, () => null);
     },
   };
 }

@@ -87,9 +87,10 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 | B8 – B14 | ✅ Done (M3), without their test bullets: tool layer + mock engine, SerpAPI tool, `LlmFactory`, Budget Auditor, Flight / Hotel / Supervisor / Planner nodes. Chat `messages` (B22) and the real forecast (B23) are still stubbed: `getForecast` returns `null` per day, nodes only write `logs` |
 | M3 live check | ✅ Run with real keys (2026-10-27): Paris (SerpAPI flights + hotels, $1278 / $1500, no re-plan), Tokyo with a bad SerpAPI key (401 → mock fallback + warn logs + warnings, completed), Samarkand (no live flights → fallback, one re-plan, ended under budget, coordinates correct), 10 Supervisor prompts (typos, € and UZS conversion, injection text, missing fields and past dates handled). Not measured: Planner token cost |
 | B15 | ⏸ Deferred — test-only ticket (testing phase) |
-| B16 – B20 | ⬜ Not started |
+| B16 – B18 | ✅ Done (M4): PostgresSaver / MemorySaver, resume and trip lookup, abort / timeout / graceful shutdown, structured logs |
+| B19 – B20 | ⬜ Not started — CI / Render deploy and Postgres provisioning left out on purpose (M5) |
 | B21 | ✅ Contracts landed with the design alignment (`packages/contracts`: richer `Flight`/`Hotel`, `Transfer`, per-day weather, `MESSAGE`, `DRAFT`, trip context); the web reducer changes are web T18 |
-| B22 – B25 | ⬜ Not started (specified in ARCHITECTURE.md §4.6, §5, §6.5, §7) |
+| B22 – B25 | ✅ Done (M6 + M7), without their test bullets: chat `MESSAGE`s + confirmed decisions, `GET /api/trip-context` (Open-Meteo + open.er-api.com) and the real Planner forecast, `DRAFT` / `PROGRESS.detail` / `run` / checkpoint rows, `RunRegistry` with reconnect (`Last-Event-ID`), cancel and `retryAfterSeconds`. Checked by hand against the real agent (live trip-context calls; a Paris run, killed mid-stream and replayed to one `RESULT`; cancel → `RESULT failed: Run stopped`; resume afterwards) |
 
 ---
 
@@ -482,11 +483,11 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B22 — Chat messages and confirmed decisions from the nodes · M
+### B22 — Chat messages and confirmed decisions from the nodes · M · ✅ Done
 
 **Goal:** every node speaks to the user in plain language, and final choices are flagged (PLAN.md Part 2 §8.5, ARCHITECTURE.md §4.6).
 
-**Depends on:** B15, B21
+**Depends on:** B15 (test-only, deferred), B21
 
 **Tasks**
 - `agent/state.ts`: `ChatMessage` type, `messages` (append reducer), `say(state, agent, text, decision?)` helper (same `step` rule as `log`).
@@ -494,14 +495,14 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 - `confirmed` in state (append); `say(..., { decision, callout })` adds the topic.
 - Update the five nodes to return `messages` next to `logs`: first-pass flight / hotel / transfer messages are proposals; re-plan-pass messages are the `flight`, `hotel`, `transfers` decisions with the saving; the Budget Auditor confirms whatever is still unconfirmed, then `budget`, on conditions 1 and 3, and sends the `Over budget` callout on a re-plan.
 - `agent/runTrip.ts`: after a node's `LOG` packets send its `MESSAGE` packets, then `DRAFT` and `PROGRESS` (B24).
-- Tests: `test/messages.test.ts` (exact text per builder, rounding, savings); node tests assert messages, `decision` topics and callouts; extend `test/runTrip.test.ts` — `MESSAGE` packets parse, order is `LOG → MESSAGE → …` per node, same `step` as the node's logs, a no-re-plan run emits `trip, itinerary` early and `flight, hotel, transfers, budget` from the auditor, an over-budget run emits `flight, hotel, transfers` in the re-plan pass (not twice for the same pass), supervisor failure emits no decision.
+- ⏸ Tests (deferred): `test/messages.test.ts` (exact text per builder, rounding, savings); node tests assert messages, `decision` topics and callouts; extend `test/runTrip.test.ts` — `MESSAGE` packets parse, order is `LOG → MESSAGE → …` per node, same `step` as the node's logs, a no-re-plan run emits `trip, itinerary` early and `flight, hotel, transfers, budget` from the auditor, an over-budget run emits `flight, hotel, transfers` in the re-plan pass (not twice for the same pass), supervisor failure emits no decision.
 
 **Acceptance**
 - A completed run's `MESSAGE` packets confirm each of `trip, flight, hotel, transfers, itinerary, budget` (a topic can repeat only across re-plan passes); a failed run contains none.
 
 ---
 
-### B23 — Trip context endpoint (weather + exchange rate) · M
+### B23 — Trip context endpoint (weather + exchange rate) · M · ✅ Done
 
 **Goal:** `GET /api/trip-context` for the web destination bar, and the forecast the Planner uses (PLAN.md Part 2 §10.1, ARCHITECTURE.md §7.1).
 
@@ -515,9 +516,9 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 - Optional `origin`: geocode it for `originTimeZone` (unknown origin → `null`, not an error).
 - Route in `app.ts` behind `generalLimiter`: validate with `TripContextQuerySchema` → `400`; geocode miss → `404 NOT_FOUND`; parse the response with `TripContextSchema` before sending.
 - `TOOLS_MODE=mock` returns fixed fixtures with `source: 'mock'`.
-- Record provider responses once as fixtures in `test/fixtures/trip-context/`.
-- Tests: `test/tripContext.test.ts` with a stubbed `fetch` — happy path, weather-only failure, rate-only failure, USD destination (`currency` and `exchangeRate` `null`), unknown country code, unknown city (`404`), unknown origin, `outlook` wording, forecast in range / beyond 16 days / failure, cache hit makes no second call, failure is not cached, timeout → `null`; supertest for `400`/`404`/`200` shapes.
-- Manual check: one live call per provider, documented in the PR.
+- ⏸ Provider fixtures in `test/fixtures/trip-context/` (deferred with the tests).
+- ⏸ Tests (deferred): `test/tripContext.test.ts` with a stubbed `fetch` — happy path, weather-only failure, rate-only failure, USD destination (`currency` and `exchangeRate` `null`), unknown country code, unknown city (`404`), unknown origin, `outlook` wording, forecast in range / beyond 16 days / failure, cache hit makes no second call, failure is not cached, timeout → `null`; supertest for `400`/`404`/`200` shapes.
+- Manual check ✅ (2026-10-27): live calls for Paris (+ origin Tashkent), Samarkand (UZS), unknown city (`404`), missing destination (`400`). Exchange-rate provider: **open.er-api.com** (keyless, lists UZS; terms ask for attribution and one update a day, which the 6 h cache respects) — open question 7 is resolved.
 
 **Acceptance**
 - `curl 'localhost:4000/api/trip-context?destination=Paris'` returns a valid `TripContext`; with one provider blocked, the other field is still returned.
@@ -529,7 +530,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 > The design's live Trip Overview, run details, reconnecting stream and rate-limit countdown (Web-Live, Main, States boards).
 > Design: ARCHITECTURE.md §6.2–§6.5, §7.
 
-### B24 — `DRAFT` packet, progress detail, checkpoint rows and log kinds · M
+### B24 — `DRAFT` packet, progress detail, checkpoint rows and log kinds · M · ✅ Done
 
 **Goal:** the browser can show the trip as it takes shape (PLAN.md Part 2 §7, ARCHITECTURE.md §6.2–§6.3).
 
@@ -539,14 +540,14 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 - `toDraft(values)` in `state.ts`; `runTrip` sends `DRAFT` after each node's `MESSAGE`s, then a checkpoint `LOG` (`System`, `kind: 'checkpoint'`) and `PROGRESS`.
 - `PROGRESS` carries `pass = retryCount + 1` and `run` (`model`, `checkpointer`, `lastCheckpointStep`); the Planner's custom writer events become `PROGRESS.detail` ("Day 4 of 5") and a `DRAFT` with the itinerary so far, with the percent interpolated 55 → 75.
 - Fallback logs use `kind: 'llm-fallback'` / `'search-fallback'` (LLM factory and tool `onFallback`).
-- Tests: extend `test/runTrip.test.ts` — packet order per node, `DRAFT` fills in field by field and never contains an empty array for a field not yet produced, `pass` increases on a re-plan, `detail` appears only while the Planner runs, checkpoint rows carry the step number.
+- ⏸ Tests (deferred): extend `test/runTrip.test.ts` — packet order per node, `DRAFT` fills in field by field and never contains an empty array for a field not yet produced, `pass` increases on a re-plan, `detail` appears only while the Planner runs, checkpoint rows carry the step number.
 
 **Acceptance**
 - In a mock run the first `DRAFT` (right after the Supervisor) has `destination`, `budget`, `durationDays`; the last `DRAFT` equals the `RESULT` trip fields.
 
 ---
 
-### B25 — Run registry, reconnect, cancel and rate-limit countdown · L
+### B25 — Run registry, reconnect, cancel and rate-limit countdown · L · ✅ Done
 
 **Goal:** a run survives its connection; the user can reconnect or stop it (PLAN.md Part 2 §7, ARCHITECTURE.md §6.5, §7).
 
@@ -557,7 +558,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 - Wire `POST /api/trips` and `POST …/resume` through the registry; remove the `res.on('close')` abort. Add `GET /api/trips/:threadId/stream` (honours `Last-Event-ID`) and `POST /api/trips/:threadId/cancel`.
 - `AppError.retryAfterSeconds`; the rate-limit handler fills it; CORS exposes `Retry-After`.
 - Config: `RUN_REPLAY_TTL_MS`, `RUN_REPLAY_MAX_EVENTS` in `config.ts`, `.env.example` and tests.
-- Tests: `test/runRegistry.test.ts` (see §13), supertest for the two new routes (404s, replay from an id, 204 cancel idempotent), 429 body has `retryAfterSeconds`.
+- ⏸ Tests (deferred): `test/runRegistry.test.ts` (see §13), supertest for the two new routes (404s, replay from an id, 204 cancel idempotent), 429 body has `retryAfterSeconds`.
 
 **Acceptance**
 - Start a run with `curl -N`, kill `curl` mid-run, then `curl -N -H 'Last-Event-ID: 12' …/stream` prints the missed packets and ends with one `RESULT`.
@@ -566,18 +567,19 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ## Open questions
 
-1. **Model choice** — the spec defaults to `claude-opus-5-5` / `claude-sonnet-5-5`. Confirm these are still the models you want (and still available) before B10, or change the `ANTHROPIC_MODEL` defaults.
-2. **Zod 4 vs LangChain** — the B2 spike was run against the OpenAI package; re-run it against `@langchain/anthropic`. It must confirm that `withStructuredOutput` works with Zod 4 **without a forced `tool_choice`** (a 400 on Opus 5.5 / Sonnet 5.5), that `withFallbacks` works, and that malformed output is rejected with a `ZodError`.
-3. **Hotel nights** — keep `durationDays` nights (blueprint) or switch to `durationDays - 1` (ARCHITECTURE.md §15)? Affects B11/B12 and the web cards.
-4. **SerpAPI plan** — the free tier has a low monthly quota; is mock-only acceptable for previews/staging, with live search only in production?
-5. **Render tier** — the free tier sleeps and cold-starts (slow first stream) and its Postgres expires; use a paid instance for production?
-6. ~~**Docs on `main`**~~ — resolved: the specs landed on `main` with PR #1.
-7. **Exchange-rate provider** — pick one free, keyless API with USD base and coverage of the currencies we care about (UZS in particular; not every ECB-based API lists it). Check its terms (attribution, rate limits) before B23.
-8. ~~**Weather scope**~~ — resolved by the design: the destination bar shows current weather plus today's range and an outlook, and the Planner reads the per-day forecast (≤ 16 days ahead; later dates get no weather).
-9. **Hotel photos and transit** — Google Hotels returns thumbnails and links but not metro lines. `Hotel.transit` stays `null` for live data unless a provider is added; the design's "Metro · lines 3, 5, 8, 9, 11" row is then mock-only. Is a separate transit lookup worth it?
-10. **Planner cost** — day-by-day generation makes `1 + N` model calls per first pass (Opus 5.5). Measure in B14; if too slow or costly, generate all days in one call and keep the `Day N of M` progress as a timed estimate.
-11. **Replay buffer scope** — the registry is in-process, so a restart or a second Render instance loses it (the checkpoint still allows `resume`). Acceptable for now?
+All resolved (2026-10-27).
 
+1. ~~**Model choice**~~ — keep `claude-opus-5-5` (primary) and `claude-sonnet-5-5` (fallback); both worked in every live run. If cost matters, try Sonnet as the Planner's primary model.
+2. ~~**Zod 4 vs LangChain**~~ — works against `@langchain/anthropic` with `method: 'jsonSchema'` (no forced `tool_choice`) in live runs; the fallback model is handled in `llm.ts`.
+3. ~~**Hotel nights**~~ — `durationDays − 1` nights (at least 1): the last day is the departure day. Implemented as `nightsFor()` in the agent (cost, labels, hotel check-out, flight return date) and in the web cards, top bar and budget summary.
+4. ~~**SerpAPI plan**~~ — mock-only for previews / staging, live search in production only; the per-IP run limit stays.
+5. ~~**Render tier**~~ — paid instance (and paid Postgres) for production; free tier only for demos (it sleeps, and its database expires).
+6. ~~**Docs on `main`**~~ — resolved: the specs landed on `main` with PR #1.
+7. ~~**Exchange-rate provider**~~ — resolved: open.er-api.com (keyless, lists UZS, USD base).
+8. ~~**Weather scope**~~ — resolved by the design: the destination bar shows current weather plus today's range and an outlook, and the Planner reads the per-day forecast (≤ 16 days ahead; later dates get no weather).
+9. ~~**Hotel photos and transit**~~ — no transit lookup for now; `Hotel.transit` stays `null` for live data and the UI hides the row. Revisit if users ask.
+10. ~~**Planner cost**~~ — keep one call per day. Measured live (Paris, 5 days, no re-plan): 43.6 s per run, of which the Planner is 40.7 s (6 calls, ≈ 6.8 s each); a re-plan re-runs only the transfers and the hotel-anchored days, so the worst case stays well under `RUN_TIMEOUT_MS` (120 s). Token cost is **not** measured; switch to a single call for all days if the timeout or the bill becomes a problem.
+11. ~~**Replay buffer scope**~~ — in-process is fine for one Render instance: after a restart `resume` continues from the checkpoint, only the missed packets are not replayed. Add a shared store (Redis) before running more than one instance.
 
 ---
 
@@ -615,6 +617,7 @@ apps/agent/
 │   │   ├── llm.ts                 # + ChatAnthropic factory with Opus 5.5 → Sonnet 5.5 fallback
 │   │   ├── runTrip.ts             # + maps graph stream → SSE packets (stream controller)
 │   │   ├── runRegistry.ts         # + active runs, replay buffer, reconnect / cancel (§7)
+│   │   ├── runAbort.ts            # + abort reasons / user-facing messages for timeout, shutdown, cancel
 │   │   ├── messages.ts            # + pure builders for friendly chat messages (§8.5)
 │   │   └── nodes/
 │   │       ├── supervisor.node.ts
@@ -623,7 +626,7 @@ apps/agent/
 │   │       ├── planner.node.ts
 │   │       └── budget.node.ts
 │   ├── tools/
-│   │   ├── types.ts               # + TravelSearchTool interface, query types, ToolUnavailableError
+│   │   ├── types.ts               # + SearchTool (flights, hotels) ⊂ TravelSearchTool (+ getForecast), query types, ToolUnavailableError
 │   │   ├── serpApi.tool.ts        # live SerpAPI implementation
 │   │   ├── mockTravel.tool.ts     # deterministic offline implementation
 │   │   ├── index.ts               # + withFallback(primary, mock) + tool selection by TOOLS_MODE
@@ -638,6 +641,7 @@ apps/agent/
 │   │   ├── sseStreamer.ts         # SSE writer, validates every packet with SseEventSchema
 │   │   ├── errors.ts              # + AppError + error codes
 │   │   ├── ttlCache.ts            # + tiny in-process TTL cache for the trip-context lookups
+│   │   ├── fetchJson.ts           # + GET → JSON with 5 s timeout and one retry (trip-context providers)
 │   │   └── logger.ts              # + structured JSON logger
 │   ├── app.ts                     # + createApp(deps): middlewares + routes, no listen (supertest)
 │   ├── server.ts                  # boot: loadConfig → createApp → listen, graceful shutdown
@@ -996,7 +1000,7 @@ Every node is `(state: TravelAgentState) => Promise<TravelAgentUpdate>` and:
 **`hotel.node.ts` — Hotel Agent** (no LLM)
 - `tools.searchHotels({ destination, checkIn, checkOut, mode, maxPricePerNight })`.
 - Ordering: among hotels with `rating >= 7` (0–10 scale), cheapest first; if none qualify, cheapest overall. `[0]` is selected.
-- Hotel cost = `hotels[0].pricePerNight × durationDays` (blueprint formula).
+- Hotel cost = `hotels[0].pricePerNight × nights`, with `nights = max(1, durationDays − 1)` (`nightsFor()`); check-out and the flight's return date are `startDate + nights`.
 - Same "never more expensive in cheaper mode" rule as flights.
 - `status: 'planning'` (the Planner always runs next).
 - Messages — first pass (ordinary): `Hôtel Lumière in Le Marais is $95/night — that pushes the budget.`; re-plan pass: decision `hotel` —
@@ -1027,9 +1031,9 @@ Every node is `(state: TravelAgentState) => Promise<TravelAgentUpdate>` and:
   `itinerary` ("Your 5-day plan is ready: Louvre, Eiffel Tower and more."). Re-plan pass — decision `transfers` ("Taxi in, RER B out. About $75 for both.").
 
 **`budget.node.ts` — Budget Auditor** (pure, no I/O)
-- `computeTotalCost(state)` exported separately for unit tests; round to 2 decimals. Formula: flight + hotel × days + Σ transfers + daily × days.
+- `computeTotalCost(state)` exported separately for unit tests; round to 2 decimals. Formula: flight + hotel × nights + Σ transfers + daily × days.
 - Every audit appends a `BudgetPass`: `{ pass: retryCount + 1, flight, hotel, transfers, daily, totalCost, flightLabel, hotelLabel }`
-  (`flightLabel` "$500 direct" / "$420 via IST" from `outbound.stops`; `hotelLabel` "5 × $95").
+  (`flightLabel` "$500 direct" / "$420 via IST" from `outbound.stops`; `hotelLabel` "4 × $95").
 - Applies the three conditions from ARCHITECTURE.md §4.3:
   - ≤ budget → `{ status: 'completed', totalCost }`, log `Total $975 fits the $1,000 budget.`
   - over & `retryCount < MAX_BUDGET_RETRIES` → `{ status: 'searching', retryCount: +1, searchMode: 'cheaper', overBudgetBy, totalCost }`,
@@ -1145,6 +1149,8 @@ export async function getForecast(destination: string, startDate: string | null,
 - **No mock fallback on failure** — a made-up temperature or rate would look real. `mode: 'mock'`
   (`TOOLS_MODE=mock`) returns fixed fixtures with `source: 'mock'` for tests and e2e (Paris: 12 °C, partly cloudy, 9–14 °C, "rain Saturday", EUR 0.92,
   `Europe/Paris`; `getForecast` returns five days with a rainy day 3).
+- `createTravelTool` composes the search tool (SerpAPI / mock) with `getForecast`; the forecast is keyless, so it is live even when search falls back to mock, and only `TOOLS_MODE=mock` swaps it for the fixture.
+- `GET /api/trip-context` lives in `routes/tripContext.ts`; a resume of a thread that is still running answers `409 CONFLICT`.
 - Provider hosts are constants; `destination` and `origin` are always `encodeURIComponent`-ed. The final value is parsed with
   `TripContextSchema` before it is sent.
 

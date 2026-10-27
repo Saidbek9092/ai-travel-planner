@@ -26,6 +26,8 @@ const EnvSchema = z
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }).optional(),
 
     RUN_TIMEOUT_MS: positiveInt.default(120_000),
+    RUN_REPLAY_TTL_MS: positiveInt.default(600_000),
+    RUN_REPLAY_MAX_EVENTS: positiveInt.default(500),
     RATE_LIMIT_WINDOW_MS: positiveInt.default(900_000),
     RATE_LIMIT_MAX_RUNS: positiveInt.default(10),
 

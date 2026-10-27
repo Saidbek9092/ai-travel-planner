@@ -12,15 +12,14 @@ export interface SseStreamerOptions {
  * The only way packets reach the wire. Every packet is validated with `SseEventSchema` and written
  * as `id: n\ndata: <json>\n\n`. Never `res.write` a packet by hand.
  *
- * Until the run registry arrives (B25) one streamer serves one run, so it numbers the packets itself
- * and keeps `PROGRESS` monotonic; the registry will take both over and pass the id in.
+ * The `RunRegistry` assigns the ids (so `Last-Event-ID` means the same on every connection to a run)
+ * and keeps `PROGRESS` monotonic before a packet is stored.
  */
 export class SseStreamer {
   private readonly heartbeatMs: number;
   private heartbeat: NodeJS.Timeout | undefined;
   private closed = false;
-  private lastId = 0;
-  private lastPercent = 0;
+  private readonly closeListeners: (() => void)[] = [];
 
   constructor(
     private readonly res: Response,
@@ -32,6 +31,12 @@ export class SseStreamer {
   /** True once the client went away or `close()` ran. */
   get isClosed(): boolean {
     return this.closed;
+  }
+
+  /** Runs `listener` once when the client goes away or `close()` runs. */
+  onClose(listener: () => void): void {
+    if (this.closed) listener();
+    else this.closeListeners.push(listener);
   }
 
   /** Sends the headers and starts the heartbeat. */
@@ -53,20 +58,10 @@ export class SseStreamer {
    * Validates and writes one packet. An invalid packet is a server bug and throws; a closed stream
    * is not an error (the run goes on without its client), so the call is a no-op.
    */
-  send(event: SseEventInput): void {
-    const parsed = SseEventSchema.parse(event);
+  send(event: SseEventInput, id: number): void {
+    const packet = SseEventSchema.parse(event);
     if (this.closed) return;
-
-    let packet = parsed;
-    if (packet.type === 'PROGRESS') {
-      // Re-plan rounds must not move the bar backwards.
-      const progressPercent = Math.max(packet.payload.progressPercent, this.lastPercent);
-      this.lastPercent = progressPercent;
-      packet = { type: 'PROGRESS', payload: { ...packet.payload, progressPercent } };
-    }
-
-    this.lastId += 1;
-    this.write(`id: ${this.lastId}\ndata: ${JSON.stringify(packet)}\n\n`);
+    this.write(`id: ${id}\ndata: ${JSON.stringify(packet)}\n\n`);
   }
 
   /** Ends the response. Safe to call more than once. */
@@ -77,8 +72,10 @@ export class SseStreamer {
   }
 
   private stop(): void {
+    if (this.closed) return;
     this.closed = true;
     clearInterval(this.heartbeat);
+    this.closeListeners.splice(0).forEach((listener) => listener());
   }
 
   private write(chunk: string): void {
