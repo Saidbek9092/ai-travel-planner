@@ -529,12 +529,16 @@ catalog:
 
 # Native postinstall scripts we don't need (same choice as the create-next-app template).
 ignoredBuiltDependencies:
+  - esbuild # binary ships via @esbuild/<platform>; postinstall only verifies it
   - sharp
   - unrs-resolver
 ```
 
-Packages reference catalog versions with `"zod": "catalog:"`. Zod 4 is pinned for every package;
-verify LangChain / OpenAI SDK compatibility when the agent is scaffolded.
+Packages reference catalog versions with `"zod": "catalog:"`. Zod 4 is pinned for every package and
+verified with `@langchain/core` 1.3 / `@langchain/openai` 1.7: `withStructuredOutput(schema, { strict: true })`
+emits a strict JSON schema, `withFallbacks` works, and malformed model output fails with a `ZodError`.
+Tooling that only one app uses (ESLint presets, `tsx`, Next.js) is declared in that app's `package.json`,
+not in the catalog.
 
 `turbo.json`
 
@@ -643,6 +647,30 @@ so several workspaces can run `pnpm dev` in parallel. Explicit `PORT` / `WEB_ORI
   version pinned in `packageManager`; the `pnpm` shim must be on `PATH` because Turborepo spawns `pnpm` itself.
 - Run actions: `dev` → `pnpm dev` (local only, uses `CONDUCTOR_PORT`), `test` → `pnpm test`. `run_mode = "concurrent"`.
 - Turborepo's local cache is shared across Git worktrees automatically, so new workspaces start warm.
+- Turborepo's strict env mode hides shell variables from tasks, so agent secrets go in `apps/agent/.env`
+  (read from disk by dotenv), not in the shell that runs `pnpm dev`.
+
+### 12.6 Ownership of shared files
+
+The root setup, `packages/contracts` and this document belong to the project, not to the frontend or the
+backend. Both apps depend on them, so they change in a controlled way:
+
+| Area | Owner | How it changes |
+| --- | --- | --- |
+| Root config (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.conductor/`, `.gitignore`) | Shared | Small, focused PRs that touch nothing else; merged quickly |
+| `packages/contracts` | Shared (the API contract) | Contracts first, then **both** apps updated in the same PR |
+| `ARCHITECTURE.md` | Shared | Any PR, limited to the section the change affects |
+| `apps/agent/**` | Backend | Backend tickets (`apps/agent/PLAN.md`) |
+| `apps/web/**` | Frontend | Frontend tickets (`apps/web/PLAN.md`) |
+
+Rules:
+
+1. **`main` is the source of truth.** Before starting a ticket, branch from the latest `main`; if the shared
+   files already exist there, build on them instead of creating your own. Rebase before opening a PR.
+2. **Never duplicate shared setup in an app branch.** If an app needs something shared (a catalog entry, a
+   Turbo setting), add the smallest possible change to the existing file and call it out in the PR.
+3. **Keep shared PRs small** so parallel workspaces can rebase onto them easily.
+4. **A contracts change is a cross-app change**: update or at least type-check the other app in the same PR.
 
 ---
 

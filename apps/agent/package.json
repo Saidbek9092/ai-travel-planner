@@ -1,0 +1,40 @@
+{
+  "name": "ai-travel-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@ai-travel/contracts": "workspace:*",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "catalog:",
+    "@types/supertest": "^7.2.1",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "catalog:",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "catalog:"
+  }
+}

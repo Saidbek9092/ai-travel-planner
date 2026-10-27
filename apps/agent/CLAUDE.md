@@ -43,12 +43,17 @@ apps/agent/
 │   │   └── rateLimiter.ts         # express-rate-limit instances
 │   ├── utils/
 │   │   ├── sseStreamer.ts         # SSE writer, validates every packet with SseEventSchema
-│   │   └── errors.ts              # + AppError + error codes
-│   ├── server.ts                  # Express app, routes, startup, graceful shutdown
+│   │   ├── errors.ts              # + AppError + error codes
+│   │   └── logger.ts              # + structured JSON logger
+│   ├── app.ts                     # + createApp(deps): middlewares + routes, no listen (supertest)
+│   ├── server.ts                  # boot: loadConfig → createApp → listen, graceful shutdown
 │   └── config.ts                  # Zod-validated env
 ├── test/                          # Vitest unit + integration tests
+├── .env.example                   # every variable from §4
 ├── package.json                   # name: ai-travel-agent
-└── tsconfig.json                  # extends ../../tsconfig.base.json, module NodeNext
+├── tsconfig.json                  # extends ../../tsconfig.base.json, NodeNext, src + test (typecheck)
+├── tsconfig.build.json            # src only → dist/
+└── eslint.config.js               # @eslint/js + typescript-eslint, Node globals
 ```
 
 Files marked `+` are not in the blueprint tree; see ARCHITECTURE.md §15 for why they exist.
@@ -67,7 +72,7 @@ Files marked `+` are not in the blueprint tree; see ARCHITECTURE.md §15 for why
 | `@langchain/langgraph-checkpoint-postgres` | `PostgresSaver` for production |
 | `@langchain/openai`, `@langchain/core` | `ChatOpenAI`, `withStructuredOutput`, `withFallbacks` |
 | `zod` (`catalog:`) | Validation |
-| `dotenv` | Load `.env` in development (`import 'dotenv/config'` at the top of `config.ts`) |
+| `dotenv` | Load `apps/agent/.env` in development (`loadDotenv({ quiet: true })` inside `loadConfig()`) |
 | dev: `typescript`, `tsx`, `vitest`, `supertest` | Build, watch mode, tests |
 
 Scripts:
@@ -75,7 +80,7 @@ Scripts:
 ```json
 {
   "dev": "tsx watch src/server.ts",
-  "build": "tsc -p tsconfig.json",
+  "build": "tsc -p tsconfig.build.json",
   "start": "node dist/server.js",
   "test": "vitest run",
   "typecheck": "tsc --noEmit",
@@ -87,8 +92,13 @@ Scripts:
 
 ## 4. Configuration — `src/config.ts`
 
-Parsed once at boot with Zod; on failure print the issues and `process.exit(1)`. The rest of the code
-imports the typed `config` object and **never reads `process.env` directly**.
+`parseConfig(env)` is a pure Zod parser (unit-tested); `loadConfig()` loads `.env`, parses `process.env`,
+prints the issues and `process.exit(1)` on failure. `server.ts` calls `loadConfig()` once and **injects** the
+typed `Config` (`createApp({ config, … })`, later `buildGraph`, `runTrip`), so importing a module never
+triggers env parsing. Nothing outside `config.ts` reads `process.env`.
+
+Blank values (`KEY=` copied from `.env.example`) count as unset. `WEB_ORIGIN` entries are normalised to
+origins (`https://x.com/` → `https://x.com`) because CORS compares them to the browser's `Origin` exactly.
 
 | Variable | Type / default | Notes |
 | --- | --- | --- |
@@ -108,7 +118,9 @@ imports the typed `config` object and **never reads `process.env` directly**.
 | `RATE_LIMIT_MAX_RUNS` | int, default `10` | Max trip runs per IP per window |
 | `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` | optional | LangGraph tracing |
 
-In `production`, `WEB_ORIGIN` must be set explicitly (no localhost default).
+Cross-field rules: in `production`, `WEB_ORIGIN` must be set explicitly (no localhost default);
+`TOOLS_MODE=live` requires `SERPAPI_API_KEY`; `LANGSMITH_TRACING=true` requires `LANGSMITH_API_KEY`;
+`DATABASE_URL` must be a `postgres://` / `postgresql://` URL.
 
 ---
 
@@ -145,6 +157,8 @@ class AppError extends Error { constructor(public code: ErrorCode, message: stri
 
 - Response shape: `{ "error": { "code": "...", "message": "..." } }`. `ZodError` → `400` with the
   flattened issues in `message`; unknown errors → `500 INTERNAL` with a generic message (stack only in logs).
+- Body-parser errors keep the code set small: malformed JSON → `400 VALIDATION_ERROR`, body over 10 kb →
+  `413 VALIDATION_ERROR`.
 - **If `res.headersSent` is true (stream already open), the error handler must not write JSON.**
   Stream errors are handled inside `runTrip` (§7) — the handler only logs and ends the response.
 
