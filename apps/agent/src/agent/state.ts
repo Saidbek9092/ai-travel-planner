@@ -1,4 +1,4 @@
-import { Annotation } from '@langchain/langgraph';
+import { Annotation, type LangGraphRunnableConfig } from '@langchain/langgraph';
 import type {
   AgentName,
   BudgetPass,
@@ -44,6 +44,8 @@ export const TravelAgentStateAnnotation = Annotation.Root({
   transfers: replace<Transfer[]>(() => []),
   itinerary: replace<ItineraryDay[]>(() => []),
   dailyExpensesEstimate: replace<number>(() => 0),
+  /** Name of the hotel the current itinerary was routed around; lets a re-plan spot a hotel change. */
+  itineraryHotel: replace<string | null>(() => null),
 
   totalCost: replace<number>(() => 0),
   retryCount: replace<number>(() => 0),
@@ -61,7 +63,7 @@ export type TravelAgentState = typeof TravelAgentStateAnnotation.State;
 export type TravelAgentUpdate = typeof TravelAgentStateAnnotation.Update;
 
 /** Every graph node: reads the state, returns only the keys it changes (including its own `logs`). */
-export type TravelNode = (state: TravelAgentState) => Promise<TravelAgentUpdate>;
+export type TravelNode = (state: TravelAgentState, config?: LangGraphRunnableConfig) => Promise<TravelAgentUpdate>;
 
 /** Graph input for a new run: the prompt plus the explicit form fields that override what the Supervisor parses. */
 export function initialState({ prompt, ...overrides }: TripRequest): TravelAgentUpdate {
@@ -82,4 +84,19 @@ export function log(
   kind: LogKind = 'log',
 ): LogEntry {
   return { timestamp: new Date().toISOString(), agent, message, step: nextStep(state), level, kind };
+}
+
+/** "$1,000" — whole dollars with thousands separators; cents only when present. */
+export function formatUsd(amount: number): string {
+  return `$${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+}
+
+/** Log line that tells the user the live provider failed and estimates are shown instead (web turns it into a banner). */
+export function searchFallbackLog(state: Pick<TravelAgentState, 'logs'>, agent: AgentName, what: string): LogEntry {
+  return log(state, agent, `Live ${what} prices unavailable, using estimates.`, 'warn', 'search-fallback');
+}
+
+/** Log line for a run that used the fallback model (web turns it into the "Running on fallback model" banner). */
+export function llmFallbackLog(state: Pick<TravelAgentState, 'logs'>, agent: AgentName, model: string): LogEntry {
+  return log(state, agent, `Primary model unavailable, used ${model}`, 'warn', 'llm-fallback');
 }
