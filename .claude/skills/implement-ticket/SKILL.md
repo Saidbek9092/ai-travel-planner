@@ -7,7 +7,7 @@ description: Implement one ticket from apps/agent/PLAN.md (B*) or apps/web/PLAN.
 
 1. Find the ticket in `apps/<app>/PLAN.md`; note its Goal, Depends on, and the SPEC § it cites.
 2. Confirm dependencies are merged (`git log --oneline`); stop and say so if not.
-3. Read only the cited `SPEC.md` sections and the `ARCHITECTURE.md` sections the ticket lists.
+3. Read only the cited spec sections (`apps/web/SPEC.md`, or `apps/agent/PLAN.md` Part 2) and the `ARCHITECTURE.md` sections the ticket lists.
    If the task touches UI or packets, run the `design-check` skill first.
 4. Implement exactly the ticket scope. One ticket = one branch = one PR; no drive-by refactors.
 5. If the implementation deviates from the SPEC, update the SPEC in the same change.

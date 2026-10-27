@@ -1,7 +1,7 @@
 # AI Travel Planner — Technical Architecture
 
 > Source of truth for the whole system. Component-level specifications and implementation plans live in
-> [`apps/agent/SPEC.md`](./apps/agent/SPEC.md) (backend) and
+> [`apps/agent/PLAN.md`](./apps/agent/PLAN.md) (backend) and
 > [`apps/web/SPEC.md`](./apps/web/SPEC.md) (frontend).
 > Derived from *Enterprise Multi-Agent AI Travel Planner — Architecture Blueprint* (2026-10-25).
 
@@ -152,7 +152,7 @@ collide with state keys, and the state already has `budget`, `flights`, `hotels`
 On a re-plan the planner runs again. A different hotel moves the start and end of every day, and the cheaper
 pass picks cheaper airport transfers (train instead of taxi), so the design shows the Planner re-routing the days
 ("Re-routing day 3 around the new hotel"). To keep the cost down it reuses the places of the earlier pass and
-only re-orders or swaps the stops that depend on the hotel (§8.4 of `apps/agent/SPEC.md`).
+only re-orders or swaps the stops that depend on the hotel (§8.4 of `apps/agent/PLAN.md`).
 
 ### 4.2 Node responsibilities
 
@@ -798,7 +798,7 @@ passes).
 Errors **before** the stream opens are JSON: `{ "error": { "code": "VALIDATION_ERROR", "message": "…" } }`
 with `400 / 404 / 429 / 500`. A `429` also carries `retryAfterSeconds` in the error object (and the standard
 `Retry-After` header, exposed through CORS) so the form can show a countdown ("Plan trip in 0:42"). Errors **after** the stream opens are a `RESULT` packet with
-`status: "failed"`. Full details in `apps/agent/SPEC.md`.
+`status: "failed"`. Full details in `apps/agent/PLAN.md`.
 
 ### 7.1 Trip context lookup (top bar)
 
@@ -882,7 +882,7 @@ Planner (`tools/weather.ts` `getForecast`, Open-Meteo reaches ~16 days ahead; la
 ```text
 ai-travel-planner/
 ├── apps/
-│   ├── agent/                  # ai-travel-agent → Render   (spec: apps/agent/SPEC.md)
+│   ├── agent/                  # ai-travel-agent → Render   (spec: apps/agent/PLAN.md)
 │   └── web/                    # ai-travel-web   → Vercel   (spec: apps/web/SPEC.md)
 ├── packages/
 │   └── contracts/              # @ai-travel/contracts (Zod schemas + types)
@@ -894,7 +894,7 @@ ai-travel-planner/
 └── tsconfig.base.json          # shared strict TS config
 ```
 
-Per-app trees are in `apps/agent/SPEC.md` §2 and `apps/web/SPEC.md` §2.
+Per-app trees are in `apps/agent/PLAN.md` §2 and `apps/web/SPEC.md` §2.
 
 ---
 
@@ -932,7 +932,7 @@ ignoredBuiltDependencies:
 
 Packages reference catalog versions with `"zod": "catalog:"`. Zod 4 is pinned for every package and
 checked with `@langchain/core` 1.3 (the structured-output spike must be re-run against `@langchain/anthropic`;
-see `apps/agent/SPEC.md` §15, open question 2).
+see `apps/agent/PLAN.md` Part 1, open question 2).
 Tooling that only one app uses (ESLint presets, `tsx`, Next.js) is declared in that app's `package.json`,
 not in the catalog.
 
@@ -1056,7 +1056,7 @@ backend. Both apps depend on them, so they change in a controlled way:
 | Root config (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.conductor/`, `.gitignore`) | Shared | Small, focused PRs that touch nothing else; merged quickly |
 | `packages/contracts` | Shared (the API contract) | Contracts first, then **both** apps updated in the same PR |
 | `ARCHITECTURE.md` | Shared | Any PR, limited to the section the change affects |
-| `apps/agent/**` | Backend | Backend tickets (`apps/agent/SPEC.md` §15) |
+| `apps/agent/**` | Backend | Backend tickets (`apps/agent/PLAN.md` Part 1) |
 | `apps/web/**` | Frontend | Frontend tickets (`apps/web/SPEC.md` §12) |
 
 Rules:
@@ -1078,7 +1078,7 @@ Rules:
 | Build command | `turbo run build` | `pnpm install --frozen-lockfile && pnpm turbo run build --filter=ai-travel-agent` |
 | Start command | managed by Vercel | `pnpm --filter ai-travel-agent start` |
 | Rebuild only when | Ignored Build Step: `npx turbo-ignore` | Build filters: `apps/agent/**`, `packages/contracts/**`, `pnpm-lock.yaml` |
-| Env vars | `NEXT_PUBLIC_MAPBOX_TOKEN`; `NEXT_PUBLIC_AGENT_URL` once the agent is deployed (unset = UI-only mode) | see `apps/agent/SPEC.md` §4 |
+| Env vars | `NEXT_PUBLIC_MAPBOX_TOKEN`; `NEXT_PUBLIC_AGENT_URL` once the agent is deployed (unset = UI-only mode) | see `apps/agent/PLAN.md` §4 |
 | Health check | — | `GET /health` |
 
 The agent builds from the repo root on purpose: Render auto-deploys only on changes inside the

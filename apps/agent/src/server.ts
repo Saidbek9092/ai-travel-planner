@@ -1,13 +1,21 @@
 import { buildGraph, createCheckpointer } from './agent/graph.js';
+import { createLlmFactory } from './agent/llm.js';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import { createTravelTool } from './tools/index.js';
 import { createLogger } from './utils/logger.js';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 const config = loadConfig();
 const logger = createLogger();
-const graph = buildGraph({ checkpointer: createCheckpointer(config) });
+const tools = createTravelTool(config, (reason) => logger.warn('live search unavailable, using mock data', { reason }));
+const graph = buildGraph({
+  checkpointer: createCheckpointer(config),
+  tools,
+  llm: createLlmFactory(config),
+  ...(config.TAVILY_API_KEY && { tavilyApiKey: config.TAVILY_API_KEY }),
+});
 const app = createApp({ config, logger, graph });
 
 const server = app.listen(config.PORT, (error) => {

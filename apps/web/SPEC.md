@@ -1037,7 +1037,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 > Two features the original blueprint did not cover: a friendly chat with confirmed decisions, and a top bar
 > with the destination's weather and exchange rate. Design: ARCHITECTURE.md §4.6, §5.2–§5.3, §7.1. The agent
-> side is in [`../agent/SPEC.md`](../agent/SPEC.md) §15, tickets B21–B23. Both new components ship after the mock agent is extended,
+> side is in [`../agent/PLAN.md`](../agent/PLAN.md), tickets B21–B23. Both new components ship after the mock agent is extended,
 > so they can be built before the backend work lands.
 
 #### T18 — Contracts: design alignment, chat messages and trip context · S · ✅ Contracts done
@@ -1094,7 +1094,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 ### M6 · Design v2
 
 > The look and the live behaviour from the design project (`.context/design`): Foundations, Components, Web-Live, Web-Trip, States, Mobile-Live,
-> Mobile-Result. The agent side is B24 – B25 in [`../agent/SPEC.md`](../agent/SPEC.md) §15. Extend the mock agent with `DRAFT`, `PROGRESS.detail` /
+> Mobile-Result. The agent side is B24 – B25 in [`../agent/PLAN.md`](../agent/PLAN.md). Extend the mock agent with `DRAFT`, `PROGRESS.detail` /
 > `pass` / `run`, checkpoint log rows, a dropped-stream scenario (`#drop`) and a rate-limit scenario (`#ratelimit`) as each ticket needs them.
 
 #### T21 — Design tokens and layout shell · M
