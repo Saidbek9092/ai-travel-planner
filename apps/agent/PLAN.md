@@ -8,15 +8,15 @@
 
 ## Overview
 
-| Milestone | Tickets | Outcome |
-| --- | --- | --- |
-| **M1 · Foundation** | B1 – B4 | Monorepo, shared contracts, Express app with config, errors, CORS, rate limits and `/health` |
-| **M2 · Streaming skeleton** | B5 – B7 | `POST /api/trips` streams real SSE packets from a graph of stub nodes — the web app can switch from its mock agent |
-| **M3 · Agent brain** | B8 – B15 | Tools, LLM factory and all five real nodes; full graph runs end to end in tests with no network |
-| **M4 · Persistence & resilience** | B16 – B18 | PostgreSQL checkpoints, resume, trip lookup, abort/timeout/shutdown, structured logs |
-| **M5 · Ship** | B19 – B20 | CI, Render deploy with Postgres, web app wired to the real agent |
-| **M6 · Chat & top bar** | B21 – B23 | Agents send friendly chat messages with confirmed decisions (`MESSAGE` packet); `GET /api/trip-context` serves weather, currency rate and time zones. Land before B20 so the integration pass covers them |
-| **M7 · Live trip & reconnect** | B24 – B25 | Design alignment: `DRAFT` packet, progress detail, checkpoint rows, run registry with reconnect / cancel, rate-limit countdown. Land before B20 |
+| Milestone | Tickets | Outcome | Status |
+| --- | --- | --- | --- |
+| **M1 · Foundation** | B1 – B4 | Monorepo, shared contracts, Express app with config, errors, CORS, rate limits and `/health` | ✅ Done (2026-10-27) |
+| **M2 · Streaming skeleton** | B5 – B7 | `POST /api/trips` streams real SSE packets from a graph of stub nodes — the web app can switch from its mock agent | ✅ Done (2026-10-27) |
+| **M3 · Agent brain** | B8 – B15 | Tools, LLM factory and all five real nodes; full graph runs end to end in tests with no network | ✅ Done in code (2026-10-27); B15 integration tests ⏸ deferred (testing phase) |
+| **M4 · Persistence & resilience** | B16 – B18 | PostgreSQL checkpoints, resume, trip lookup, abort/timeout/shutdown, structured logs | ✅ Done in code (2026-10-27); "Tests:" bullets ⏸ deferred; Postgres path not yet run against a real database |
+| **M5 · Ship** | B19 – B20 | CI, Render deploy with Postgres, web app wired to the real agent | ⏳ Todo |
+| **M6 · Chat & top bar** | B21 – B23 | Agents send friendly chat messages with confirmed decisions (`MESSAGE` packet); `GET /api/trip-context` serves weather, currency rate and time zones. Land before B20 so the integration pass covers them | 🟡 B21 done; B22 – B23 todo |
+| **M7 · Live trip & reconnect** | B24 – B25 | Design alignment: `DRAFT` packet, progress detail, checkpoint rows, run registry with reconnect / cancel, rate-limit countdown. Land before B20 | ⏳ Todo |
 
 ### Dependency graph
 
@@ -95,8 +95,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ## M1 · Foundation
 
-### B1 — Monorepo foundation · S
-
+### B1 — Monorepo foundation · S · ✅ Done
 **Goal:** one `pnpm install` and `pnpm dev` at the repo root (ARCHITECTURE.md §12). *Same as web T1.*
 
 **Depends on:** —
@@ -113,8 +112,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B2 — Shared contracts package (`@ai-travel/contracts`) · M
-
+### B2 — Shared contracts package (`@ai-travel/contracts`) · M · ✅ Done
 **Goal:** the single source of cross-service types (ARCHITECTURE.md §5). *Same as web T2.*
 
 **Depends on:** B1
@@ -130,8 +128,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B3 — Agent scaffold + validated config · M
-
+### B3 — Agent scaffold + validated config · M · ✅ Done
 **Goal:** an empty `ai-travel-agent` that builds, starts on the right port and refuses bad env (PLAN.md Part 2 §1–§4).
 
 **Depends on:** B1, B2
@@ -151,8 +148,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B4 — HTTP skeleton: middlewares, errors, `/health` · M
-
+### B4 — HTTP skeleton: middlewares, errors, `/health` · M · ✅ Done
 **Goal:** the Express app with everything except the trip routes (PLAN.md Part 2 §5.1, §5.3, §5.4).
 
 **Depends on:** B3
@@ -173,8 +169,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ## M2 · Streaming skeleton
 
-### B5 — `SseStreamer` · S
-
+### B5 — `SseStreamer` · S · ✅ Done
 **Goal:** the only way packets reach the wire (PLAN.md Part 2 §6, ARCHITECTURE.md §6.1).
 
 **Depends on:** B4
@@ -190,8 +185,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B6 — State, graph wiring and stub nodes · M
-
+### B6 — State, graph wiring and stub nodes · M · ✅ Done
 **Goal:** the real `StateGraph` with real routers and loop, running on placeholder nodes (PLAN.md Part 2 §8.1–§8.3).
 
 **Depends on:** B3
@@ -208,8 +202,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B7 — `runTrip` stream controller + `POST /api/trips` · M
-
+### B7 — `runTrip` stream controller + `POST /api/trips` · M · ✅ Done
 **Goal:** a real SSE stream from the API, end to end (PLAN.md Part 2 §5.2, §7; ARCHITECTURE.md §6.3).
 
 **Depends on:** B5, B6
@@ -229,8 +222,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ## M3 · Agent brain
 
-### B8 — Tool layer + mock travel engine · M
-
+### B8 — Tool layer + mock travel engine · M · ✅ Done
 **Goal:** a `TravelSearchTool` the nodes can call, working fully offline (PLAN.md Part 2 §10).
 
 **Depends on:** B6
@@ -246,8 +238,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B9 — SerpAPI tool (live flights & hotels) · L
-
+### B9 — SerpAPI tool (live flights & hotels) · L · ✅ Done
 **Goal:** real prices from Google Flights / Google Hotels with safe degradation (PLAN.md Part 2 §10).
 
 **Depends on:** B8
@@ -266,8 +257,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B10 — LLM factory + fake factory · S
-
+### B10 — LLM factory + fake factory · S · ✅ Done
 **Goal:** one place that builds structured-output models with fallback (PLAN.md Part 2 §9).
 
 **Depends on:** B6
@@ -283,8 +273,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B11 — Budget Auditor node · S
-
+### B11 — Budget Auditor node · S · ✅ Done
 **Goal:** the deterministic cost check and re-plan decision (PLAN.md Part 2 §8.4, ARCHITECTURE.md §4.3), including transfers, per-pass records and over-budget suggestions.
 
 **Depends on:** B6
@@ -301,8 +290,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B12 — Flight Agent + Hotel Agent nodes · M
-
+### B12 — Flight Agent + Hotel Agent nodes · M · ✅ Done
 **Goal:** search, sort and select flights and hotels, honouring cheaper mode (PLAN.md Part 2 §8.4).
 
 **Depends on:** B8
@@ -320,8 +308,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B13 — Supervisor node · M
-
+### B13 — Supervisor node · M · ✅ Done
 **Goal:** turn free text into a structured trip, safely (PLAN.md Part 2 §8.4, ARCHITECTURE.md §9).
 
 **Depends on:** B10
@@ -340,8 +327,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B14 — Planner node (transfers, forecast, day by day) · L
-
+### B14 — Planner node (transfers, forecast, day by day) · L · ✅ Done
 **Goal:** airport transfers, a per-day forecast, and a day-by-day plan with real coordinates and a daily spend estimate, produced one day at a time (PLAN.md Part 2 §8.4).
 
 **Depends on:** B10, B8 (weather client in B23 provides `getForecast`; stub it until then)
@@ -385,8 +371,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ## M4 · Persistence & resilience
 
-### B16 — PostgreSQL checkpointer, resume and trip lookup · L
-
+### B16 — PostgreSQL checkpointer, resume and trip lookup · L · ✅ Done
 **Goal:** runs survive failures and reloads (PLAN.md Part 2 §5.2, §11; ARCHITECTURE.md §4.5).
 
 **Depends on:** B15
@@ -404,8 +389,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B17 — Abort, timeout and graceful shutdown · M
-
+### B17 — Abort, timeout and graceful shutdown · M · ✅ Done
 **Goal:** no wasted LLM/tool spend and no hung streams (ARCHITECTURE.md §8, §5.5, §7).
 
 **Depends on:** B15
@@ -421,8 +405,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ---
 
-### B18 — Observability · S
-
+### B18 — Observability · S · ✅ Done
 **Goal:** every run is traceable by `threadId` (PLAN.md Part 2 §12, ARCHITECTURE.md §10).
 
 **Depends on:** B15

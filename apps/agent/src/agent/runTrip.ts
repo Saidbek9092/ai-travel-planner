@@ -1,6 +1,7 @@
 import type { ProgressPayload, ResultPayload, SseEventInput, TripRequest, TripStatus } from '@ai-travel/contracts';
 import type { CompiledTravelGraph } from './graph.js';
 import { initialState, log, MAX_BUDGET_RETRIES, type LogEntry, type TravelAgentState } from './state.js';
+import { abortMessage } from './activeRuns.js';
 import type { Logger } from '../utils/logger.js';
 
 const GENERIC_ERROR = 'Something went wrong while planning your trip. Please try again.';
@@ -69,7 +70,10 @@ export interface RunTripArgs {
   /** Receives every packet in order; the HTTP route wires it to one `SseStreamer`. */
   emit: (event: SseEventInput) => void;
   threadId: string;
-  request: TripRequest;
+  /** Required for a new run; ignored when `resume` is set. */
+  request?: TripRequest;
+  /** Continue from the last checkpoint instead of starting over. */
+  resume?: boolean;
   /** Timeout / cancel / shutdown. A closed client connection must NOT abort the run. */
   signal?: AbortSignal;
   logger?: Logger;
@@ -79,12 +83,16 @@ export interface RunTripArgs {
  * Runs the graph and turns its stream into packets: node logs → `LOG`, node + status → `PROGRESS`,
  * then exactly one `RESULT`. Never throws; failures end the stream with `RESULT failed`.
  */
-export async function runTrip({ graph, emit, threadId, request, signal, logger }: RunTripArgs): Promise<void> {
+export async function runTrip({ graph, emit, threadId, request, resume = false, signal, logger }: RunTripArgs): Promise<void> {
   const config = { configurable: { thread_id: threadId }, recursionLimit: 20, ...(signal && { signal }) };
   const emitLog = (entry: LogEntry) => emit({ type: 'LOG', payload: entry });
   const emitProgress = (payload: Pick<ProgressPayload, 'progressPercent' | 'currentStatus'> & Partial<ProgressPayload>) =>
     emit({ type: 'PROGRESS', payload });
 
+  const startedAt = Date.now();
+  let nodeStartedAt = startedAt;
+  let llmFallbackUsed = false;
+  let toolFallbackUsed = false;
   let retryCount = 0;
   let lastPercent = 5;
 
@@ -92,13 +100,18 @@ export async function runTrip({ graph, emit, threadId, request, signal, logger }
     emitProgress({ progressPercent: lastPercent, currentStatus: 'parsing' });
 
     // `custom` carries the Planner's per-day events; they are mapped in B24.
-    const stream = await graph.stream(initialState(request), { ...config, streamMode: ['updates', 'custom'] });
+    const input = resume || request === undefined ? null : initialState(request);
+    const stream = await graph.stream(input, { ...config, streamMode: ['updates', 'custom'] });
     for await (const [mode, chunk] of stream) {
       if (mode !== 'updates') continue;
 
       for (const [node, update] of Object.entries(chunk as Record<string, NodeUpdate | null>)) {
         if (update == null) continue;
         update.logs?.forEach(emitLog);
+        llmFallbackUsed ||= update.logs?.some((entry) => entry.kind === 'llm-fallback') ?? false;
+        toolFallbackUsed ||= update.logs?.some((entry) => entry.kind === 'search-fallback') ?? false;
+        logger?.info('node finished', { threadId, node, durationMs: Date.now() - nodeStartedAt });
+        nodeStartedAt = Date.now();
         retryCount = update.retryCount ?? retryCount;
 
         const progress = progressAfter(node, update);
@@ -115,18 +128,36 @@ export async function runTrip({ graph, emit, threadId, request, signal, logger }
     const values: Partial<TravelAgentState> = (await graph.getState(config)).values;
     emitProgress({ progressPercent: 100, currentStatus: values.status === 'failed' ? 'failed' : 'completed' });
     emit({ type: 'RESULT', payload: buildResultPayload(threadId, values) });
+    summarize(values.status === 'failed' ? 'failed' : 'completed');
   } catch (error) {
-    logger?.error('run failed', {
-      threadId,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    // An abort is an expected outcome, not an error worth a stack trace.
+    if (signal?.aborted) logger?.warn('run aborted', { threadId, reason: abortMessage(signal) ?? 'cancelled' });
+    else {
+      logger?.error('run failed', {
+        threadId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    }
     await emitFailure();
+    summarize(signal?.aborted ? 'aborted' : 'failed');
+  }
+
+  function summarize(outcome: 'completed' | 'failed' | 'aborted') {
+    logger?.info('run summary', {
+      threadId,
+      outcome,
+      resumed: resume,
+      retryCount,
+      llmFallbackUsed,
+      toolFallbackUsed,
+      totalMs: Date.now() - startedAt,
+    });
   }
 
   /** Safe message only: no stack, no keys. The result carries whatever the last checkpoint holds. */
   async function emitFailure() {
-    const message = signal?.aborted ? INTERRUPTED_ERROR : GENERIC_ERROR;
+    const message = abortMessage(signal) ?? (signal?.aborted ? INTERRUPTED_ERROR : GENERIC_ERROR);
     try {
       const values: Partial<TravelAgentState> = await graph
         .getState(config)
