@@ -13,6 +13,11 @@ export const metadata: Metadata = {
   title: 'AI Travel Planner',
   description:
     'Plan a trip in one sentence: flights, hotels and a day-by-day itinerary within your budget.',
+  openGraph: {
+    title: 'AI Travel Planner',
+    description: 'Flights, hotels and a day-by-day itinerary within your budget, planned by AI agents.',
+    type: 'website',
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {

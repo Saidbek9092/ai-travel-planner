@@ -79,6 +79,25 @@ createServer(async (req, res) => {
     return void (await stream(res, threadId, scenarios[pickScenario(prompt)]!(threadId)));
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/trip-context') {
+    const destination = url.searchParams.get('destination') ?? '';
+    if (destination.trim().length < 2 || destination.includes('#unknowncity')) {
+      return json(res, 404, { error: { code: 'NOT_FOUND', message: 'Unknown place' } });
+    }
+    const origin = url.searchParams.get('origin');
+    return json(res, 200, {
+      location: 'Paris, France',
+      weather: destination.includes('#noweather')
+        ? null
+        : { temperatureC: 12, condition: 'Partly cloudy', icon: 'partly-cloudy', todayLowC: 9, todayHighC: 14, outlook: 'rain Saturday' },
+      currency: { code: 'EUR', symbol: '€' },
+      exchangeRate: destination.includes('#norate') ? null : { base: 'USD', quote: 'EUR', rate: 0.92, asOf: new Date().toISOString() },
+      timeZone: 'Europe/Paris',
+      originTimeZone: origin ? 'Asia/Tashkent' : null,
+      source: 'mock',
+    });
+  }
+
   const resume = /^\/api\/trips\/([^/]+)\/resume$/.exec(url.pathname);
   if (req.method === 'POST' && resume) {
     const threadId = resume[1]!;
@@ -87,7 +106,11 @@ createServer(async (req, res) => {
 
   const lookup = /^\/api\/trips\/([^/]+)$/.exec(url.pathname);
   if (req.method === 'GET' && lookup) {
-    const result = trips.get(lookup[1]!) ?? resultPacket(lookup[1]!).payload;
+    const known = trips.get(lookup[1]!);
+    if (!known && !/^[0-9a-f-]{36}$/i.test(lookup[1]!)) {
+      return json(res, 404, { error: { code: 'NOT_FOUND', message: 'Trip not found' } });
+    }
+    const result = known ?? resultPacket(lookup[1]!).payload;
     return json(res, 200, result);
   }
 

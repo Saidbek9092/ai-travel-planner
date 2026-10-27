@@ -3,9 +3,9 @@
 import type { LogPayload } from '@ai-travel/contracts';
 import { AlertTriangleIcon, ArrowDownIcon, CircleXIcon } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { StreamStatus } from '@/hooks/useAgentStream';
+import { useStickToBottom } from '@/hooks/useStickToBottom';
 import { AGENT_COLORS, LOG_LEVEL_STYLES } from '@/lib/labels';
 import { cn, formatTime } from '@/lib/utils';
 
@@ -18,26 +18,8 @@ const LEVEL_ICONS = { info: null, warn: AlertTriangleIcon, error: CircleXIcon } 
 
 export function AgentTerminalLogs({ logs, status }: AgentTerminalLogsProps) {
   const reduceMotion = useReducedMotion();
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const [stuck, setStuck] = useState(true);
+  const { viewportRef, stuck, onScroll, jumpToLatest } = useStickToBottom(logs.length);
   const streaming = status === 'streaming' || status === 'connecting';
-
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (viewport && stuck) viewport.scrollTop = viewport.scrollHeight;
-  }, [logs.length, stuck]);
-
-  const onScroll = () => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    setStuck(viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 24);
-  };
-
-  const jumpToLatest = () => {
-    const viewport = viewportRef.current;
-    if (viewport) viewport.scrollTop = viewport.scrollHeight;
-    setStuck(true);
-  };
 
   return (
     <div className="relative rounded-xl bg-zinc-950 text-sm">
