@@ -15,9 +15,9 @@ const EnvSchema = z
     CONDUCTOR_PORT: port.optional(),
     WEB_ORIGIN: z.string().optional(),
 
-    OPENAI_API_KEY: secret,
-    OPENAI_MODEL: z.string().min(1).default('gpt-4o'),
-    OPENAI_FALLBACK_MODEL: z.string().min(1).default('gpt-4o-mini'),
+    ANTHROPIC_API_KEY: secret,
+    ANTHROPIC_MODEL: z.string().min(1).default('claude-opus-5-5'),
+    ANTHROPIC_FALLBACK_MODEL: z.string().min(1).default('claude-sonnet-5-5'),
 
     SERPAPI_API_KEY: secret.optional(),
     TAVILY_API_KEY: secret.optional(),

@@ -62,7 +62,7 @@ backend builds on that setup. Shared files follow the ownership rules in ARCHITE
 
 - `pnpm --filter ai-travel-agent typecheck lint test` passes (and `build` from B3 on).
 - Cross-service types come only from `@ai-travel/contracts`; `process.env` is read only in `src/config.ts`.
-- No test calls OpenAI, SerpAPI, Tavily or a real database (fake `LlmFactory`, `TOOLS_MODE=mock`, `MemorySaver`).
+- No test calls Anthropic, SerpAPI, Tavily or a real database (fake `LlmFactory`, `TOOLS_MODE=mock`, `MemorySaver`).
 - Relative imports use the `.js` extension (ESM + `NodeNext`).
 - New behaviour has tests as listed in the ticket.
 - If the implementation has to deviate from `CLAUDE.md`, the spec is updated in the same PR.
@@ -108,7 +108,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 **Tasks**
 - `packages/contracts/package.json`: name `@ai-travel/contracts`, `"type": "module"`, `exports` → `dist/index.js` + `.d.ts`, scripts `build: tsc`, `dev: tsc --watch`, `test`, `typecheck`.
 - `src/trip.ts`, `src/sse-events.ts`, `src/index.ts` exactly as in §5.1 / §5.2.
-- **Zod 4 check:** confirm the pinned `zod` version works with `@langchain/core` / `@langchain/openai` `withStructuredOutput` (a 10-line spike is enough). If not, pin the catalog to a compatible version now — both apps depend on this choice.
+- **Zod 4 check:** confirm the pinned `zod` version works with `@langchain/core` / `@langchain/anthropic` `withStructuredOutput` (a 10-line spike is enough). If not, pin the catalog to a compatible version now — both apps depend on this choice.
 - Tests: blueprint example packets parse; malformed packets rejected (wrong `type`, missing fields, percent > 100, bad coordinates, non-UUID `threadId`); `TripRequestSchema` bounds.
 
 **Acceptance**
@@ -129,7 +129,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 - `src/config.ts`: Zod schema for every variable in CLAUDE.md §4 — `PORT` derived from `CONDUCTOR_PORT + 1` / 4000, `WEB_ORIGIN` comma list with the localhost default (required in `production`), `TOOLS_MODE`, `RUN_TIMEOUT_MS`, rate-limit values, optional keys. Print issues and `process.exit(1)` on failure. Export a pure `parseConfig(env)` for tests.
 - `.env.example` with every variable and a one-line comment each.
 - Placeholder `src/server.ts` that logs the port and listens.
-- Tests: `test/config.test.ts` — defaults, `CONDUCTOR_PORT` derivation, `PORT` wins, `WEB_ORIGIN` list parsing, production without `WEB_ORIGIN` fails, missing `OPENAI_API_KEY` fails.
+- Tests: `test/config.test.ts` — defaults, `CONDUCTOR_PORT` derivation, `PORT` wins, `WEB_ORIGIN` list parsing, production without `WEB_ORIGIN` fails, missing `ANTHROPIC_API_KEY` fails.
 
 **Acceptance**
 - `pnpm dev` from the root starts the agent on `$CONDUCTOR_PORT + 1` (or 4000) next to the web app.
@@ -259,13 +259,13 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 **Depends on:** B6
 
 **Tasks**
-- `agent/llm.ts`: `LlmFactory.structured(schema, name, opts?)` → primary `ChatOpenAI` (`temperature`, `maxRetries: 2`, `timeout: 30_000`) `.withStructuredOutput(schema, { name, strict: true })` `.withFallbacks([fallback…])`.
-- Report which model answered (so nodes can add the "used gpt-4o-mini" `warn` log) — e.g. return `{ data, model }` or expose an `onFallback` callback.
+- `agent/llm.ts`: `LlmFactory.structured(schema, name, opts?)` → primary `ChatAnthropic` (`maxRetries: 2`, `timeout: 30_000`; no `temperature`) `.withStructuredOutput(schema, { name })` `.withFallbacks([fallback…])`.
+- Report which model answered (so nodes can add the "used claude-sonnet-5-5" `warn` log) — e.g. return `{ data, model }` or expose an `onFallback` callback.
 - `test/helpers/fakeLlm.ts`: fake factory returning canned objects per schema name, with an option to throw (for fallback/failure tests).
 - Tests: fallback is used when the primary throws (with fake chat models), strict-schema helper rejects `optional()` fields.
 
 **Acceptance**
-- No node constructs `ChatOpenAI` directly; everything goes through `LlmFactory`.
+- No node constructs `ChatAnthropic` directly; everything goes through `LlmFactory`.
 
 ---
 
@@ -332,7 +332,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 **Tasks**
 - Structured schema `{ dailyExpensesEstimate, days: ItineraryDay[] }` (strict-compatible version of the contract schema).
-- Prompt: real well-known places, accurate coordinates, 2–5 places per day, realistic USD per-day spend for one traveller; `temperature: 0.4`.
+- Prompt: real well-known places, accurate coordinates, 2–5 places per day, realistic USD per-day spend for one traveller.
 - Post-validation: exactly `durationDays` days numbered 1..N (fail → treat as model failure → fallback), drop places > ~100 km from the day's median point (haversine helper).
 - Optional Tavily context when `TAVILY_API_KEY` is set (top attractions passed into the prompt; skipped silently on error).
 - Replace the B6 stub.
@@ -392,13 +392,13 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 **Depends on:** B15
 
 **Tasks**
-- Client disconnect aborts the graph and in-flight `fetch`/LLM calls (signal threaded into tools and `ChatOpenAI` calls).
+- Client disconnect aborts the graph and in-flight `fetch`/LLM calls (signal threaded into tools and `ChatAnthropic` calls).
 - `RUN_TIMEOUT_MS` via `AbortSignal.timeout` → `RESULT failed` "Trip planning took too long, resume to continue".
 - Active-run registry; `SIGTERM`/`SIGINT` → stop accepting, abort runs with "Server restarting, resume to continue", close Postgres pool, exit ≤ 10 s.
 - Tests: abort mid-run stops further node execution (spy), timeout path with a slow fake node, shutdown sends failed `RESULT` to open streams.
 
 **Acceptance**
-- Closing the browser tab mid-run produces no further OpenAI/SerpAPI requests (verified in logs).
+- Closing the browser tab mid-run produces no further Anthropic/SerpAPI requests (verified in logs).
 
 ---
 
@@ -432,7 +432,7 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 - GitHub Actions (shared with web T17 if it exists): pnpm cache, `pnpm install --frozen-lockfile`, `pnpm turbo run lint typecheck test build`.
 - Render web service: root = repo root, build/start commands and build filters from §13, health check `/health`, Corepack pnpm version.
 - Render Postgres instance; `DATABASE_URL` linked.
-- Env vars: `OPENAI_API_KEY`, `SERPAPI_API_KEY`, `WEB_ORIGIN` (production + preview domains), `NODE_ENV=production`, optional Tavily / LangSmith.
+- Env vars: `ANTHROPIC_API_KEY`, `SERPAPI_API_KEY`, `WEB_ORIGIN` (production + preview domains), `NODE_ENV=production`, optional Tavily / LangSmith.
 - Smoke test after deploy: `/health`, one real trip, one resume.
 - `apps/agent/README.md`: run locally, env vars, deploy notes.
 
@@ -459,8 +459,8 @@ Size: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 2 days.
 
 ## Open questions
 
-1. **Model choice** — the spec defaults to `gpt-4o` / `gpt-4o-mini`. Confirm these are still the models you want (and still available) before B10, or change the `OPENAI_MODEL` defaults.
-2. ~~**Zod 4 vs LangChain**~~ — resolved in B2: Zod 4.6 works with `@langchain/core` 1.3 / `@langchain/openai` 1.7 (`withStructuredOutput(…, { strict: true })` emits a strict JSON schema, `withFallbacks` works, malformed output is rejected with a `ZodError`). Staying on Zod 4.
+1. **Model choice** — the spec defaults to `claude-opus-5-5` / `claude-sonnet-5-5`. Confirm these are still the models you want (and still available) before B10, or change the `ANTHROPIC_MODEL` defaults.
+2. **Zod 4 vs LangChain** — the B2 spike was run against the OpenAI package; re-run it against `@langchain/anthropic`. It must confirm that `withStructuredOutput` works with Zod 4 **without a forced `tool_choice`** (a 400 on Opus 5.5 / Sonnet 5.5), that `withFallbacks` works, and that malformed output is rejected with a `ZodError`.
 3. **Hotel nights** — keep `durationDays` nights (blueprint) or switch to `durationDays - 1` (ARCHITECTURE.md §15)? Affects B11/B12 and the web cards.
 4. **SerpAPI plan** — the free tier has a low monthly quota; is mock-only acceptable for previews/staging, with live search only in production?
 5. **Render tier** — the free tier sleeps and cold-starts (slow first stream) and its Postgres expires; use a paid instance for production?

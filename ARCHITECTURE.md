@@ -22,7 +22,7 @@ browser as typed SSE packets.
 | **Type safety end to end** | TypeScript strict mode everywhere; Zod schemas in `packages/contracts` shared by both apps |
 | **State persistence & resiliency** | LangGraph Checkpointer (`MemorySaver` in dev, `PostgresSaver` in prod); a run that fails at step N resumes from the last checkpoint |
 | **Standardized stream protocol** | Every SSE packet is one of `LOG` / `PROGRESS` / `RESULT`, validated by Zod on send and on receive |
-| **Fallbacks & rate limits** | GPT-4o → GPT-4o-mini; SerpAPI → Mock engine; retries with backoff; `express-rate-limit` on the API |
+| **Fallbacks & rate limits** | Claude Opus 5.5 → Claude Sonnet 5.5; SerpAPI → Mock engine; retries with backoff; `express-rate-limit` on the API |
 | **Bounded loops** | Budget Auditor re-plans at most 2 times (`retryCount`), then returns the best result with a warning |
 
 ---
@@ -35,7 +35,7 @@ browser as typed SSE packets.
 | Monorepo | pnpm workspaces + Turborepo | One install, one command, ordered + cached builds |
 | Backend service | Node.js (LTS) + Express | REST + SSE stream controller, CORS, rate limiting |
 | AI orchestration | `@langchain/langgraph` | `StateGraph`, conditional edges, Checkpointer |
-| LLM | OpenAI via LangChain (`@langchain/openai`) | GPT-4o with Structured Outputs (Zod), GPT-4o-mini fallback |
+| LLM | Anthropic via LangChain (`@langchain/anthropic`) | Claude Opus 5.5 with structured outputs (Zod), Claude Sonnet 5.5 fallback |
 | Validation | Zod | Contracts, env config, LLM outputs, request bodies |
 | Tools / data | SerpAPI (Google Flights / Google Hotels), Tavily (optional), Mock engine | Flight & hotel search with offline fallback |
 | Frontend | Next.js 16 (App Router, Turbopack) | RSC shell + client streaming dashboard |
@@ -62,7 +62,7 @@ flowchart LR
     Graph[LangGraph StateGraph<br/>5 agent nodes]
     CP[(Checkpointer<br/>MemorySaver / PostgresSaver)]
     Tools[Tool layer<br/>SerpAPI → Mock fallback]
-    LLM[LLM factory<br/>GPT-4o → GPT-4o-mini]
+    LLM[LLM factory<br/>Claude Opus 5.5 → Claude Sonnet 5.5]
     MW --> Ctrl --> Graph
     Graph <--> CP
     Graph --> Tools
@@ -70,7 +70,7 @@ flowchart LR
   end
 
   subgraph External["External services"]
-    OpenAI[(OpenAI API)]
+    Anthropic[(Anthropic API)]
     Serp[(SerpAPI)]
     PG[(PostgreSQL)]
     Mapbox[(Mapbox tiles)]
@@ -78,7 +78,7 @@ flowchart LR
 
   Hook -- "POST /api/trips (JSON)" --> MW
   Ctrl -- "text/event-stream: LOG · PROGRESS · RESULT" --> Hook
-  LLM --> OpenAI
+  LLM --> Anthropic
   Tools --> Serp
   CP --> PG
   UI --> Mapbox
@@ -446,7 +446,7 @@ with `400 / 404 / 429 / 500`. Errors **after** the stream opens are a `RESULT` p
 
 | Failure | Handling |
 | --- | --- |
-| OpenAI error / timeout / 429 on GPT-4o | SDK retries (`maxRetries: 2`), then `.withFallbacks([gpt-4o-mini])` |
+| Anthropic API error / timeout / 429 on Opus 5.5 | SDK retries (`maxRetries: 2`), then `.withFallbacks([claude-sonnet-5-5])` |
 | Both models fail | Node throws → `RESULT failed`, checkpoint kept → resumable |
 | LLM output does not match schema | Structured Outputs + Zod parse; a parse failure counts as a model failure and triggers the fallback |
 | SerpAPI error / timeout (10 s) / 429 | 2 retries with exponential backoff + jitter, then Mock engine; a `warn` LOG and a `warnings` entry ("Live prices unavailable, showing estimates") |
@@ -460,7 +460,7 @@ with `400 / 404 / 429 / 500`. Errors **after** the stream opens are a `RESULT` p
 
 ## 9. Security
 
-- **Secrets only on the agent.** `OPENAI_API_KEY`, `SERPAPI_API_KEY`, `TAVILY_API_KEY`, `DATABASE_URL`
+- **Secrets only on the agent.** `ANTHROPIC_API_KEY`, `SERPAPI_API_KEY`, `TAVILY_API_KEY`, `DATABASE_URL`
   live in Render env vars. The web app has only public values (`NEXT_PUBLIC_AGENT_URL`,
   URL-restricted `NEXT_PUBLIC_MAPBOX_TOKEN`).
 - **CORS** allows only `WEB_ORIGIN`; `X-Thread-Id` is listed in `Access-Control-Expose-Headers`.
@@ -535,8 +535,8 @@ ignoredBuiltDependencies:
 ```
 
 Packages reference catalog versions with `"zod": "catalog:"`. Zod 4 is pinned for every package and
-verified with `@langchain/core` 1.3 / `@langchain/openai` 1.7: `withStructuredOutput(schema, { strict: true })`
-emits a strict JSON schema, `withFallbacks` works, and malformed model output fails with a `ZodError`.
+checked with `@langchain/core` 1.3 (the structured-output spike must be re-run against `@langchain/anthropic`;
+see `apps/agent/PLAN.md` open question 2).
 Tooling that only one app uses (ESLint presets, `tsx`, Next.js) is declared in that app's `package.json`,
 not in the catalog.
 
