@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 import { parseConfig } from '../src/config.js';
 
-const base = { OPENAI_API_KEY: 'sk-test' };
+const base = { ANTHROPIC_API_KEY: 'sk-ant-test' };
 
 describe('parseConfig', () => {
   it('applies defaults', () => {
@@ -11,8 +11,8 @@ describe('parseConfig', () => {
       NODE_ENV: 'development',
       PORT: 4000,
       WEB_ORIGIN: ['http://localhost:3000'],
-      OPENAI_MODEL: 'gpt-4o',
-      OPENAI_FALLBACK_MODEL: 'gpt-4o-mini',
+      ANTHROPIC_MODEL: 'claude-opus-5-5',
+      ANTHROPIC_FALLBACK_MODEL: 'claude-sonnet-5-5',
       TOOLS_MODE: 'auto',
       RUN_TIMEOUT_MS: 120_000,
       RATE_LIMIT_WINDOW_MS: 900_000,
@@ -52,9 +52,9 @@ describe('parseConfig', () => {
     ).toEqual(['https://travel.example.com']);
   });
 
-  it('requires OPENAI_API_KEY and treats a blank value as missing', () => {
-    expect(() => parseConfig({})).toThrow(/OPENAI_API_KEY/);
-    expect(() => parseConfig({ OPENAI_API_KEY: '  ' })).toThrow(/OPENAI_API_KEY/);
+  it('requires ANTHROPIC_API_KEY and treats a blank value as missing', () => {
+    expect(() => parseConfig({})).toThrow(/ANTHROPIC_API_KEY/);
+    expect(() => parseConfig({ ANTHROPIC_API_KEY: '  ' })).toThrow(/ANTHROPIC_API_KEY/);
   });
 
   it('treats blank optional values as unset', () => {

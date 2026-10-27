@@ -6,7 +6,7 @@ export const TEST_WEB_ORIGIN = 'http://localhost:3000';
 export function testConfig(env: Record<string, string> = {}): Config {
   return parseConfig({
     NODE_ENV: 'test',
-    OPENAI_API_KEY: 'sk-test',
+    ANTHROPIC_API_KEY: 'sk-ant-test',
     TOOLS_MODE: 'mock',
     WEB_ORIGIN: TEST_WEB_ORIGIN,
     ...env,

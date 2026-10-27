@@ -10,7 +10,7 @@
 
 - Expose the trip API over HTTP and stream progress as typed SSE packets.
 - Run the 5-node LangGraph workflow with checkpointing, bounded re-planning and fallbacks.
-- Own every secret and every external call (OpenAI, SerpAPI, Tavily, PostgreSQL).
+- Own every secret and every external call (Anthropic, SerpAPI, Tavily, PostgreSQL).
 - Validate everything that crosses a boundary with Zod: env, request bodies, LLM outputs, outgoing packets.
 
 Package name `ai-travel-agent`, ESM (`"type": "module"`), Node.js LTS, Express 5.
@@ -25,7 +25,7 @@ apps/agent/
 │   ├── agent/
 │   │   ├── state.ts               # Annotation.Root state, reducers, initial state
 │   │   ├── graph.ts               # StateGraph wiring, routers, checkpointer, compile()
-│   │   ├── llm.ts                 # + ChatOpenAI factory with GPT-4o → GPT-4o-mini fallback
+│   │   ├── llm.ts                 # + ChatAnthropic factory with Opus 5.5 → Sonnet 5.5 fallback
 │   │   ├── runTrip.ts             # + maps graph stream → SSE packets (stream controller)
 │   │   └── nodes/
 │   │       ├── supervisor.node.ts
@@ -70,7 +70,7 @@ Files marked `+` are not in the blueprint tree; see ARCHITECTURE.md §15 for why
 | `express-rate-limit` | Per-IP throttling |
 | `@langchain/langgraph` | `StateGraph`, `Annotation`, `MemorySaver`, `START`/`END` |
 | `@langchain/langgraph-checkpoint-postgres` | `PostgresSaver` for production |
-| `@langchain/openai`, `@langchain/core` | `ChatOpenAI`, `withStructuredOutput`, `withFallbacks` |
+| `@langchain/anthropic`, `@langchain/core` | `ChatAnthropic`, `withStructuredOutput`, `withFallbacks` |
 | `zod` (`catalog:`) | Validation |
 | `dotenv` | Load `apps/agent/.env` in development (`loadDotenv({ quiet: true })` inside `loadConfig()`) |
 | dev: `typescript`, `tsx`, `vitest`, `supertest` | Build, watch mode, tests |
@@ -106,9 +106,9 @@ origins (`https://x.com/` → `https://x.com`) because CORS compares them to the
 | `PORT` | int; default `CONDUCTOR_PORT + 1` if set, else `4000` | Render sets `PORT` |
 | `CONDUCTOR_PORT` | int, optional | Conductor workspace base port |
 | `WEB_ORIGIN` | comma-separated URLs; default `http://localhost:${CONDUCTOR_PORT ?? 3000}` | CORS allow-list |
-| `OPENAI_API_KEY` | string, **required** | |
-| `OPENAI_MODEL` | default `gpt-4o` | Primary model |
-| `OPENAI_FALLBACK_MODEL` | default `gpt-4o-mini` | Fallback model |
+| `ANTHROPIC_API_KEY` | string, **required** | |
+| `ANTHROPIC_MODEL` | default `claude-opus-5-5` | Primary model |
+| `ANTHROPIC_FALLBACK_MODEL` | default `claude-sonnet-5-5` | Fallback model |
 | `SERPAPI_API_KEY` | string, optional | Missing → mock tools in `auto` mode |
 | `TAVILY_API_KEY` | string, optional | Optional place research for the planner |
 | `TOOLS_MODE` | `auto \| live \| mock`, default `auto` | `auto` = live if key present, else mock; tests use `mock` |
@@ -374,13 +374,15 @@ export interface LlmFactory {
 }
 ```
 
-- Primary: `new ChatOpenAI({ model: config.OPENAI_MODEL, temperature: 0, maxRetries: 2, timeout: 30_000 })`.
-- Fallback: same with `config.OPENAI_FALLBACK_MODEL`.
-- `primary.withStructuredOutput(schema, { name, strict: true }).withFallbacks([fallback.withStructuredOutput(schema, { name, strict: true })])`.
-- Planner may use `temperature: 0.4`; Supervisor stays at `0`.
-- Strict structured outputs require every field to be present; model optional values as `nullable()`,
+- Primary: `new ChatAnthropic({ model: config.ANTHROPIC_MODEL, maxRetries: 2, timeout: 30_000 })`.
+- Fallback: same with `config.ANTHROPIC_FALLBACK_MODEL`.
+- `primary.withStructuredOutput(schema, { name }).withFallbacks([fallback.withStructuredOutput(schema, { name })])`.
+- Do not set `temperature` / `top_p` / `top_k`: Claude Opus 5.5 and Sonnet 5.5 reject non-default sampling values (HTTP 400).
+  Thinking cannot be disabled on Opus 5.5 and its effort defaults to `medium`; forced `tool_choice` (`any` / `tool`) is also a 400,
+  so structured output must use the API's JSON-schema output format, not a forced tool call (verify in the B2 spike).
+- Structured outputs require every field to be present; model optional values as `nullable()`,
   not `optional()`.
-- When the fallback model answers, add a `warn` log (`Primary model unavailable, used gpt-4o-mini`).
+- When the fallback model answers, add a `warn` log (`Primary model unavailable, used claude-sonnet-5-5`).
 - Tests inject a fake factory returning canned objects — no network calls in tests.
 
 ---
@@ -454,7 +456,7 @@ export class ToolUnavailableError extends Error {}
 | `test/resume.test.ts` | Inject a failure in `itineraryPlanner`, assert `RESULT failed`, resume → completes without re-running supervisor/flight/hotel |
 | `test/server.test.ts` | supertest: 400 on bad body, 429 on limit, CORS headers incl. `X-Thread-Id` exposure, `/health` |
 
-No test may hit OpenAI or SerpAPI. Use `TOOLS_MODE=mock` and the fake `LlmFactory`.
+No test may hit Anthropic or SerpAPI. Use `TOOLS_MODE=mock` and the fake `LlmFactory`.
 
 ---
 
