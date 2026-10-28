@@ -154,6 +154,20 @@ createServer(async (req, res) => {
     });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/places') {
+    const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
+    const all = [
+      { label: 'Paris, France', name: 'Paris', detail: 'Île-de-France, France', kind: 'city' },
+      { label: 'France', name: 'France', detail: null, kind: 'country' },
+      { label: 'London, United Kingdom', name: 'London', detail: 'England, United Kingdom', kind: 'city' },
+      { label: 'United Kingdom', name: 'United Kingdom', detail: null, kind: 'country' },
+      { label: 'Istanbul, Türkiye', name: 'Istanbul', detail: 'Istanbul, Türkiye', kind: 'city' },
+      { label: 'Tokyo, Japan', name: 'Tokyo', detail: 'Tokyo, Japan', kind: 'city' },
+      { label: 'Tashkent, Uzbekistan', name: 'Tashkent', detail: 'Tashkent, Uzbekistan', kind: 'city' },
+    ];
+    return json(res, 200, { places: all.filter((place) => place.label.toLowerCase().includes(q)) });
+  }
+
   const reattach = /^\/api\/trips\/([^/]+)\/stream$/.exec(url.pathname);
   if (req.method === 'GET' && reattach) {
     const threadId = reattach[1]!;

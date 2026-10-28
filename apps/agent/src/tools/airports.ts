@@ -19,7 +19,8 @@ const KNOWN: Record<string, Airport> = {
   bangkok: { code: 'BKK', name: 'Bangkok Suvarnabhumi' },
 };
 
-const normalise = (city: string) => city.trim().toLowerCase().replace(/\s+/g, ' ');
+/** "Paris, France" (a dropdown label) and "Paris" are the same city. */
+const normalise = (city: string) => (city.split(',')[0] ?? city).trim().toLowerCase().replace(/\s+/g, ' ');
 
 /** Airport for a city name or IATA code. Unknown cities get a made-up code from their first letters (mock data only). */
 export function airportFor(city: string): Airport {

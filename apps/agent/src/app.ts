@@ -6,6 +6,7 @@ import type { CompiledTravelGraph } from './agent/graph.js';
 import type { Config } from './config.js';
 import { createErrorHandler } from './middlewares/errorHandler.js';
 import { createRateLimiters, type RateLimiters } from './middlewares/rateLimiter.js';
+import { createPlacesRouter } from './routes/places.js';
 import { createTripContextRouter } from './routes/tripContext.js';
 import { createTripsRouter } from './routes/trips.js';
 import { notFound } from './utils/errors.js';
@@ -62,6 +63,7 @@ export function createApp({
   app.use('/api', rateLimiters.generalLimiter);
   app.use('/api', createTripsRouter({ graph, registry, runLimiter: rateLimiters.runLimiter }));
   app.use('/api', createTripContextRouter({ config }));
+  app.use('/api', createPlacesRouter({ config }));
 
   app.use((req, _res, next) => {
     next(notFound(`Route ${req.method} ${req.path} not found`));
