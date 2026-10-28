@@ -1,12 +1,12 @@
 'use client';
 
-import type { DecisionTopic, Hotel, ItineraryDay, MessagePayload, ProgressPayload, ResultPayload } from '@ai-travel/contracts';
+import type { DecisionTopic, Hotel, ItineraryDay, MessagePayload, ProgressPayload, ResultPayload, Transfer } from '@ai-travel/contracts';
 import dynamic from 'next/dynamic';
 import { PlaneIcon } from 'lucide-react';
 import type { ReactNode, RefObject } from 'react';
 import { BudgetMeter } from '@/components/BudgetMeter';
 import { SelectedFlightCard, SelectedHotelCard } from '@/components/FlightHotelCards';
-import { DayCards, DayList, DayPanel } from '@/components/ItineraryTimeline';
+import { DayList, DayPanel, DayStrip, type DaySelection } from '@/components/ItineraryTimeline';
 import { SchematicMap } from '@/components/SchematicMap';
 import { Skeleton } from '@/components/ui/skeleton';
 import { env } from '@/lib/env';
@@ -22,14 +22,53 @@ function MapArea(props: { itinerary: ItineraryDay[]; hotel: Hotel | null; active
   return env.mapboxToken ? <MapboxViewer {...props} /> : <SchematicMap {...props} />;
 }
 
-function Card({ title, aside, children, className }: { title: string; aside?: ReactNode; children: ReactNode; className?: string }) {
+interface DayExplorerProps {
+  itinerary: ItineraryDay[];
+  totalDays: number;
+  hotel: Hotel | null;
+  transfers: Transfer[];
+  dailySpend: number | null;
+  selected: DaySelection;
+  onSelect: (day: DaySelection) => void;
+  drafting: number | null;
+  mapHeight: string;
+}
+
+/** Day strip first, then the map and stop list for the selected day ("All days" shows every route, faded). */
+function DayExplorer({ itinerary, totalDays, hotel, transfers, dailySpend, selected, onSelect, drafting, mapHeight }: DayExplorerProps) {
+  const day = selected === 'all' ? null : (itinerary.find((d) => d.day === selected) ?? null);
+  const index = day ? itinerary.indexOf(day) : -1;
   return (
-    <section aria-label={title} className={`overflow-hidden rounded-xl border bg-card ${className ?? ''}`}>
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
-        <h3 className="text-lg font-semibold">{title}</h3>
-        {aside && <div className="text-[13px] text-ink-2">{aside}</div>}
+    <section aria-labelledby="day-explorer-title" className="overflow-hidden rounded-xl border bg-card">
+      <header className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-3">
+        <h2 id="day-explorer-title" className="text-lg font-semibold">
+          Day by day
+        </h2>
+        <span className="text-[13px] text-ink-2">{day ? `Showing Day ${day.day}` : 'Showing all days'}</span>
       </header>
-      {children}
+      <DayStrip itinerary={itinerary} totalDays={totalDays} selected={selected} onSelect={onSelect} />
+      <div role="tabpanel" aria-labelledby={`day-tab-${selected}`}>
+        {itinerary.some((d) => d.places.length > 0) && (
+          <div className={mapHeight}>
+            <MapArea itinerary={itinerary} hotel={hotel} activeDay={day?.day ?? null} labels={day !== null} />
+          </div>
+        )}
+        {day ? (
+          <div className="border-t">
+            <DayPanel
+              day={day}
+              transfers={transfers}
+              dailySpend={dailySpend}
+              onPrev={index > 0 ? () => onSelect(itinerary[index - 1]!.day) : null}
+              onNext={index < itinerary.length - 1 ? () => onSelect(itinerary[index + 1]!.day) : null}
+            />
+          </div>
+        ) : (
+          <div className="border-t px-1">
+            <DayList itinerary={itinerary} pendingDays={{ drafting, total: totalDays }} activeDay={null} onSelectDay={onSelect} />
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -40,14 +79,13 @@ interface LiveOverviewProps {
   trip: TripView;
   decisions: Decisions;
   progress: ProgressPayload | null;
-  activeDay: number | null;
-  onSelectDay: (day: number | null) => void;
+  selectedDay: DaySelection;
+  onSelectDay: (day: DaySelection) => void;
 }
 
 /** Right column while agents work: sections appear as their data arrives in `DRAFT` packets. */
-export function LiveOverview({ trip, decisions, progress, activeDay, onSelectDay }: LiveOverviewProps) {
+export function LiveOverview({ trip, decisions, progress, selectedDay, onSelectDay }: LiveOverviewProps) {
   const itinerary = trip.itinerary ?? [];
-  const placed = itinerary.filter((d) => d.places.length > 0);
   const empty = !trip.destination;
   return (
     <section aria-labelledby="overview-title" className="flex flex-col gap-[18px]">
@@ -88,22 +126,17 @@ export function LiveOverview({ trip, decisions, progress, activeDay, onSelectDay
             confirmed={!!decisions.hotel}
             variant="live"
           />
-          {placed.length > 0 && (
-            <Card
-              title="Map"
-              aside={activeDay !== null ? `Showing Day ${activeDay}` : placed.length === 1 ? 'Day 1 placed' : `Days 1–${placed.length} placed`}
-            >
-              <div className="h-80 lg:h-[460px]">
-                <MapArea itinerary={itinerary} hotel={trip.hotels?.[0] ?? null} activeDay={activeDay} labels={false} />
-              </div>
-            </Card>
-          )}
           {trip.durationDays ? (
-            <DayList
+            <DayExplorer
               itinerary={itinerary}
-              pendingDays={{ drafting: progress?.currentStatus === 'planning' ? draftingDay(progress.detail) : null, total: trip.durationDays }}
-              activeDay={activeDay}
-              onSelectDay={onSelectDay}
+              totalDays={trip.durationDays}
+              hotel={trip.hotels?.[0] ?? null}
+              transfers={trip.transfers ?? []}
+              dailySpend={null}
+              selected={selectedDay}
+              onSelect={onSelectDay}
+              drafting={progress?.currentStatus === 'planning' ? draftingDay(progress.detail) : null}
+              mapHeight="h-72 lg:h-[340px]"
             />
           ) : null}
         </>
@@ -115,19 +148,16 @@ export function LiveOverview({ trip, decisions, progress, activeDay, onSelectDay
 interface FinishedOverviewProps {
   result: ResultPayload;
   decisions: Decisions;
-  activeDay: number | null;
-  onSelectDay: (day: number | null) => void;
+  selectedDay: DaySelection;
+  onSelectDay: (day: DaySelection) => void;
   /** The chat summary card (left column). */
   chat: ReactNode;
   headingRef: RefObject<HTMLHeadingElement | null>;
 }
 
-/** The finished trip: title + budget, chat summary, flights, hotel, map with the selected day, day cards. */
-export function FinishedOverview({ result, decisions, activeDay, onSelectDay, chat, headingRef }: FinishedOverviewProps) {
+/** The finished trip: title + budget on top; collapsed chat on the left; flights, hotel, days and map on the right. */
+export function FinishedOverview({ result, decisions, selectedDay, onSelectDay, chat, headingRef }: FinishedOverviewProps) {
   const { itinerary } = result;
-  const shown = itinerary.find((d) => d.day === activeDay) ?? itinerary[0] ?? null;
-  const index = shown ? itinerary.indexOf(shown) : -1;
-  const hotel = result.hotels[0] ?? null;
   // A reopened trip has no chat: every section of a completed result is confirmed.
   const confirmed = (topic: DecisionTopic) => !!decisions[topic] || result.status === 'completed';
   const subtitle = [
@@ -153,9 +183,9 @@ export function FinishedOverview({ result, decisions, activeDay, onSelectDay, ch
         </div>
       </div>
 
-      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,302fr)_minmax(0,609fr)_minmax(0,341fr)] lg:items-start">
-        <div className="lg:row-span-3">{chat}</div>
-        <div className="lg:self-stretch">
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start">
+        <div className="lg:sticky lg:top-5">{chat}</div>
+        <div className="flex min-w-0 flex-col gap-5">
           <SelectedFlightCard
             flights={result.flights}
             transfers={result.transfers}
@@ -164,43 +194,21 @@ export function FinishedOverview({ result, decisions, activeDay, onSelectDay, ch
             confirmedTransfers={confirmed('transfers')}
             variant="full"
           />
-        </div>
-        <div className="lg:self-stretch">
           <SelectedHotelCard hotels={result.hotels} durationDays={result.durationDays} startDate={result.startDate} confirmed={confirmed('hotel')} variant="full" />
+          {itinerary.length > 0 && (
+            <DayExplorer
+              itinerary={itinerary}
+              totalDays={itinerary.length}
+              hotel={result.hotels[0] ?? null}
+              transfers={result.transfers}
+              dailySpend={result.dailyExpensesEstimate || null}
+              selected={selectedDay}
+              onSelect={onSelectDay}
+              drafting={null}
+              mapHeight="h-[420px]"
+            />
+          )}
         </div>
-
-        {shown && (
-          <section aria-labelledby="map-title" className="overflow-hidden rounded-xl border bg-card lg:col-span-2">
-            <header className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-[13px]">
-              <h2 id="map-title" className="text-lg font-semibold">
-                Map
-              </h2>
-              <p className="text-sm text-ink-2">
-                Showing <span className="font-semibold text-foreground">Day {shown.day}</span>
-                {' · '}pick a day below to change the route
-              </p>
-            </header>
-            <div className="lg:grid lg:min-h-[580px] lg:grid-cols-[minmax(0,1fr)_300px]">
-              <div className="h-[580px]">
-                <MapArea itinerary={itinerary} hotel={hotel} activeDay={shown?.day ?? null} labels />
-              </div>
-              <div className="border-l">
-                <DayPanel
-                  day={shown}
-                  transfers={result.transfers}
-                  dailySpend={result.dailyExpensesEstimate || null}
-                  onPrev={index > 0 ? () => onSelectDay(itinerary[index - 1]!.day) : null}
-                  onNext={index < itinerary.length - 1 ? () => onSelectDay(itinerary[index + 1]!.day) : null}
-                />
-              </div>
-            </div>
-          </section>
-        )}
-        {itinerary.length > 0 && shown && (
-          <div className="lg:col-span-2">
-            <DayCards itinerary={itinerary} activeDay={shown.day} onSelectDay={onSelectDay} />
-          </div>
-        )}
       </div>
     </div>
   );

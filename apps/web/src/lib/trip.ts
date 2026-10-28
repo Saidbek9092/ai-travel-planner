@@ -194,3 +194,8 @@ export function requestFromResult(result: ResultPayload, today: string): TripReq
     ...(result.startDate && result.startDate >= today ? { startDate: result.startDate } : {}),
   };
 }
+
+/** The day to open on: today's day when the trip is under way, else Day 1. */
+export function defaultDay(itinerary: { day: number; date: string | null }[], today: string): number {
+  return itinerary.find((d) => d.date === today)?.day ?? itinerary[0]?.day ?? 1;
+}

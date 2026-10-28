@@ -4,8 +4,10 @@ import type { Flight, FlightLeg, Hotel, Transfer } from '@ai-travel/contracts';
 import { motion, useReducedMotion } from 'motion/react';
 import { BedDoubleIcon, CheckIcon, PlaneIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { ExternalLink } from '@/components/ExternalLink';
 import { ConfirmedTag, EstimateTag } from '@/components/Tags';
 import { AGENT_AVATAR_COLORS, TRANSFER_MODES, ratingWord } from '@/lib/labels';
+import { mapUrl, safeUrl, sourceLabel } from '@/lib/links';
 import { addDays, cn, dayDifference, formatDay, formatDuration, formatLegTime, formatUsd, nightsFor } from '@/lib/utils';
 
 const Dots = () => <span aria-hidden="true" className="mt-3 h-px min-w-4 flex-1 border-t-2 border-dotted border-border" />;
@@ -104,6 +106,7 @@ function TransferRow({ transfer, confirmed }: { transfer: Transfer; confirmed: b
         <p className="line-clamp-2 text-sm leading-5 text-ink-2" title={transferSub(transfer)}>
           {transferSub(transfer)}
         </p>
+        {safeUrl(transfer.url) && <ExternalLink href={safeUrl(transfer.url)!}>Timetable and fares</ExternalLink>}
       </div>
       {confirmed && (
         <>
@@ -181,15 +184,13 @@ export function SelectedFlightCard({ flights, transfers, firstDay, confirmed, co
             Selected Flights
           </h2>
           <span className="ml-auto flex flex-wrap items-center gap-3">
-            {flight.bookingUrl ? (
-              <a href={flight.bookingUrl} target="_blank" rel="noreferrer" className="text-sm text-ink-2 underline-offset-4 hover:text-primary hover:underline">
-                {flight.airline} · {flight.return ? 'round trip' : 'one way'}
-                <span className="sr-only"> (view fare, opens in a new tab)</span>
-              </a>
-            ) : (
-              <span className="text-sm text-ink-2">
-                {flight.airline} · {flight.return ? 'round trip' : 'one way'}
-              </span>
+            <span className="text-sm text-ink-2">
+              {flight.airline} · {flight.return ? 'round trip' : 'one way'}
+            </span>
+            {flight.source === 'serpapi' && safeUrl(flight.bookingUrl) && (
+              <ExternalLink href={safeUrl(flight.bookingUrl)!} source={sourceLabel(flight.source, 'Flights')}>
+                View on Google Flights
+              </ExternalLink>
             )}
             <span className="font-mono text-xl font-semibold">{formatUsd(flight.price)}</span>
             {flight.source === 'mock' && <EstimateTag />}
@@ -310,16 +311,19 @@ export function SelectedHotelCard({ hotels, durationDays, startDate, confirmed, 
               ))}
             </dl>
           )}
+          {hotel.source === 'serpapi' && (
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+              {safeUrl(hotel.bookingUrl) && (
+                <ExternalLink href={safeUrl(hotel.bookingUrl)!} source={sourceLabel(hotel.source, 'Hotels')}>
+                  View on Google Hotels
+                </ExternalLink>
+              )}
+              {hotel.location && <ExternalLink href={mapUrl(hotel.location, hotel.name)}>View on map</ExternalLink>}
+            </div>
+          )}
           <div className="mt-auto pt-4">
             <div className="flex items-baseline justify-between border-t pt-3.5">
-              {hotel.bookingUrl ? (
-                <a href={hotel.bookingUrl} target="_blank" rel="noreferrer" className="text-[15px] text-ink-2 underline-offset-4 hover:text-primary hover:underline">
-                  {priceLine}
-                  <span className="sr-only"> (view rooms, opens in a new tab)</span>
-                </a>
-              ) : (
-                <span className="text-[15px] text-ink-2">{priceLine}</span>
-              )}
+              <span className="text-[15px] text-ink-2">{priceLine}</span>
               <span className="font-mono text-2xl font-semibold">{formatUsd(total)}</span>
             </div>
           </div>

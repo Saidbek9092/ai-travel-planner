@@ -21,7 +21,7 @@ const created = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short
 export function StartHero() {
   return (
     <section aria-labelledby="plan-title" className="bg-[#0b1726] text-white">
-      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3 px-4 pt-10 pb-[104px] sm:px-6 lg:px-[72px]">
+      <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-3 px-4 pt-10 pb-[104px] sm:px-8 lg:px-8">
         <p className="font-mono text-[11px] tracking-[0.14em] text-white/70 uppercase">Plan a trip</p>
         <h1 id="plan-title" className="text-4xl font-semibold tracking-tight sm:text-[44px] sm:leading-[1.1]">
           Where do you want to go?

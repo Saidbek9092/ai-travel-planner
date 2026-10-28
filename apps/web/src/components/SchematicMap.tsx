@@ -62,6 +62,7 @@ export function SchematicMap({ itinerary, hotel, activeDay, labels }: SchematicM
               fill="none"
               stroke={dayColor(day.day)}
               strokeWidth={activeDay === null ? 2.5 : 3.5}
+              strokeOpacity={activeDay === null ? 0.5 : 1}
               strokeDasharray="2 6"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"

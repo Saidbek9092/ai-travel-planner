@@ -62,7 +62,7 @@ export default function MapboxViewer({ itinerary, hotel, activeDay, labels }: Ma
             id={`route-line-${day}`}
             type="line"
             layout={{ 'line-cap': 'round' }}
-            paint={{ 'line-color': dayColor(day), 'line-width': activeDay === null ? 2.5 : 3.5, 'line-dasharray': [0.5, 2] }}
+            paint={{ 'line-color': dayColor(day), 'line-width': activeDay === null ? 2.5 : 3.5, 'line-opacity': activeDay === null ? 0.5 : 1, 'line-dasharray': [0.5, 2] }}
           />
         </Source>
       ))}

@@ -26,7 +26,7 @@ function Chip({ icon, label, title, heading, children }: { icon?: ReactNode; lab
       role="group"
       aria-label={label}
       title={title}
-      className="flex min-w-0 items-center gap-4 py-4 sm:px-6 sm:first:pl-0 lg:border-l lg:border-white/15 lg:first:border-l-0"
+      className="flex min-w-0 items-center gap-4 py-4 sm:px-8 sm:first:pl-0 lg:border-l lg:border-white/15 lg:first:border-l-0"
     >
       {icon && (
         <span aria-hidden="true" className="shrink-0 text-white">
@@ -63,7 +63,7 @@ export function TopBar({ status, data, startDate, durationDays, origin }: TopBar
   if (status === 'loading') {
     return (
       <div className="bg-foreground" aria-busy="true" aria-label="Loading destination info">
-        <div className="mx-auto grid w-full max-w-[1440px] gap-4 px-4 py-5 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-[72px]">
+        <div className="mx-auto grid w-full max-w-[1360px] gap-4 px-4 py-5 sm:grid-cols-2 sm:px-8 lg:grid-cols-4 lg:px-8">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-14 rounded-lg bg-white/10" />
           ))}
@@ -146,7 +146,7 @@ export function TopBar({ status, data, startDate, durationDays, origin }: TopBar
   }
   return (
     <section aria-label="Destination" className="bg-foreground">
-      <div className="mx-auto grid w-full max-w-[1440px] px-4 py-[5px] sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-[72px]">{chips}</div>
+      <div className="mx-auto grid w-full max-w-[1360px] px-4 py-[5px] sm:grid-cols-2 sm:px-8 lg:grid-cols-4 lg:px-8">{chips}</div>
     </section>
   );
 }

@@ -42,6 +42,8 @@ export const FlightSchema = z.object({
   /** "View fare" link, when the provider gives one. */
   bookingUrl: z.url().nullable(),
   source: DataSourceSchema,
+  /** When the tool fetched this option. */
+  fetchedAt: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export const PlaceSchema = z.object({
@@ -50,6 +52,9 @@ export const PlaceSchema = z.object({
   lng: z.number().min(-180).max(180),
   /** Short hint shown next to the stop, e.g. "Morning". */
   note: z.string().min(1).nullable(),
+  /** Official website, passed through from tool data. */
+  url: z.url().nullish(),
+  fetchedAt: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export const HotelSchema = z.object({
@@ -70,6 +75,8 @@ export const HotelSchema = z.object({
   location: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).nullable(),
   bookingUrl: z.url().nullable(),
   source: DataSourceSchema,
+  /** When the tool fetched this option. */
+  fetchedAt: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export const TransferModeSchema = z.enum(['taxi', 'train', 'metro', 'bus', 'shuttle', 'walk']);
@@ -86,6 +93,8 @@ export const TransferSchema = z.object({
   durationMinutes: z.number().int().positive().nullable(),
   /** e.g. "Fixed fare €56" or "Leave the hotel by 16:00". */
   note: z.string().min(1).nullable(),
+  /** Official taxi or train information, passed through from tool data. */
+  url: z.url().nullish(),
 });
 
 /** Forecast for one itinerary day. */

@@ -8,6 +8,7 @@ import { AgentAvatar } from '@/components/AgentAvatar';
 import { Button } from '@/components/ui/button';
 import type { StreamStatus } from '@/hooks/useAgentStream';
 import { useStickToBottom } from '@/hooks/useStickToBottom';
+import { env } from '@/lib/env';
 import { STATUS_AGENTS, agentDisplayNames, decisionChipLabel, decisionLabels } from '@/lib/labels';
 import { draftingDay, type AgentRow } from '@/lib/trip';
 import { cn } from '@/lib/utils';
@@ -174,11 +175,11 @@ function Feed({
   const streaming = status === 'streaming' || status === 'connecting';
   const { viewportRef, stuck, onScroll, jumpToLatest } = useStickToBottom(messages.length + (progress?.progressPercent ?? 0));
   return (
-    <div className="relative">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={viewportRef}
         onScroll={onScroll}
-        className="max-h-[70dvh] min-h-32 overflow-y-auto px-5 py-6 lg:max-h-[calc(100dvh-14rem)]"
+        className="max-h-[70dvh] min-h-32 flex-1 overflow-y-auto px-5 py-6 lg:max-h-none"
         tabIndex={0}
         aria-label="Conversation, scrollable"
       >
@@ -226,7 +227,7 @@ interface AgentChatProps {
 export function AgentChat({ messages, status, decisionCount, progress, agents, technical, overBudget }: AgentChatProps) {
   const [view, setView] = useState<'chat' | 'log'>('chat');
   return (
-    <section className="flex flex-col overflow-hidden rounded-xl border bg-card" aria-labelledby="agent-chat-title">
+    <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-card lg:h-full" aria-labelledby="agent-chat-title">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-5 py-4">
         <h2 id="agent-chat-title" className="text-lg font-semibold">
           Agent Chat
@@ -244,17 +245,19 @@ export function AgentChat({ messages, status, decisionCount, progress, agents, t
         <span className="text-[13px] text-ink-2">
           {decisionCount} {decisionCount === 1 ? 'decision' : 'decisions'} confirmed
         </span>
-        <Button
-          variant="outline"
-          className="ml-auto h-9 bg-card px-3"
-          aria-pressed={view === 'log'}
-          onClick={() => setView((v) => (v === 'chat' ? 'log' : 'chat'))}
-        >
-          {view === 'chat' ? <TerminalIcon aria-hidden="true" /> : <MessageSquareIcon aria-hidden="true" />}
-          {view === 'chat' ? 'Technical log' : 'Back to chat'}
-        </Button>
+        {env.showTechLog && (
+          <Button
+            variant="outline"
+            className="ml-auto h-9 bg-card px-3"
+            aria-pressed={view === 'log'}
+            onClick={() => setView((v) => (v === 'chat' ? 'log' : 'chat'))}
+          >
+            {view === 'chat' ? <TerminalIcon aria-hidden="true" /> : <MessageSquareIcon aria-hidden="true" />}
+            {view === 'chat' ? 'Technical log' : 'Back to chat'}
+          </Button>
+        )}
       </header>
-      {view === 'chat' ? <Feed messages={messages} status={status} progress={progress} overBudget={overBudget} /> : <div className="p-5">{technical}</div>}
+      {view === 'chat' || !env.showTechLog ? <Feed messages={messages} status={status} progress={progress} overBudget={overBudget} /> : <div className="p-5">{technical}</div>}
     </section>
   );
 }
@@ -337,9 +340,11 @@ export function ChatSummary({
                 Open full chat
               </Button>
             )}
-            <Button variant="link" className="h-11 px-2 text-[15px]" onClick={() => setView('log')}>
-              Technical log
-            </Button>
+            {env.showTechLog && (
+              <Button variant="link" className="h-11 px-2 text-[15px]" onClick={() => setView('log')}>
+                Technical log
+              </Button>
+            )}
           </div>
         </div>
       )}

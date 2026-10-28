@@ -2,7 +2,7 @@
 
 import type { ResultPayload, TripRequest } from '@ai-travel/contracts';
 import { InfoIcon, RotateCcwIcon } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AgentBoard } from '@/components/AgentBoard';
 import { AgentChat, ChatSummary } from '@/components/AgentChat';
@@ -14,6 +14,7 @@ import { TopBar } from '@/components/TopBar';
 import { TripActions } from '@/components/TripActions';
 import { HowItWorks, PickUp, StartHero } from '@/components/StartExtras';
 import { TripInputForm } from '@/components/TripInputForm';
+import type { DaySelection } from '@/components/ItineraryTimeline';
 import { FinishedOverview, LiveOverview } from '@/components/TripOverview';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,7 @@ import { useTripContext } from '@/hooks/useTripContext';
 import { useTripHistory } from '@/hooks/useTripHistory';
 import { NEW_TRIP_EVENT } from '@/lib/dom';
 import { env } from '@/lib/env';
-import { agentRows, briefLine, decisionSummaries, phaseStates, requestFromResult, timesWord, tripTitle, type TripView } from '@/lib/trip';
+import { agentRows, briefLine, decisionSummaries, defaultDay, phaseStates, requestFromResult, timesWord, tripTitle, type TripView } from '@/lib/trip';
 import { PassesTable, budgetVerdict } from '@/components/BudgetMeter';
 
 interface TripDashboardProps {
@@ -32,7 +33,22 @@ interface TripDashboardProps {
 
 export function TripDashboard({ initialThreadId, initialResult }: TripDashboardProps) {
   const stream = useAgentStream({ threadId: initialThreadId, result: initialResult });
-  const [activeDay, setActiveDay] = useState<number | null>(null);
+  // `null` = not chosen yet: Day 1, or today's day if the trip is under way. The choice lives in the URL (`?day=2`, `?day=all`).
+  const [chosenDay, setChosenDay] = useState<DaySelection | null>(null);
+  const setActiveDay = useCallback((day: DaySelection | null) => {
+    setChosenDay(day);
+    const url = new URL(window.location.href);
+    if (day === null) url.searchParams.delete('day');
+    else url.searchParams.set('day', String(day));
+    window.history.replaceState(window.history.state, '', url);
+  }, []);
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get('day');
+    const n = Number(raw);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the URL is only readable after hydration
+    if (raw === 'all') setChosenDay('all');
+    else if (Number.isInteger(n) && n >= 1) setChosenDay(n);
+  }, []);
   const history = useTripHistory();
   const { status, progress, result, logs, messages, decisions, draft, error, threadId, lastRequest } = stream;
   const uiOnly = env.agentUrl === null;
@@ -52,6 +68,12 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
   const view: 'idle' | 'live' | 'finished' = finished ? 'finished' : hasRun || (live && status !== 'connecting') ? 'live' : 'idle';
   const overBudget = (finished ? result.totalCost > result.budget : (draft.totalCost ?? 0) > (draft.budget ?? Infinity)) && !!decisions.budget;
 
+  const itinerary = trip.itinerary ?? [];
+  const selectedDay: DaySelection =
+    chosenDay === 'all' || (chosenDay !== null && itinerary.some((d) => d.day === chosenDay))
+      ? chosenDay
+      : defaultDay(itinerary, new Date().toISOString().slice(0, 10));
+
   const start = (request: TripRequest) => {
     setActiveDay(null);
     stream.start(request);
@@ -68,7 +90,7 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
     };
     window.addEventListener(NEW_TRIP_EVENT, onNewTrip);
     return () => window.removeEventListener(NEW_TRIP_EVENT, onNewTrip);
-  }, [reset]);
+  }, [reset, setActiveDay]);
 
   // A started run is remembered as paused until it finishes, so the start page can offer Resume.
   useEffect(() => {
@@ -95,6 +117,15 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
       });
     }
   }, [status, result, add]);
+
+  // LOG packets always stream (the chat is built from them); in development they also print to the console.
+  const printed = useRef(0);
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    if (logs.length < printed.current) printed.current = 0;
+    for (const log of logs.slice(printed.current)) console.debug('[agent log]', log);
+    printed.current = logs.length;
+  }, [logs]);
 
   const technical = (
     <div className="flex flex-col gap-4">
@@ -136,7 +167,7 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
         origin={origin}
       />
       {view === 'idle' && <StartHero />}
-      <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-6 px-4 pt-6 pb-12 sm:px-6 lg:px-[72px]">
+      <main className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col gap-5 px-4 pt-6 pb-12 sm:px-8">
         {view === 'idle' && (
           <div className="-mt-26 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-start">
             <div className="flex flex-col gap-6">
@@ -177,8 +208,8 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
           <>
             {banners}
             <RunProgress status={status} progress={progress} phases={phases} startedAt={stream.startedAt} brief={briefLine(draft)} />
-            <div className={`grid gap-5 lg:grid-cols-[minmax(0,749fr)_minmax(0,525fr)] lg:items-start ${live ? '' : 'opacity-60'}`}>
-              <div className="flex flex-col gap-6">
+            <div className={`grid gap-5 lg:grid-cols-12 lg:items-start ${live ? '' : 'opacity-60'}`}>
+              <div className="flex flex-col lg:sticky lg:top-5 lg:col-span-7 lg:h-[calc(100dvh-10rem)] lg:min-h-[480px]">
                 <AgentChat
                   messages={messages}
                   status={status}
@@ -189,8 +220,8 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
                   overBudget={overBudget}
                 />
               </div>
-              <div>
-                <LiveOverview trip={trip} decisions={decisions} progress={progress} activeDay={activeDay} onSelectDay={setActiveDay} />
+              <div className="lg:sticky lg:top-5 lg:col-span-5 lg:max-h-[calc(100dvh-2.5rem)] lg:overflow-y-auto lg:overscroll-contain">
+                <LiveOverview trip={trip} decisions={decisions} progress={progress} selectedDay={selectedDay} onSelectDay={setActiveDay} />
               </div>
             </div>
           </>
@@ -202,7 +233,7 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
             <FinishedOverview
               result={result}
               decisions={decisions}
-              activeDay={activeDay}
+              selectedDay={selectedDay}
               onSelectDay={setActiveDay}
               headingRef={resultHeadingRef}
               chat={

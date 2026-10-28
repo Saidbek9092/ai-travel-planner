@@ -42,7 +42,7 @@ export function AgentStatusChip({ status }: { status: AgentRunStatus }) {
   );
 }
 
-/** Muted "Estimate" tag for `source: 'mock'` options. */
+/** Muted "Sample data" tag for `source: 'mock'` options. */
 export function EstimateTag() {
   return (
     <Tooltip>
@@ -50,7 +50,7 @@ export function EstimateTag() {
         render={<span tabIndex={0} />}
         className="inline-flex h-6 items-center gap-1 rounded-full bg-secondary px-2.5 text-xs font-medium text-muted-foreground"
       >
-        <CircleAlertIcon className="size-3.5" aria-hidden="true" /> Estimate
+        <CircleAlertIcon className="size-3.5" aria-hidden="true" /> Sample data
       </TooltipTrigger>
       <TooltipContent>Live prices were unavailable</TooltipContent>
     </Tooltip>
