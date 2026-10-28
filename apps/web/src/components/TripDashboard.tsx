@@ -12,7 +12,7 @@ import { RunDetails } from '@/components/RunDetails';
 import { RunProgress } from '@/components/RunProgress';
 import { TopBar } from '@/components/TopBar';
 import { TripActions } from '@/components/TripActions';
-import { HowItWorks, PickUp, StartHero } from '@/components/StartExtras';
+import { HowItWorks, StartHero } from '@/components/StartExtras';
 import { TripInputForm } from '@/components/TripInputForm';
 import type { DaySelection } from '@/components/ItineraryTimeline';
 import { FinishedOverview, LiveOverview } from '@/components/TripOverview';
@@ -204,7 +204,6 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
                   )}
                 </>
               }
-              aside={<PickUp disabled={live || uiOnly} onResume={stream.resumeTrip} />}
               footer={<HowItWorks embedded />}
             />
           </div>

@@ -88,14 +88,12 @@ interface TripInputFormProps {
   retryAt: number | null;
   /** Notices above the form card (left column). */
   notices?: ReactNode;
-  /** Extra cards under the examples (right column). */
-  aside?: ReactNode;
   /** Bottom of the input card, under the Plan button. */
   footer?: ReactNode;
 }
 
 /** The start page's input: one sentence, the fields the agents understood from it, interests and examples. */
-export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside, footer }: TripInputFormProps) {
+export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: TripInputFormProps) {
   const waitSeconds = useCountdown(retryAt);
   const { homeCity, setHomeCity } = useHomeCity();
   const [prompt, setPrompt] = useState('');
@@ -202,7 +200,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside, foo
         event.preventDefault();
         submit();
       }}
-      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-start"
+      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]"
     >
       <div className="flex min-w-0 flex-col gap-6">
         {notices}
@@ -302,8 +300,9 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside, foo
 
       </div>
 
-      <div className="flex min-w-0 flex-col gap-6">
-        <section aria-labelledby={`${promptId}-examples`} className="flex flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm lg:max-h-[calc(100dvh-24rem)] lg:min-h-[300px]">
+      <div className="flex min-w-0 flex-col lg:relative">
+        {/* On large screens the card is pinned to the row (the form card sets its height) and its list scrolls. */}
+        <section aria-labelledby={`${promptId}-examples`} className="flex flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm lg:absolute lg:inset-0">
           <div className="shrink-0">
             <h2 id={`${promptId}-examples`} className="text-lg font-semibold">
               Not sure where to start?
@@ -350,7 +349,6 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside, foo
             ))}
           </ul>
         </section>
-        {aside}
       </div>
     </form>
   );
