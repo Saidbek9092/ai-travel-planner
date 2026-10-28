@@ -176,38 +176,46 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
       {view === 'idle' && <StartHero />}
       <main className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col gap-5 px-4 pt-6 pb-12 sm:px-8">
         {view === 'idle' && (
-          <div className="-mt-20 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-start">
-            <div className="flex flex-col gap-6">
-              {uiOnly && (
-                <Alert>
-                  <InfoIcon aria-hidden="true" />
-                  <AlertTitle>Preview</AlertTitle>
-                  <AlertDescription>The planning agent isn&apos;t connected yet.</AlertDescription>
-                </Alert>
-              )}
-              {unfinished && (
-                <Alert>
-                  <AlertTitle>This trip didn&apos;t finish</AlertTitle>
-                  <AlertDescription className="flex flex-wrap items-center gap-2">
-                    Pick up where the agents left off.
-                    <Button size="sm" variant="outline" onClick={stream.resume}>
-                      <RotateCcwIcon aria-hidden="true" /> Resume
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              )}
-              {error && !threadId && (
-                <Alert variant="destructive">
-                  <AlertTitle>Couldn&apos;t start the trip</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              <TripInputForm disabled={live || uiOnly} retryAt={stream.retryAt} onSubmit={start} />
-            </div>
-            <div className="flex flex-col gap-6">
-              <HowItWorks />
-              <PickUp disabled={live || uiOnly} onResume={stream.resumeTrip} />
-            </div>
+          <div className="-mt-20">
+            <TripInputForm
+              disabled={live || uiOnly}
+              retryAt={stream.retryAt}
+              onSubmit={start}
+              notices={
+                <>
+                  {uiOnly && (
+                    <Alert>
+                      <InfoIcon aria-hidden="true" />
+                      <AlertTitle>Preview</AlertTitle>
+                      <AlertDescription>The planning agent isn&apos;t connected yet.</AlertDescription>
+                    </Alert>
+                  )}
+                  {unfinished && (
+                    <Alert>
+                      <AlertTitle>This trip didn&apos;t finish</AlertTitle>
+                      <AlertDescription className="flex flex-wrap items-center gap-2">
+                        Pick up where the agents left off.
+                        <Button size="sm" variant="outline" onClick={stream.resume}>
+                          <RotateCcwIcon aria-hidden="true" /> Resume
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {error && !threadId && (
+                    <Alert variant="destructive">
+                      <AlertTitle>Couldn&apos;t start the trip</AlertTitle>
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+                </>
+              }
+              aside={
+                <>
+                  <PickUp disabled={live || uiOnly} onResume={stream.resumeTrip} />
+                  <HowItWorks />
+                </>
+              }
+            />
           </div>
         )}
 
@@ -216,7 +224,7 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
             {banners}
             <RunProgress status={status} progress={progress} phases={phases} startedAt={stream.startedAt} brief={briefLine(draft)} />
             <div className={`grid gap-5 lg:grid-cols-12 lg:items-start ${live ? '' : 'opacity-60'}`}>
-              <div className="flex flex-col lg:sticky lg:top-5 lg:col-span-7 lg:h-[calc(100dvh-10rem)] lg:min-h-[480px]">
+              <div className="flex flex-col lg:sticky lg:top-20 lg:col-span-7 lg:h-[calc(100dvh-11rem)] lg:min-h-[480px]">
                 <AgentChat
                   messages={messages}
                   status={status}

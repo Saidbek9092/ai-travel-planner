@@ -1,15 +1,17 @@
 'use client';
 
-import type { DecisionTopic, Hotel, ItineraryDay, MessagePayload, ProgressPayload, ResultPayload, Transfer } from '@ai-travel/contracts';
+import type { DecisionTopic, Flight, Hotel, ItineraryDay, MessagePayload, ProgressPayload, ResultPayload, Transfer } from '@ai-travel/contracts';
 import dynamic from 'next/dynamic';
-import { PlaneIcon } from 'lucide-react';
-import type { ReactNode, RefObject } from 'react';
+import { BedDoubleIcon, CalendarDaysIcon, CarIcon, MapIcon, MapPinOffIcon, PlaneIcon, type LucideIcon } from 'lucide-react';
+import { useState, type ReactNode, type RefObject } from 'react';
 import { BudgetMeter } from '@/components/BudgetMeter';
-import { SelectedFlightCard, SelectedHotelCard } from '@/components/FlightHotelCards';
-import { DayList, DayPanel, DayStrip, type DaySelection } from '@/components/ItineraryTimeline';
+import { SelectedFlightCard, SelectedHotelCard, TransfersCard } from '@/components/FlightHotelCards';
+import { DayList, DayPanel, DayStrip, useArrowKeys, type DaySelection } from '@/components/ItineraryTimeline';
 import { SchematicMap } from '@/components/SchematicMap';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { env } from '@/lib/env';
+import { cn, formatUsd } from '@/lib/utils';
 import { budgetParts, draftingDay, timesWord, tripTitle, tripTotal, type TripView } from '@/lib/trip';
 
 const MapboxViewer = dynamic(() => import('@/components/MapboxViewer'), {
@@ -38,18 +40,27 @@ interface DayExplorerProps {
 function DayExplorer({ itinerary, totalDays, hotel, transfers, dailySpend, selected, onSelect, drafting, mapHeight }: DayExplorerProps) {
   const day = selected === 'all' ? null : (itinerary.find((d) => d.day === selected) ?? null);
   const index = day ? itinerary.indexOf(day) : -1;
+  // The map is optional: the day's details come first, the map opens on request.
+  const [showMap, setShowMap] = useState(false);
+  const hasPlaces = itinerary.some((d) => d.places.length > 0);
   return (
     <section aria-labelledby="day-explorer-title" className="overflow-hidden rounded-xl border bg-card">
-      <header className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-3">
-        <h2 id="day-explorer-title" className="text-lg font-semibold">
-          Day by day
-        </h2>
-        <span className="text-[13px] text-ink-2">{day ? `Showing Day ${day.day}` : 'Showing all days'}</span>
-      </header>
+      <h2 id="day-explorer-title" className="sr-only">
+        Day by day
+      </h2>
       <DayStrip itinerary={itinerary} totalDays={totalDays} selected={selected} onSelect={onSelect} />
+      {hasPlaces && (
+        <div className="flex items-center justify-between gap-2 border-b px-4 pb-3">
+          <span className="text-[13px] text-ink-2">{day ? `Day ${day.day} · ${day.places.length} ${day.places.length === 1 ? 'stop' : 'stops'}` : 'All days'}</span>
+          <Button variant="outline" size="sm" aria-expanded={showMap} aria-controls="day-map" onClick={() => setShowMap((v) => !v)}>
+            {showMap ? <MapPinOffIcon aria-hidden="true" /> : <MapIcon aria-hidden="true" />}
+            {showMap ? 'Hide map' : 'Show map'}
+          </Button>
+        </div>
+      )}
       <div role="tabpanel" aria-labelledby={`day-tab-${selected}`}>
-        {itinerary.some((d) => d.places.length > 0) && (
-          <div className={mapHeight}>
+        {hasPlaces && showMap && (
+          <div id="day-map" className={cn('border-b', mapHeight)}>
             <MapArea itinerary={itinerary} hotel={hotel} activeDay={day?.day ?? null} labels={day !== null} />
           </div>
         )}
@@ -73,7 +84,121 @@ function DayExplorer({ itinerary, totalDays, hotel, transfers, dailySpend, selec
   );
 }
 
+type SectionId = 'flight' | 'hotel' | 'transfers' | 'days';
+
+interface SectionTab {
+  id: SectionId;
+  label: string;
+  icon: LucideIcon;
+  /// Small hint on the tab ("3 days"); null while the agent has nothing yet.
+  hint: string | null;
+  content: ReactNode;
+}
+
+/** Flight, Hotel, Transfers and Days as tabs: one section at a time. Arrow keys move between tabs. */
+function SectionTabs({ tabs, initial }: { tabs: SectionTab[]; initial: SectionId }) {
+  const [active, setActive] = useState<SectionId>(initial);
+  const keys = useArrowKeys(tabs.length);
+  const current = tabs.find((t) => t.id === active) ?? tabs[0]!;
+  return (
+    <div className="flex min-w-0 flex-col gap-5">
+      <div role="tablist" aria-label="Trip sections" className="sticky top-16 z-30 -mx-1 flex gap-1 border-b bg-background/95 px-1 backdrop-blur">
+        {tabs.map((tab, i) => {
+          const selected = tab.id === current.id;
+          return (
+            <button
+              key={tab.id}
+              ref={keys.ref(i)}
+              type="button"
+              role="tab"
+              id={`section-tab-${tab.id}`}
+              aria-selected={selected}
+              aria-controls="section-panel"
+              tabIndex={selected ? 0 : -1}
+              onClick={() => setActive(tab.id)}
+              onKeyDown={(e) => keys.onKeyDown(e, i)}
+              className={cn(
+                '-mb-px flex min-w-0 flex-1 items-center justify-center gap-2 border-b-2 px-2 py-3 text-[15px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                selected ? 'border-foreground font-semibold text-foreground' : 'border-transparent text-ink-2 hover:text-foreground',
+              )}
+            >
+              <tab.icon className="size-4 shrink-0" aria-hidden="true" />
+              {tab.label}
+              <span className="hidden truncate rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-ink-2 xl:inline">{tab.hint ?? '…'}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div role="tabpanel" id="section-panel" aria-labelledby={`section-tab-${current.id}`} className="min-w-0">
+        {current.content}
+      </div>
+    </div>
+  );
+}
+
+const WAITING = (what: string) => (
+  <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed bg-card/60 p-10 text-center text-ink-2">
+    <p>{what} appears here when the agent has decided.</p>
+  </div>
+);
+
 type Decisions = Partial<Record<DecisionTopic, MessagePayload>>;
+
+interface SectionInput {
+  flights: Flight[];
+  hotels: Hotel[];
+  transfers: Transfer[];
+  durationDays: number;
+  startDate: string | null;
+  firstDay: number;
+  confirmed: { flight: boolean; hotel: boolean; transfers: boolean };
+  days: ReactNode;
+  dayCount: number;
+  totalDays: number;
+}
+
+function sectionTabs(i: SectionInput): SectionTab[] {
+  const flight = i.flights[0];
+  const hotel = i.hotels[0];
+  return [
+    {
+      id: 'flight',
+      label: 'Flight',
+      icon: PlaneIcon,
+      hint: flight ? formatUsd(flight.price) : null,
+      content: flight ? (
+        <SelectedFlightCard flights={i.flights} transfers={[]} firstDay={i.firstDay} confirmed={i.confirmed.flight} confirmedTransfers={false} variant="full" />
+      ) : (
+        WAITING('The flight')
+      ),
+    },
+    {
+      id: 'hotel',
+      label: 'Hotel',
+      icon: BedDoubleIcon,
+      hint: hotel ? `${formatUsd(hotel.pricePerNight)}/night` : null,
+      content: hotel ? (
+        <SelectedHotelCard hotels={i.hotels} durationDays={i.durationDays} startDate={i.startDate} confirmed={i.confirmed.hotel} variant="full" />
+      ) : (
+        WAITING('The hotel')
+      ),
+    },
+    {
+      id: 'transfers',
+      label: 'Transfer',
+      icon: CarIcon,
+      hint: i.transfers.length > 0 ? `${i.transfers.length} ${i.transfers.length === 1 ? 'ride' : 'rides'}` : null,
+      content: i.transfers.length > 0 ? <TransfersCard transfers={i.transfers} firstDay={i.firstDay} confirmed={i.confirmed.transfers} /> : WAITING('The transfers'),
+    },
+    {
+      id: 'days',
+      label: 'Days',
+      icon: CalendarDaysIcon,
+      hint: i.dayCount > 0 ? `${i.dayCount}${i.totalDays > i.dayCount ? `/${i.totalDays}` : ''} planned` : null,
+      content: i.days ?? WAITING('The itinerary'),
+    },
+  ];
+}
 
 interface LiveOverviewProps {
   trip: TripView;
@@ -111,34 +236,33 @@ export function LiveOverview({ trip, decisions, progress, selectedDay, onSelectD
               final={!!decisions.budget}
             />
           ) : null}
-          <SelectedFlightCard
-            flights={trip.flights ?? []}
-            transfers={trip.transfers ?? []}
-            firstDay={1}
-            confirmed={!!decisions.flight}
-            confirmedTransfers={!!decisions.transfers}
-            variant="live"
+          <SectionTabs
+            initial="flight"
+            tabs={sectionTabs({
+              flights: trip.flights ?? [],
+              hotels: trip.hotels ?? [],
+              transfers: trip.transfers ?? [],
+              durationDays: trip.durationDays ?? 1,
+              startDate: trip.startDate ?? null,
+              firstDay: 1,
+              confirmed: { flight: !!decisions.flight, hotel: !!decisions.hotel, transfers: !!decisions.transfers },
+              days: trip.durationDays ? (
+                <DayExplorer
+                  itinerary={itinerary}
+                  totalDays={trip.durationDays}
+                  hotel={trip.hotels?.[0] ?? null}
+                  transfers={trip.transfers ?? []}
+                  dailySpend={null}
+                  selected={selectedDay}
+                  onSelect={onSelectDay}
+                  drafting={progress?.currentStatus === 'planning' ? draftingDay(progress.detail) : null}
+                  mapHeight="h-72 lg:h-[340px]"
+                />
+              ) : null,
+              dayCount: itinerary.length,
+              totalDays: trip.durationDays ?? 0,
+            })}
           />
-          <SelectedHotelCard
-            hotels={trip.hotels ?? []}
-            durationDays={trip.durationDays ?? 1}
-            startDate={trip.startDate ?? null}
-            confirmed={!!decisions.hotel}
-            variant="live"
-          />
-          {trip.durationDays ? (
-            <DayExplorer
-              itinerary={itinerary}
-              totalDays={trip.durationDays}
-              hotel={trip.hotels?.[0] ?? null}
-              transfers={trip.transfers ?? []}
-              dailySpend={null}
-              selected={selectedDay}
-              onSelect={onSelectDay}
-              drafting={progress?.currentStatus === 'planning' ? draftingDay(progress.detail) : null}
-              mapHeight="h-72 lg:h-[340px]"
-            />
-          ) : null}
         </>
       )}
     </section>
@@ -184,30 +308,36 @@ export function FinishedOverview({ result, decisions, selectedDay, onSelectDay, 
       </div>
 
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start">
-        <div className="lg:sticky lg:top-5">{chat}</div>
+        <div className="lg:sticky lg:top-20">{chat}</div>
         <div className="flex min-w-0 flex-col gap-5">
-          <SelectedFlightCard
-            flights={result.flights}
-            transfers={result.transfers}
-            firstDay={itinerary[0]?.day ?? 1}
-            confirmed={confirmed('flight')}
-            confirmedTransfers={confirmed('transfers')}
-            variant="full"
+          <SectionTabs
+            initial="days"
+            tabs={sectionTabs({
+              flights: result.flights,
+              hotels: result.hotels,
+              transfers: result.transfers,
+              durationDays: result.durationDays,
+              startDate: result.startDate,
+              firstDay: itinerary[0]?.day ?? 1,
+              confirmed: { flight: confirmed('flight'), hotel: confirmed('hotel'), transfers: confirmed('transfers') },
+              days:
+                itinerary.length > 0 ? (
+                  <DayExplorer
+                    itinerary={itinerary}
+                    totalDays={itinerary.length}
+                    hotel={result.hotels[0] ?? null}
+                    transfers={result.transfers}
+                    dailySpend={result.dailyExpensesEstimate || null}
+                    selected={selectedDay}
+                    onSelect={onSelectDay}
+                    drafting={null}
+                    mapHeight="h-[420px]"
+                  />
+                ) : null,
+              dayCount: itinerary.length,
+              totalDays: itinerary.length,
+            })}
           />
-          <SelectedHotelCard hotels={result.hotels} durationDays={result.durationDays} startDate={result.startDate} confirmed={confirmed('hotel')} variant="full" />
-          {itinerary.length > 0 && (
-            <DayExplorer
-              itinerary={itinerary}
-              totalDays={itinerary.length}
-              hotel={result.hotels[0] ?? null}
-              transfers={result.transfers}
-              dailySpend={result.dailyExpensesEstimate || null}
-              selected={selectedDay}
-              onSelect={onSelectDay}
-              drafting={null}
-              mapHeight="h-[420px]"
-            />
-          )}
         </div>
       </div>
     </div>
