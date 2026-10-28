@@ -16,4 +16,5 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: ./scripts/check-no-hardcoded-trip-data.sh
       - run: pnpm turbo run lint typecheck test build

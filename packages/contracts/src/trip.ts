@@ -95,6 +95,10 @@ export const TransferSchema = z.object({
   note: z.string().min(1).nullable(),
   /** Official taxi or train information, passed through from tool data. */
   url: z.url().nullish(),
+  /** `estimate` = the planner's own figure, not a published fare. Shown as "Estimated". */
+  source: z.literal('estimate').nullish(),
+  /** When the figure was produced. */
+  fetchedAt: z.iso.datetime({ offset: true }).nullish(),
 });
 
 /** Forecast for one itinerary day. */

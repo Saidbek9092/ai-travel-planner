@@ -53,6 +53,8 @@ export const TripContextSchema = z.object({
   originTimeZone: z.string().min(1).nullable(),
   /** `mock` only when the agent runs with `TOOLS_MODE=mock` (tests, e2e). */
   source: z.enum(['live', 'mock']),
+  /** When the agent looked this up. */
+  fetchedAt: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export type TripContextQuery = z.infer<typeof TripContextQuerySchema>;

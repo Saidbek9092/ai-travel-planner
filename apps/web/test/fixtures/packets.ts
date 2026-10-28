@@ -310,7 +310,7 @@ function designRun(o: RunOptions = {}): Step[] {
     s(draftPacket({ totalCost: p1 }), 150),
     s(
       messagePacket(4, 'BudgetAuditor', `Heads up: with daily costs that's $${p1.toLocaleString('en-US')} against $${budget.toLocaleString('en-US')}. We need to find about $${p1 - budget} before we lock anything in.`, {
-        callout: { tone: 'warn', label: `Over budget by $${p1 - budget} · re-plan 1 of 2` },
+        callout: { tone: 'info', label: 'Finding cheaper options, try 1 of 2' },
       }),
     ),
     s(logPacket(4, 'BudgetAuditor', 'retryCount 0 → 1 · loop back: find cheaper flights and hotels', { level: 'warn' })),
@@ -376,7 +376,7 @@ function designRun(o: RunOptions = {}): Step[] {
   );
   if (o.overBudget) {
     steps.push(
-      s(messagePacket(8, 'BudgetAuditor', `Still $${p2 - budget} over. One more try for cheaper options.`, { callout: { tone: 'warn', label: `Over budget by $${p2 - budget} · re-plan 2 of 2` } })),
+      s(messagePacket(8, 'BudgetAuditor', `Still $${p2 - budget} over. One more try for cheaper options.`, { callout: { tone: 'info', label: 'Finding cheaper options, try 2 of 2' } })),
       s(progressPacket(94, 'searching', { pass: 3, run: run(8) })),
       s(logPacket(9, 'FlightAgent', 'No cheaper flight than $420 via Istanbul')),
       s(logPacket(10, 'HotelAgent', 'No cheaper hotel rated ≥ 7.5 than $80/night')),
