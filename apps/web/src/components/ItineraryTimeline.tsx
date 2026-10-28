@@ -1,10 +1,12 @@
 'use client';
 
-import type { ItineraryDay, Transfer } from '@ai-travel/contracts';
+import type { ItineraryDay, Place, Transfer } from '@ai-travel/contracts';
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { useRef, type KeyboardEvent } from 'react';
+import { ExternalLink } from '@/components/ExternalLink';
 import { Button } from '@/components/ui/button';
 import { TRANSFER_MODES, WEATHER_ICONS, dayColor, formatTemperature } from '@/lib/labels';
+import { placeLinks, safeUrl } from '@/lib/links';
 import { cn, formatDay, formatDuration, formatUsd } from '@/lib/utils';
 
 const stops = (n: number) => `${n} ${n === 1 ? 'stop' : 'stops'}`;
@@ -32,7 +34,7 @@ interface DayListProps {
   itinerary: ItineraryDay[];
   pendingDays: { drafting: number | null; total: number };
   activeDay: number | null;
-  onSelectDay: (day: number | null) => void;
+  onSelectDay: (day: number) => void;
 }
 
 /** Live "Day by day": planned days with a check, the day in `progress.detail` "drafting", the rest "waiting". */
@@ -57,7 +59,7 @@ export function DayList({ itinerary, pendingDays, activeDay, onSelectDay }: DayL
                   ref={keys.ref(i)}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => onSelectDay(active ? null : n)}
+                  onClick={() => onSelectDay(n)}
                   onKeyDown={(e) => keys.onKeyDown(e, i)}
                   className={cn(
                     '-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-2.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 hover:bg-muted',
@@ -101,60 +103,98 @@ export function DayList({ itinerary, pendingDays, activeDay, onSelectDay }: DayL
   );
 }
 
-/** Finished trip: one card per day; the selected card takes the day's colour. */
-export function DayCards({ itinerary, activeDay, onSelectDay }: { itinerary: ItineraryDay[]; activeDay: number; onSelectDay: (day: number) => void }) {
-  const keys = useArrowKeys(itinerary.length);
-  const totalStops = itinerary.reduce((sum, d) => sum + d.places.length, 0);
+export type DaySelection = number | 'all';
+
+interface DayStripProps {
+  itinerary: ItineraryDay[];
+  /** Days still being planned (live run): shown as inactive tabs. */
+  totalDays: number;
+  selected: DaySelection;
+  onSelect: (day: DaySelection) => void;
+}
+
+/** Date strip above the map: "All days" plus one tab per day. Arrows move focus, Enter or Space selects. */
+export function DayStrip({ itinerary, totalDays, selected, onSelect }: DayStripProps) {
+  const days = Array.from({ length: Math.max(totalDays, itinerary.length) }, (_, i) => i + 1);
+  const keys = useArrowKeys(days.length + 1);
   return (
-    <section aria-labelledby="day-cards-title" className="flex flex-col gap-3">
-      <header className="flex items-baseline justify-between gap-2">
-        <h2 id="day-cards-title" className="text-xl leading-7 font-semibold">
-          Day by day
-        </h2>
-        <span className="text-sm text-ink-2">
-          {itinerary.length} days · {stops(totalStops)}
-        </span>
-      </header>
-      <ul className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 lg:mx-0 lg:grid lg:auto-cols-fr lg:grid-flow-col lg:gap-3.5 lg:overflow-visible lg:px-0">
-        {itinerary.map((day, i) => {
-          const active = day.day === activeDay;
-          const Icon = day.weather ? WEATHER_ICONS[day.weather.icon] : null;
-          const color = dayColor(day.day);
-          return (
-            <li key={day.day} className="w-44 shrink-0 snap-start lg:w-auto">
-              <button
-                ref={keys.ref(i)}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onSelectDay(day.day)}
-                onKeyDown={(e) => keys.onKeyDown(e, i)}
-                className={cn(
-                  'flex h-full w-full flex-col gap-1.5 rounded-xl border-2 bg-card px-4 py-3.5 text-left outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50',
-                  !active && 'border-border hover:border-muted-foreground/40',
+    <div
+      role="tablist"
+      aria-label="Days"
+      className="flex snap-x gap-2.5 overflow-x-auto border-b px-5 py-3"
+    >
+      {[
+        { key: 'all' as const, day: null as ItineraryDay | null, n: 0 },
+        ...days.map((n) => ({ key: n, day: itinerary.find((d) => d.day === n) ?? null, n })),
+      ].map((tab, i) => {
+        const active = selected === tab.key;
+        const color = tab.key === 'all' ? null : dayColor(tab.n);
+        const Icon = tab.day?.weather ? WEATHER_ICONS[tab.day.weather.icon] : null;
+        const planned = tab.key === 'all' || tab.day !== null;
+        return (
+          <button
+            key={tab.key}
+            ref={keys.ref(i)}
+            type="button"
+            role="tab"
+            id={`day-tab-${tab.key}`}
+            aria-selected={active}
+            aria-disabled={!planned}
+            tabIndex={active ? 0 : -1}
+            onClick={() => planned && onSelect(tab.key)}
+            onKeyDown={(e) => keys.onKeyDown(e, i)}
+            onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })}
+            className={cn(
+              'flex min-h-[72px] w-40 shrink-0 snap-start flex-col gap-1 rounded-xl border-2 bg-card px-3.5 py-2.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+              !active && 'border-border hover:border-muted-foreground/40',
+              !planned && 'cursor-default text-muted-foreground hover:border-border',
+            )}
+            style={active ? { borderColor: color ?? 'var(--foreground)', backgroundColor: color ? `color-mix(in srgb, ${color} 10%, white)` : 'var(--muted)' } : undefined}
+          >
+            {tab.key === 'all' ? (
+              <>
+                <span className="text-[15px] leading-5 font-semibold">All days</span>
+                <span className="text-[13px] leading-[18px] text-muted-foreground">{itinerary.length} planned</span>
+              </>
+            ) : (
+              <>
+                <span className="flex items-center gap-2 text-[13px] leading-[18px]">
+                  <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: color! }} aria-hidden="true" />
+                  <span className="truncate font-semibold">
+                    Day {tab.n}
+                    {tab.day?.date && ` · ${formatDay(tab.day.date, 'short')}`}
+                  </span>
+                </span>
+                {tab.day ? (
+                  <>
+                    <span className="truncate text-[15px] leading-5 font-semibold">{tab.day.title}</span>
+                    {tab.day.weather && Icon && (
+                      <span className="flex items-center gap-1.5 text-[13px] leading-[18px] text-ink-2">
+                        <Icon className="size-3.5" aria-hidden="true" />
+                        {formatTemperature(tab.day.weather.highC)}
+                        <span className="sr-only"> {tab.day.weather.condition}</span>
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-[13px] leading-[18px]">planning…</span>
                 )}
-                style={active ? { borderColor: color, backgroundColor: `color-mix(in srgb, ${color} 10%, white)` } : undefined}
-              >
-                <span className="flex items-center gap-2 text-[15px] leading-[18px]">
-                  <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
-                  <span className="font-semibold">Day {day.day}</span>
-                  {day.date && <span className="ml-auto text-[13px] text-muted-foreground">{formatDay(day.date, 'short')}</span>}
-                </span>
-                <span className="line-clamp-2 min-h-10 text-base leading-5 font-semibold">{day.title}</span>
-                <span className="mt-auto flex flex-col gap-0.5 text-sm leading-5 text-ink-2">
-                  {day.weather && Icon && (
-                    <span className="flex items-center gap-1.5">
-                      <Icon className="size-4" aria-hidden="true" />
-                      {weatherText(day)}
-                    </span>
-                  )}
-                  <span className="text-[13px] leading-[18px] text-muted-foreground">{stops(day.places.length)}</span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+              </>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlaceLinks({ place }: { place: Place }) {
+  const { website, map } = placeLinks(place);
+  return (
+    <span className="mt-0.5 flex flex-wrap gap-x-3">
+      {website && <ExternalLink href={website}>Website</ExternalLink>}
+      <ExternalLink href={map}>View on map</ExternalLink>
+    </span>
   );
 }
 
@@ -174,6 +214,7 @@ function TransferStop({ transfer }: { transfer: Transfer }) {
           {formatUsd(transfer.priceUsd)}
           {transfer.durationMinutes ? ` · about ${formatDuration(transfer.durationMinutes)}` : ''}
         </span>
+        {safeUrl(transfer.url) && <ExternalLink href={safeUrl(transfer.url)!}>Timetable and fares</ExternalLink>}
       </span>
     </li>
   );
@@ -232,6 +273,7 @@ export function DayPanel({
             <span className="min-w-0">
               <span className="block text-[17px] leading-6 font-semibold">{place.name}</span>
               {place.note && <span className="block text-sm text-ink-2">{place.note}</span>}
+              <PlaceLinks place={place} />
             </span>
           </li>
         ))}

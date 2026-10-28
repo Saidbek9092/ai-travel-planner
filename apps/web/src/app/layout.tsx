@@ -29,7 +29,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       <body className="flex min-h-full flex-col bg-background text-[15px] leading-[22px] text-foreground">
         <TooltipProvider>
           <header className="border-b bg-card">
-            <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-3 px-4 sm:gap-6 sm:px-6 lg:px-[72px]">
+            <div className="mx-auto flex h-16 w-full max-w-[1360px] items-center gap-3 px-4 sm:gap-6 sm:px-8 lg:px-8">
               <Link href="/" className="flex shrink-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                 <span className="flex size-8 items-center justify-center rounded-lg bg-foreground text-white">
                   <RouteIcon className="size-4" aria-hidden="true" />
