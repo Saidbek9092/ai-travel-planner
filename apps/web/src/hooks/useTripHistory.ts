@@ -7,6 +7,8 @@ export interface TripHistoryEntry {
   title: string;
   /** Epoch ms. */
   createdAt: number;
+  /** `paused` = started but not finished (can be resumed); missing = finished. */
+  status?: 'paused' | 'done';
 }
 
 const KEY = 'ai-travel:trips';
