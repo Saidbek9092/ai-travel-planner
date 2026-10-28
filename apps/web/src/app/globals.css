@@ -39,6 +39,20 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-ink-2: var(--ink-2);
+  --color-primary-soft: var(--primary-soft);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-live: var(--live);
+  --color-live-foreground: var(--live-foreground);
+  --color-live-soft: var(--live-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-map-ground: var(--map-ground);
+  --color-budget-flights: var(--budget-flights);
+  --color-budget-hotel: var(--budget-hotel);
+  --color-budget-transfers: var(--budget-transfers);
+  --color-budget-daily: var(--budget-daily);
+  --color-budget-left: var(--budget-left);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -49,72 +63,54 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* "Departure board" tokens (SPEC.md §8). Light theme only. */
+  --background: #f2f3f5;
+  --foreground: #0b1726;
+  --ink-2: #3d4a5c;
+  --card: #ffffff;
+  --card-foreground: #0b1726;
+  --popover: #ffffff;
+  --popover-foreground: #0b1726;
+  --primary: #2952cc;
+  --primary-foreground: #ffffff;
+  --primary-soft: #e8eefc;
+  --secondary: #eef0f3;
+  --secondary-foreground: #0b1726;
+  --muted: #f2f3f5;
+  --muted-foreground: #5f6b7a;
+  --accent: #eef0f3;
+  --accent-foreground: #0b1726;
+  --destructive: #c2361f;
+  --destructive-soft: #fbe9e5;
+  --live: #f2a60d;
+  --live-foreground: #8a5300;
+  --live-soft: #fef3dc;
+  --success: #0f7b5f;
+  --success-soft: #e3f4ee;
+  --border: #dde1e6;
+  --input: #dde1e6;
+  --ring: #2952cc;
+  --map-ground: #e8ebef;
+  --budget-flights: #1f3fa3;
+  --budget-hotel: #4f78e0;
+  --budget-transfers: #7f9cf0;
+  --budget-daily: #a9bdf0;
+  --budget-left: #eef0f3;
+  --chart-1: #1f3fa3;
+  --chart-2: #4f78e0;
+  --chart-3: #7f9cf0;
+  --chart-4: #a9bdf0;
+  --chart-5: #eef0f3;
+  /* 8 px controls; cards use rounded-xl (12 px). */
+  --radius: 0.5rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0b1726;
+  --sidebar-primary: #2952cc;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef0f3;
+  --sidebar-accent-foreground: #0b1726;
+  --sidebar-border: #dde1e6;
+  --sidebar-ring: #2952cc;
 }
 
 @layer base {
@@ -127,6 +123,21 @@
   html {
     @apply font-sans;
   }
+}
+
+/* Label Mono 11/16 caps (SPEC.md §8). */
+@utility label-mono {
+  font-family: var(--font-geist-mono);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Hatched block for a missing hotel photo. */
+@utility placeholder-hatch {
+  background-color: var(--muted);
+  background-image: repeating-linear-gradient(135deg, transparent 0 10px, rgb(11 23 38 / 0.05) 10px 20px);
 }
 @media (prefers-reduced-motion: reduce) {
   *,

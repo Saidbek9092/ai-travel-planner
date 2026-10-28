@@ -17,7 +17,7 @@
 | **M3 · UI** | T8 – T13 | Dashboard and all its components, driven by the mock agent | ✅ Done (2026-10-27) |
 | **M4 · Resilience & ship** | T14 – T17 | Failure/resume/deep links, polish, end-to-end tests, CI and Vercel deploy | ✅ Done in code (2026-10-27); T16 dropped (no tests); the Vercel project itself is a manual step, see `DEPLOY.md` |
 | **M5 · Chat & top bar** | T18 – T20 | `MESSAGE` packets in the hook, `AgentChat` with "Confirmed" decisions, destination bar with weather, rate and local time | ✅ Done (2026-10-27) |
-| **M6 · Design v2** | T21 – T26 | The design's look and live Trip Overview: tokens and layout, `DRAFT` handling, agent board and banners, reconnect / cancel / countdown, mobile layouts, My trips | — |
+| **M6 · Design v2** | T21 – T26 | The design's look and live Trip Overview: tokens and layout, `DRAFT` handling, agent board and banners, reconnect / cancel / countdown, mobile layouts, My trips | ✅ Web done (2026-10-28): T21–T24, T26; T25 (mobile) not started |
 
 ### Dependency graph
 
@@ -495,7 +495,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 > Mobile-Result. The agent side is B24 – B25 in [`../agent/PLAN.md`](../agent/PLAN.md). Extend the mock agent with `DRAFT`, `PROGRESS.detail` /
 > `pass` / `run`, checkpoint log rows, a dropped-stream scenario (`#drop`) and a rate-limit scenario (`#ratelimit`) as each ticket needs them.
 
-### T21 — Design tokens and layout shell · M
+### T21 — Design tokens and layout shell · M · ✅ Done
 
 **Goal:** the "Departure board" look and the two-column live layout (SPEC.md §6, §8).
 
@@ -511,7 +511,10 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-### T22 — `DRAFT` handling and the live Trip Overview · L
+### T22 — `DRAFT` handling and the live Trip Overview · L · ✅ Done
+
+> Mock agent `happy` now plays the design's run: pass 1 over budget → re-plan with flight / hotel / transfers confirmations → weather prep →
+> days 1…5 drafted one by one → budget approved. Without a Mapbox token the map is a schematic plot (`SchematicMap`).
 
 **Goal:** the right column fills in as agents decide (SPEC.md §6, §7).
 
@@ -527,7 +530,10 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-### T23 — Agent board, run banners and run details · M
+### T23 — Agent board, run banners and run details · M · ✅ Done
+
+> The board, run details and terminal open from the chat's "Technical log" button (the design has no board in the column). "Trip ready" is a toast.
+> `#fallback` scenario shows the fallback-model banner.
 
 **Goal:** the status furniture around the chat (SPEC.md §7).
 
@@ -542,7 +548,10 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-### T24 — Reconnect, cancel and rate-limit countdown · M
+### T24 — Reconnect, cancel and rate-limit countdown · M · ✅ Done
+
+> Mock agent keeps runs in a registry: `#drop` cuts the connection mid-run (and refuses the first two reattaches so the banner is visible),
+> `#dropped` loses the run (reconnect → 404 → "Connection lost"), `#ratelimit` returns 429 with `retryAfterSeconds: 42`.
 
 **Goal:** the resilience states from the design that depend on the connection (SPEC.md §5.2, §7).
 
@@ -558,7 +567,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-### T25 — Mobile layouts · M
+### T25 — Mobile layouts · M · ⏸ Not started (web first, by request)
 
 **Goal:** the Mobile-Live and Mobile-Result boards (SPEC.md §6).
 
@@ -574,7 +583,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-### T26 — My trips and share · S
+### T26 — My trips and share · S · ✅ Done
 
 **Goal:** the header's "My trips" and "Share trip" (SPEC.md §7).
 
@@ -595,7 +604,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 | --- | --- | --- |
 | 1 | Next.js 15 or 16? | **Next.js 16** (current stable line; 15 only receives backports). Turbopack by default, ESLint CLI instead of `next lint`, async-only request APIs. Specs updated. |
 | 2 | Vercel previews before the backend exists | **UI only.** No hosted mock agent; deployed builds run without `NEXT_PUBLIC_AGENT_URL` and show an "agent not connected" banner. The mock agent stays local/CI-only. |
-| 3 | Branding | **The design's "Departure board" system** (§8): custom palette over the shadcn `base-nova` variables, Geist fonts, text wordmark + lucide `Plane` icon. Replaces the earlier "shadcn defaults, no branding" decision. |
+| 3 | Branding | **The design's "Departure board" system** (§8): custom palette over the shadcn `base-nova` variables, Geist fonts, text wordmark + lucide `Route` icon in a navy square. Replaces the earlier "shadcn defaults, no branding" decision. |
 | 4 | Chat vs terminal | **Separate `MESSAGE` packet.** `LOG` stays technical for the terminal; the chat shows friendly text and a "Confirmed" badge for decisions. The terminal becomes a collapsible "Technical log". |
 | 5 | When the destination bar loads | **As soon as the destination is known**: from the first `DRAFT` (right after the Supervisor) during a run, or from the `RESULT` when a stored trip reopens. Straight from the browser to the agent. Replaces "after the `RESULT`" — the design shows the bar while agents plan. |
 | 6 | Lookup failure | **Hide the chip.** No mock weather or rate — fake values in the header would look real. |

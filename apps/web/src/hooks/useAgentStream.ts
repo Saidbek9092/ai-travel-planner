@@ -15,7 +15,14 @@ import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { env } from '@/lib/env';
 import { readSseEvents } from '@/lib/sse';
 
-export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'completed' | 'failed' | 'aborted';
+export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'reconnecting' | 'completed' | 'failed' | 'aborted';
+
+export interface ReconnectState {
+  attempt: number;
+  max: number;
+  /** Epoch ms of the next attempt; `null` while the attempt is in flight. */
+  nextAt: number | null;
+}
 
 export interface AgentStreamState {
   status: StreamStatus;
@@ -29,17 +36,27 @@ export interface AgentStreamState {
   error: string | null;
   /** Epoch ms when the rate limit lifts (429), else null. */
   retryAt: number | null;
+  reconnect: ReconnectState | null;
   lastRequest: TripRequest | null;
+  /** Epoch ms when the current run started (for the ETA). */
+  startedAt: number | null;
+  /** Index in `logs` where the current search pass began (`AgentBoard`). */
+  passStart: number;
 }
 
 export type AgentStreamAction =
-  | { type: 'START'; request: TripRequest | null }
+  | { type: 'START'; request: TripRequest | null; now?: number }
   | { type: 'CONNECTED'; threadId: string }
   | { type: 'PACKET'; event: SseEvent }
   | { type: 'STREAM_ENDED' }
+  | { type: 'RECONNECTING'; attempt: number; nextAt: number | null }
   | { type: 'HTTP_ERROR'; code: string; message?: string; retryAfterSeconds?: number; now?: number }
   | { type: 'ABORTED' }
   | { type: 'RESET' };
+
+export const MAX_RECONNECTS = 5;
+/** Wait before each reconnect attempt, in ms. */
+export const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000] as const;
 
 export const initialStreamState: AgentStreamState = {
   status: 'idle',
@@ -52,7 +69,10 @@ export const initialStreamState: AgentStreamState = {
   result: null,
   error: null,
   retryAt: null,
+  reconnect: null,
   lastRequest: null,
+  startedAt: null,
+  passStart: 0,
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -61,6 +81,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   NOT_FOUND: 'We could not find that trip. It may have expired.',
   INTERNAL: 'Something went wrong on our side. Please try again.',
   NETWORK: 'Could not reach the planning agent. Check your connection and try again.',
+  CONNECTION_LOST: 'Connection lost',
 };
 
 export function errorMessage(code: string, serverMessage?: string): string {
@@ -75,13 +96,22 @@ export function agentStreamReducer(state: AgentStreamState, action: AgentStreamA
         ...initialStreamState,
         // A resume keeps what the run had so far.
         ...(action.request === null
-          ? { threadId: state.threadId, logs: state.logs, messages: state.messages, decisions: state.decisions, draft: state.draft, progress: state.progress }
+          ? {
+              threadId: state.threadId,
+              logs: state.logs,
+              messages: state.messages,
+              decisions: state.decisions,
+              draft: state.draft,
+              progress: state.progress,
+              passStart: state.passStart,
+            }
           : {}),
         status: 'connecting',
         lastRequest: action.request ?? state.lastRequest,
+        startedAt: action.now ?? Date.now(),
       };
     case 'CONNECTED':
-      return { ...state, status: 'streaming', threadId: action.threadId };
+      return { ...state, status: 'streaming', threadId: action.threadId, reconnect: null };
     case 'PACKET': {
       const { event } = action;
       switch (event.type) {
@@ -97,14 +127,17 @@ export function agentStreamReducer(state: AgentStreamState, action: AgentStreamA
           };
         case 'DRAFT':
           return { ...state, draft: { ...state.draft, ...event.payload } };
-        case 'PROGRESS':
+        case 'PROGRESS': {
+          const newPass = event.payload.pass > (state.progress?.pass ?? 1);
           return {
             ...state,
             progress: {
               ...event.payload,
               progressPercent: Math.max(state.progress?.progressPercent ?? 0, event.payload.progressPercent),
             },
+            passStart: newPass ? state.logs.length : state.passStart,
           };
+        }
         case 'RESULT':
           return {
             ...state,
@@ -112,25 +145,29 @@ export function agentStreamReducer(state: AgentStreamState, action: AgentStreamA
             threadId: event.payload.threadId,
             status: event.payload.status,
             error: event.payload.error,
+            reconnect: null,
           };
       }
       return state;
     }
     case 'STREAM_ENDED':
       if (state.result || state.status === 'aborted') return state;
-      return { ...state, status: 'failed', error: 'Connection lost' };
+      return { ...state, status: 'failed', error: errorMessage('CONNECTION_LOST'), reconnect: null };
+    case 'RECONNECTING':
+      return { ...state, status: 'reconnecting', reconnect: { attempt: action.attempt, max: MAX_RECONNECTS, nextAt: action.nextAt } };
     case 'HTTP_ERROR':
       return {
         ...state,
         status: 'failed',
         error: errorMessage(action.code, action.message),
+        reconnect: null,
         retryAt:
           action.code === 'RATE_LIMITED' && action.retryAfterSeconds
             ? (action.now ?? Date.now()) + action.retryAfterSeconds * 1000
             : null,
       };
     case 'ABORTED':
-      return { ...state, status: 'aborted' };
+      return { ...state, status: 'aborted', reconnect: null };
     case 'RESET':
       return initialStreamState;
   }
@@ -156,30 +193,133 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
 
+/** SSE ids are the run's sequence numbers; compare numerically when they are numbers. */
+function isNewer(id: string, last: string | null): boolean {
+  if (last === null) return true;
+  const a = Number(id);
+  const b = Number(last);
+  return Number.isFinite(a) && Number.isFinite(b) ? a > b : id !== last;
+}
+
+type ReadOutcome = 'result' | 'ended' | 'network' | 'aborted';
+
 export function useAgentStream(initial?: InitialRun) {
   const [state, dispatch] = useReducer(agentStreamReducer, initial, initState);
   const controllerRef = useRef<AbortController | null>(null);
+  const lastEventIdRef = useRef<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wakeRef = useRef<(() => void) | null>(null);
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
   });
 
-  useEffect(() => () => controllerRef.current?.abort(), []);
+  const clearTimer = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    wakeRef.current = null;
+  };
 
-  const run = useCallback(async (path: string, body: TripRequest | null, request: TripRequest | null) => {
-    if (env.agentUrl === null) return;
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    dispatch({ type: 'START', request });
+  useEffect(
+    () => () => {
+      controllerRef.current?.abort();
+      clearTimer();
+    },
+    [],
+  );
 
+  /** Reads packets until the stream ends; dedupes replayed packets by SSE id. */
+  const consume = useCallback(async (body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<ReadOutcome> => {
+    let sawResult = false;
     try {
-      const response = await fetch(`${env.agentUrl}${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
-      });
+      for await (const { id, data } of readSseEvents(body, signal)) {
+        if (id !== null) {
+          if (!isNewer(id, lastEventIdRef.current)) continue;
+          lastEventIdRef.current = id;
+        }
+        let json: unknown;
+        try {
+          json = JSON.parse(data);
+        } catch {
+          json = null;
+        }
+        const parsed = SseEventSchema.safeParse(json);
+        if (parsed.success) {
+          if (parsed.data.type === 'RESULT') sawResult = true;
+          dispatch({ type: 'PACKET', event: parsed.data });
+        } else if (process.env.NODE_ENV !== 'production') console.warn('Dropped invalid SSE packet', data);
+      }
+    } catch (error) {
+      if (isAbortError(error) || signal.aborted) return 'aborted';
+      return sawResult ? 'result' : 'network';
+    }
+    if (signal.aborted) return 'aborted';
+    return sawResult ? 'result' : 'ended';
+  }, []);
+
+  /** Waits with backoff and re-attaches to the run with `Last-Event-ID` until it ends or five attempts fail. */
+  const reconnectLoop = useCallback(
+    async (threadId: string, controller: AbortController) => {
+      let attempt = 0;
+      while (attempt < MAX_RECONNECTS && !controller.signal.aborted) {
+        attempt += 1;
+        const delay = RECONNECT_DELAYS[attempt - 1] ?? 15_000;
+        dispatch({ type: 'RECONNECTING', attempt, nextAt: Date.now() + delay });
+        await new Promise<void>((resolve) => {
+          wakeRef.current = resolve;
+          timerRef.current = setTimeout(resolve, delay);
+        });
+        clearTimer();
+        if (controller.signal.aborted) return;
+        dispatch({ type: 'RECONNECTING', attempt, nextAt: null });
+        let response: Response;
+        try {
+          response = await fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}/stream`, {
+            headers: {
+              Accept: 'text/event-stream',
+              ...(lastEventIdRef.current ? { 'Last-Event-ID': lastEventIdRef.current } : {}),
+            },
+            signal: controller.signal,
+          });
+        } catch (error) {
+          if (isAbortError(error) || controller.signal.aborted) return;
+          continue;
+        }
+        if (response.status === 404) break;
+        if (!response.ok || !response.body) continue;
+        dispatch({ type: 'CONNECTED', threadId });
+        attempt = 0;
+        const outcome = await consume(response.body, controller.signal);
+        if (outcome === 'result' || outcome === 'aborted') return;
+      }
+      if (!controller.signal.aborted) dispatch({ type: 'STREAM_ENDED' });
+    },
+    [consume],
+  );
+
+  const run = useCallback(
+    async (path: string, body: TripRequest | null, request: TripRequest | null) => {
+      if (env.agentUrl === null) return;
+      controllerRef.current?.abort();
+      clearTimer();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      lastEventIdRef.current = null;
+      dispatch({ type: 'START', request, now: Date.now() });
+
+      let response: Response;
+      try {
+        response = await fetch(`${env.agentUrl}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          body: body ? JSON.stringify(body) : undefined,
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (isAbortError(error) || controller.signal.aborted) return;
+        dispatch({ type: 'HTTP_ERROR', code: 'NETWORK' });
+        return;
+      }
       if (!response.ok || !response.body) {
         const json = (await response.json().catch(() => null)) as {
           error?: { code?: string; message?: string; retryAfterSeconds?: number };
@@ -188,55 +328,56 @@ export function useAgentStream(initial?: InitialRun) {
           type: 'HTTP_ERROR',
           code: json?.error?.code ?? 'INTERNAL',
           message: json?.error?.message,
-          retryAfterSeconds: json?.error?.retryAfterSeconds,
+          retryAfterSeconds: json?.error?.retryAfterSeconds ?? (Number(response.headers.get('Retry-After')) || undefined),
+          now: Date.now(),
         });
         return;
       }
 
-      const threadId = response.headers.get('X-Thread-Id');
+      const threadId = response.headers.get('X-Thread-Id') ?? stateRef.current.threadId;
       if (threadId) {
         dispatch({ type: 'CONNECTED', threadId });
         window.history.replaceState(null, '', `?trip=${threadId}`);
       }
-      for await (const { data } of readSseEvents(response.body, controller.signal)) {
-        let json: unknown;
-        try {
-          json = JSON.parse(data);
-        } catch {
-          json = null;
-        }
-        const parsed = SseEventSchema.safeParse(json);
-        if (parsed.success) dispatch({ type: 'PACKET', event: parsed.data });
-        else if (process.env.NODE_ENV !== 'production') console.warn('Dropped invalid SSE packet', data);
-      }
-      if (!controller.signal.aborted) dispatch({ type: 'STREAM_ENDED' });
-    } catch (error) {
-      if (isAbortError(error) || controller.signal.aborted) return;
-      dispatch({ type: 'HTTP_ERROR', code: 'NETWORK' });
-    }
-  }, []);
+      const outcome = await consume(response.body, controller.signal);
+      if (outcome === 'result' || outcome === 'aborted') return;
+      // The run keeps going on the server: catch up instead of failing.
+      if (threadId) await reconnectLoop(threadId, controller);
+      else dispatch({ type: 'STREAM_ENDED' });
+    },
+    [consume, reconnectLoop],
+  );
 
   const start = useCallback((request: TripRequest) => void run('/api/trips', request, request), [run]);
 
   const resume = useCallback(() => {
     const { threadId, status, result } = stateRef.current;
-    // `idle` with a thread id = a deep link to a trip that never finished.
-    const resumable = status === 'failed' || (status === 'idle' && result === null);
+    // `idle` with a thread id = a deep link to a trip that never finished; `aborted` = the user stopped it.
+    const resumable = status === 'failed' || status === 'aborted' || (status === 'idle' && result === null);
     if (threadId && resumable) void run(`/api/trips/${threadId}/resume`, null, null);
   }, [run]);
 
+  const reconnectNow = useCallback(() => wakeRef.current?.(), []);
+
   const cancel = useCallback(() => {
+    const { threadId } = stateRef.current;
     controllerRef.current?.abort();
     controllerRef.current = null;
+    clearTimer();
     dispatch({ type: 'ABORTED' });
+    // Best effort: the agent stops the graph and keeps the checkpoint, so the run stays resumable.
+    if (threadId && env.agentUrl !== null) {
+      void fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}/cancel`, { method: 'POST' }).catch(() => undefined);
+    }
   }, []);
 
   const reset = useCallback(() => {
     controllerRef.current?.abort();
     controllerRef.current = null;
+    clearTimer();
     dispatch({ type: 'RESET' });
     window.history.replaceState(null, '', window.location.pathname);
   }, []);
 
-  return { ...state, start, resume, cancel, reset };
+  return { ...state, start, resume, reconnectNow, cancel, reset };
 }

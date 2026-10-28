@@ -1,33 +1,66 @@
-import type { AgentName, DecisionTopic, LogLevel, TripStatus, WeatherIcon } from '@ai-travel/contracts';
+import type { AgentName, DecisionTopic, LogLevel, TransferMode, TripStatus, WeatherIcon } from '@ai-travel/contracts';
 import {
+  BedDoubleIcon,
+  BusIcon,
+  CarIcon,
   CloudFogIcon,
   CloudIcon,
   CloudLightningIcon,
   CloudRainIcon,
   CloudSnowIcon,
   CloudSunIcon,
+  FootprintsIcon,
+  MapIcon,
+  PlaneIcon,
   SunIcon,
+  TextAlignStartIcon,
+  TrainFrontIcon,
+  TramFrontIcon,
+  CpuIcon,
+  WalletIcon,
   type LucideIcon,
 } from 'lucide-react';
 
-/** Agent name colours for the dark terminal panel (bg-zinc-950). */
+/** The five graph nodes in run order (System is not an agent). */
+export const AGENT_ORDER = ['Supervisor', 'FlightAgent', 'HotelAgent', 'Planner', 'BudgetAuditor'] as const satisfies readonly AgentName[];
+
+/** Agent name colours on the dark terminal ground (Foundations board). */
 export const AGENT_COLORS: Record<AgentName, string> = {
-  System: 'text-zinc-400',
-  Supervisor: 'text-sky-400',
-  FlightAgent: 'text-violet-400',
-  HotelAgent: 'text-emerald-400',
-  Planner: 'text-fuchsia-400',
-  BudgetAuditor: 'text-cyan-400',
+  System: 'text-[#8A9BB0]',
+  Supervisor: 'text-[#9DB4FF]',
+  FlightAgent: 'text-[#F2B53C]',
+  HotelAgent: 'text-[#5FD0AE]',
+  Planner: 'text-[#C3A6FF]',
+  BudgetAuditor: 'text-[#FF9A85]',
 };
 
-/** Message colours per log level; levels also get a text prefix so colour is never the only signal. */
+/** Avatar ground per agent in the chat (white icon on top). */
+export const AGENT_AVATAR_COLORS: Record<AgentName, string> = {
+  System: '#5F6B7A',
+  Supervisor: '#0B1726',
+  FlightAgent: '#2952CC',
+  HotelAgent: '#7A4CD9',
+  Planner: '#C46A00',
+  BudgetAuditor: '#B8336A',
+};
+
+export const AGENT_ICONS: Record<AgentName, LucideIcon> = {
+  System: CpuIcon,
+  Supervisor: TextAlignStartIcon,
+  FlightAgent: PlaneIcon,
+  HotelAgent: BedDoubleIcon,
+  Planner: MapIcon,
+  BudgetAuditor: WalletIcon,
+};
+
+/** Message colours per log level on the terminal; levels also get a text prefix so colour is never the only signal. */
 export const LOG_LEVEL_STYLES: Record<LogLevel, { className: string; prefix: string }> = {
-  info: { className: 'text-zinc-100', prefix: '' },
-  warn: { className: 'text-amber-400', prefix: 'WARN' },
-  error: { className: 'text-red-400', prefix: 'ERROR' },
+  info: { className: 'text-white/90', prefix: '' },
+  warn: { className: 'text-live', prefix: 'WARN' },
+  error: { className: 'text-[#FF9A85]', prefix: 'ERROR' },
 };
 
-/** Progress bar label per run status. */
+/** Progress label per run status. */
 export const STATUS_LABELS: Record<TripStatus, string> = {
   parsing: 'Understanding your request',
   searching: 'Searching flights & hotels',
@@ -37,8 +70,28 @@ export const STATUS_LABELS: Record<TripStatus, string> = {
   failed: 'Something went wrong',
 };
 
-/** Day colours 1–5, cycled for longer trips; map pins also carry the stop number. */
-export const DAY_COLORS = ['#0F7B5F', '#2952CC', '#C46A00', '#7A4CD9', '#C2361F'] as const;
+/** Which agent is at work for a run status (the chat's "… is drafting" line). */
+export const STATUS_AGENTS: Record<TripStatus, AgentName> = {
+  parsing: 'Supervisor',
+  searching: 'FlightAgent',
+  planning: 'Planner',
+  auditing: 'BudgetAuditor',
+  completed: 'BudgetAuditor',
+  failed: 'System',
+};
+
+/** The six phase chips above the run, in order. `budget` is done when the result is in. */
+export const PHASES = [
+  { topic: 'trip', label: 'Brief' },
+  { topic: 'flight', label: 'Flights' },
+  { topic: 'hotel', label: 'Hotel' },
+  { topic: 'transfers', label: 'Transfers' },
+  { topic: 'itinerary', label: 'Itinerary' },
+  { topic: 'budget', label: 'Budget check' },
+] as const satisfies readonly { topic: DecisionTopic; label: string }[];
+
+/** Day colours 1–5 as in the design's day tabs, cycled for longer trips; map pins also carry the stop number. */
+export const DAY_COLORS = ['#2952CC', '#C46A00', '#7A4CD9', '#0F7B5F', '#C2361F'] as const;
 
 export function dayColor(day: number): string {
   return DAY_COLORS[(day - 1) % DAY_COLORS.length] ?? DAY_COLORS[0];
@@ -62,6 +115,12 @@ export const decisionLabels: Record<DecisionTopic, string> = {
   budget: 'Budget',
 };
 
+/** Text of the decision chip under a chat message ("Flight confirmed", "Budget approved" / "Over budget"). */
+export function decisionChipLabel(topic: DecisionTopic, overBudget = false): string {
+  if (topic === 'budget') return overBudget ? 'Budget checked · over budget' : 'Budget approved';
+  return `${decisionLabels[topic]} confirmed`;
+}
+
 /** Agent names as people read them (the contract names are identifiers). */
 export const agentDisplayNames: Record<AgentName, string> = {
   System: 'System',
@@ -72,14 +131,14 @@ export const agentDisplayNames: Record<AgentName, string> = {
   BudgetAuditor: 'Budget Auditor',
 };
 
-/** Agent name colours on the light chat background. */
-export const AGENT_CHAT_COLORS: Record<AgentName, string> = {
-  System: 'text-zinc-600',
-  Supervisor: 'text-sky-700',
-  FlightAgent: 'text-violet-700',
-  HotelAgent: 'text-emerald-700',
-  Planner: 'text-fuchsia-700',
-  BudgetAuditor: 'text-cyan-700',
+/** Who owns each decision, for the "Confirmed by the agents" list. */
+export const DECISION_AGENTS: Record<DecisionTopic, AgentName> = {
+  trip: 'Supervisor',
+  flight: 'FlightAgent',
+  hotel: 'HotelAgent',
+  transfers: 'Planner',
+  itinerary: 'Planner',
+  budget: 'BudgetAuditor',
 };
 
 export const WEATHER_ICONS: Record<WeatherIcon, LucideIcon> = {
@@ -90,6 +149,15 @@ export const WEATHER_ICONS: Record<WeatherIcon, LucideIcon> = {
   rain: CloudRainIcon,
   snow: CloudSnowIcon,
   storm: CloudLightningIcon,
+};
+
+export const TRANSFER_MODES: Record<TransferMode, { label: string; icon: LucideIcon }> = {
+  taxi: { label: 'Taxi', icon: CarIcon },
+  train: { label: 'Train', icon: TrainFrontIcon },
+  metro: { label: 'Metro', icon: TramFrontIcon },
+  bus: { label: 'Bus', icon: BusIcon },
+  shuttle: { label: 'Shuttle', icon: BusIcon },
+  walk: { label: 'Walk', icon: FootprintsIcon },
 };
 
 const celsius = new Intl.NumberFormat('en-US', { style: 'unit', unit: 'celsius', maximumFractionDigits: 0 });
