@@ -21,6 +21,8 @@ interface MapboxViewerProps {
 /** Street map; only rendered when `env.mapboxToken` is set (the overview falls back to `SchematicMap`). */
 export default function MapboxViewer({ itinerary, hotel, activeDay, labels }: MapboxViewerProps) {
   const mapRef = useRef<MapRef>(null);
+  /** Markers attach to the map canvas, which only exists once the style has loaded (it never does with a bad token). */
+  const [loaded, setLoaded] = useState(false);
   const [popup, setPopup] = useState<{ name: string; day: number; lng: number; lat: number } | null>(null);
   const bounds = useMemo(() => boundsOf(framePoints(itinerary, hotel, activeDay)), [itinerary, hotel, activeDay]);
   const routes = useMemo(
@@ -44,7 +46,10 @@ export default function MapboxViewer({ itinerary, hotel, activeDay, labels }: Ma
       initialViewState={bounds ? { bounds, fitBoundsOptions: { padding: 48 } } : undefined}
       mapStyle="mapbox://styles/mapbox/light-v11"
       style={{ width: '100%', height: '100%' }}
-      onLoad={() => bounds && mapRef.current?.fitBounds(bounds, { padding: 48, duration: 0 })}
+      onLoad={() => {
+        setLoaded(true);
+        if (bounds) mapRef.current?.fitBounds(bounds, { padding: 48, duration: 0 });
+      }}
     >
       <NavigationControl position="top-right" showCompass={false} />
       {routes.map(({ day, line }) => (
@@ -57,7 +62,8 @@ export default function MapboxViewer({ itinerary, hotel, activeDay, labels }: Ma
           />
         </Source>
       ))}
-      {itinerary.flatMap((day) =>
+      {loaded &&
+        itinerary.flatMap((day) =>
         day.places.map((place, i) => {
           const selected = activeDay === day.day;
           return (
@@ -74,12 +80,12 @@ export default function MapboxViewer({ itinerary, hotel, activeDay, labels }: Ma
           );
         }),
       )}
-      {hotel?.location && (
+      {loaded && hotel?.location && (
         <Marker longitude={hotel.location.lng} latitude={hotel.location.lat} style={{ zIndex: 3 }}>
           <HotelPin name={hotel.name} showLabel={labels} />
         </Marker>
       )}
-      {popup && (
+      {loaded && popup && (
         <Popup longitude={popup.lng} latitude={popup.lat} offset={14} onClose={() => setPopup(null)} closeOnClick={false}>
           <p className="text-sm font-semibold">{popup.name}</p>
           <p className="text-xs">Day {popup.day}</p>
