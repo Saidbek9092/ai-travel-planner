@@ -128,6 +128,9 @@ export const AgentNameSchema = z.enum([
 /** What a confirmed decision is about. */
 export const DecisionTopicSchema = z.enum(['trip', 'flight', 'hotel', 'transfers', 'itinerary', 'budget']);
 
+/** Optional interests the traveller ticks on the start page. */
+export const InterestSchema = z.enum(['museums', 'food', 'walking', 'nightlife', 'shopping', 'nature']);
+
 /** POST /api/trips body. Explicit fields override what the Supervisor parses from `prompt`. */
 export const TripRequestSchema = z.object({
   prompt: z.string().trim().min(3).max(1000),
@@ -136,8 +139,12 @@ export const TripRequestSchema = z.object({
   durationDays: z.number().int().min(1).max(30).optional(),
   /** YYYY-MM-DD */
   startDate: z.iso.date().optional(),
+  /** How the traveller described the timing, e.g. "March" or "Flexible". Display only; `startDate` drives the plan. */
+  when: z.string().trim().min(1).max(40).optional(),
+  interests: z.array(InterestSchema).max(6).optional(),
 });
 
+export type Interest = z.infer<typeof InterestSchema>;
 export type DecisionTopic = z.infer<typeof DecisionTopicSchema>;
 export type DataSource = z.infer<typeof DataSourceSchema>;
 export type WeatherIcon = z.infer<typeof WeatherIconSchema>;

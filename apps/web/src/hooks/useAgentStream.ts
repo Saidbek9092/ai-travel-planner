@@ -357,6 +357,15 @@ export function useAgentStream(initial?: InitialRun) {
     if (threadId && resumable) void run(`/api/trips/${threadId}/resume`, null, null);
   }, [run]);
 
+  /** Resumes a paused trip picked from the start page, on its own thread id. */
+  const resumeTrip = useCallback(
+    (threadId: string) => {
+      dispatch({ type: 'CONNECTED', threadId });
+      void run(`/api/trips/${encodeURIComponent(threadId)}/resume`, null, null);
+    },
+    [run],
+  );
+
   const reconnectNow = useCallback(() => wakeRef.current?.(), []);
 
   const cancel = useCallback(() => {
@@ -379,5 +388,5 @@ export function useAgentStream(initial?: InitialRun) {
     window.history.replaceState(null, '', window.location.pathname);
   }, []);
 
-  return { ...state, start, resume, reconnectNow, cancel, reset };
+  return { ...state, start, resume, resumeTrip, reconnectNow, cancel, reset };
 }

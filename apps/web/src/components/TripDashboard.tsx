@@ -12,6 +12,7 @@ import { RunDetails } from '@/components/RunDetails';
 import { RunProgress } from '@/components/RunProgress';
 import { TopBar } from '@/components/TopBar';
 import { TripActions } from '@/components/TripActions';
+import { HowItWorks, PickUp, StartHero } from '@/components/StartExtras';
 import { TripInputForm } from '@/components/TripInputForm';
 import { FinishedOverview, LiveOverview } from '@/components/TripOverview';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -69,6 +70,14 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
     return () => window.removeEventListener(NEW_TRIP_EVENT, onNewTrip);
   }, [reset]);
 
+  // A started run is remembered as paused until it finishes, so the start page can offer Resume.
+  useEffect(() => {
+    if (!threadId || finished || !lastRequest) return;
+    if (!history.trips.some((t) => t.threadId === threadId)) {
+      history.add({ threadId, title: tripTitle({ ...draft }), createdAt: Date.now(), status: 'paused' });
+    }
+  }, [threadId, finished, lastRequest, history, draft]);
+
   // When a run the user watched finishes: focus the result, toast, and remember it in "My trips".
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
   const previousStatus = useRef(status);
@@ -78,7 +87,7 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
     previousStatus.current = status;
     if (!wasLive || status !== 'completed' || !result) return;
     resultHeadingRef.current?.focus();
-    add({ threadId: result.threadId, title: tripTitle(result), createdAt: Date.now() });
+    add({ threadId: result.threadId, title: tripTitle(result), createdAt: Date.now(), status: 'done' });
     if (!result.suggestions) {
       const verdict = budgetVerdict(result.totalCost, result.budget);
       toast.success(`Trip ready · ${verdict.text}`, {
@@ -126,16 +135,11 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
         durationDays={draft.durationDays ?? result?.durationDays ?? null}
         origin={origin}
       />
+      {view === 'idle' && <StartHero />}
       <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-6 px-4 pt-6 pb-12 sm:px-6 lg:px-[72px]">
         {view === 'idle' && (
-          <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
-            <section aria-labelledby="plan-title" className="flex flex-col gap-4 rounded-xl border bg-card p-5 sm:p-6 lg:col-span-5">
-              <div>
-                <h1 id="plan-title" className="text-xl font-semibold">
-                  Plan a trip
-                </h1>
-                <p className="text-sm text-ink-2">One sentence is enough. Five agents search, plan and check the budget while you watch.</p>
-              </div>
+          <div className="-mt-26 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-start">
+            <div className="flex flex-col gap-6">
               {uiOnly && (
                 <Alert>
                   <InfoIcon aria-hidden="true" />
@@ -161,9 +165,10 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
                 </Alert>
               )}
               <TripInputForm disabled={live || uiOnly} retryAt={stream.retryAt} onSubmit={start} />
-            </section>
-            <div className="lg:col-span-7">
-              <LiveOverview trip={draft} decisions={decisions} progress={progress} activeDay={activeDay} onSelectDay={setActiveDay} />
+            </div>
+            <div className="flex flex-col gap-6">
+              <HowItWorks />
+              <PickUp disabled={live || uiOnly} onResume={stream.resumeTrip} />
             </div>
           </div>
         )}
