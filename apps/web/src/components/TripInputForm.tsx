@@ -300,14 +300,15 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside }: T
       </div>
 
       <div className="flex min-w-0 flex-col gap-6">
-        <section aria-labelledby={`${promptId}-examples`} className="flex flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm">
-          <div>
+        <section aria-labelledby={`${promptId}-examples`} className="flex flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm lg:max-h-[calc(100dvh-24rem)] lg:min-h-[300px]">
+          <div className="shrink-0">
             <h2 id={`${promptId}-examples`} className="text-lg font-semibold">
               Not sure where to start?
             </h2>
             <p className="text-sm text-ink-2">Pick one: it fills the form, and you can edit it after.</p>
           </div>
-          <ul className="flex flex-col gap-3">
+          {/* Only this list scrolls, so the photos never make the whole page taller. The padding keeps focus rings from being clipped. */}
+          <ul className="-mx-1 flex min-h-0 flex-col gap-3 overflow-y-auto px-1 py-1">
             {EXAMPLES.map((example) => (
               <li key={example.title}>
                 <button
