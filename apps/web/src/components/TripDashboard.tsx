@@ -204,12 +204,8 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
                   )}
                 </>
               }
-              aside={
-                <>
-                  <PickUp disabled={live || uiOnly} onResume={stream.resumeTrip} />
-                  <HowItWorks />
-                </>
-              }
+              aside={<PickUp disabled={live || uiOnly} onResume={stream.resumeTrip} />}
+              footer={<HowItWorks embedded />}
             />
           </div>
         )}
