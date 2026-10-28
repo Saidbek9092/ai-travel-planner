@@ -57,6 +57,30 @@ export const TripContextSchema = z.object({
   fetchedAt: z.iso.datetime({ offset: true }).nullish(),
 });
 
+/** Query string of GET /api/places. */
+export const PlacesQuerySchema = z.object({
+  /** What the user has typed so far in a city / country field. */
+  q: z.string().trim().min(2).max(100),
+});
+
+export const PlaceSuggestionSchema = z.object({
+  /** Text to put in the field, e.g. "Paris, France" or "France". The agent geocodes it back to the same place. */
+  label: z.string().min(1),
+  /** Short name, e.g. "Paris". */
+  name: z.string().min(1),
+  /** Second line of the dropdown row, e.g. "Île-de-France, France"; `null` for countries. */
+  detail: z.string().min(1).nullable(),
+  kind: z.enum(['country', 'region', 'city']),
+});
+
+/** Response of GET /api/places. */
+export const PlacesResponseSchema = z.object({
+  places: z.array(PlaceSuggestionSchema),
+});
+
+export type PlacesQuery = z.infer<typeof PlacesQuerySchema>;
+export type PlaceSuggestion = z.infer<typeof PlaceSuggestionSchema>;
+export type PlacesResponse = z.infer<typeof PlacesResponseSchema>;
 export type TripContextQuery = z.infer<typeof TripContextQuerySchema>;
 export type Weather = z.infer<typeof WeatherSchema>;
 export type Currency = z.infer<typeof CurrencySchema>;

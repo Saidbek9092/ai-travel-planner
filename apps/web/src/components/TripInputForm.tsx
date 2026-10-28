@@ -4,6 +4,7 @@ import { TripRequestSchema, type Interest, type TripRequest } from '@ai-travel/c
 import { ArrowRightIcon, CheckIcon, CircleDotIcon, CloudSunIcon, CoinsIcon, ClockIcon, InfoIcon, PlusIcon } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Notice } from '@/components/Notice';
+import { PlaceInput } from '@/components/PlaceInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -337,24 +338,42 @@ function UnderstoodField({
         <label htmlFor={inputId} className="text-[13px] font-semibold text-ink-2">
           {field.label}
         </label>
-        <Input
-          id={inputId}
-          autoFocus
-          value={draft}
-          inputMode={field.inputMode}
-          placeholder={field.placeholder}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              close(true);
-            } else if (event.key === 'Escape') {
-              event.preventDefault();
+        {field.key === 'destination' || field.key === 'origin' ? (
+          <PlaceInput
+            id={inputId}
+            value={draft}
+            placeholder={field.placeholder}
+            onChange={setDraft}
+            onCommit={(value) => {
+              onChange(value);
               close(false);
-            }
-          }}
-          onBlur={() => close(true)}
-        />
+            }}
+            onCancel={() => close(false)}
+            onBlurCommit={(value) => {
+              onChange(value);
+              onClose();
+            }}
+          />
+        ) : (
+          <Input
+            id={inputId}
+            autoFocus
+            value={draft}
+            inputMode={field.inputMode}
+            placeholder={field.placeholder}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                close(true);
+              } else if (event.key === 'Escape') {
+                event.preventDefault();
+                close(false);
+              }
+            }}
+            onBlur={() => close(true)}
+          />
+        )}
       </li>
     );
   }

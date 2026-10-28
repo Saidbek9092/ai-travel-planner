@@ -1,5 +1,6 @@
 import type { DayWeather, Weather, WeatherIcon } from '@ai-travel/contracts';
 import { z } from 'zod';
+import { aliasFor } from './placeAliases.js';
 import { addDays } from '../utils/dates.js';
 import { notFound } from '../utils/errors.js';
 import { fetchJson } from '../utils/fetchJson.js';
@@ -7,6 +8,7 @@ import { normalizeKey, TtlCache } from '../utils/ttlCache.js';
 
 const GEOCODE_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
+const GEOCODE_HINT_COUNT = 10;
 const GEOCODE_TTL_MS = 24 * 60 * 60 * 1000;
 const WEATHER_TTL_MS = 30 * 60 * 1000;
 /** Open-Meteo answers about 16 days ahead. */
@@ -48,6 +50,8 @@ const GeocodeSchema = z.looseObject({
         name: z.string(),
         country: z.string().optional(),
         country_code: z.string().optional(),
+        admin1: z.string().optional(),
+        feature_code: z.string().optional(),
         latitude: z.number(),
         longitude: z.number(),
         timezone: z.string().optional(),
@@ -56,21 +60,37 @@ const GeocodeSchema = z.looseObject({
     .optional(),
 });
 
+export type GeocodeHit = NonNullable<z.infer<typeof GeocodeSchema>['results']>[number];
+
+/** Raw Open-Meteo geocoding hits for a place name, best match first. Rejects when the provider fails. */
+export async function searchGeocode(name: string, count: number, deps: Pick<WeatherDeps, 'fetch'>, signal?: AbortSignal): Promise<GeocodeHit[]> {
+  const url = `${GEOCODE_URL}?name=${encodeURIComponent(name)}&count=${count}&language=en&format=json`;
+  return GeocodeSchema.parse(await fetchJson(deps.fetch, url, signal)).results ?? [];
+}
+
+const sameText = (a: string | undefined, b: string) => a !== undefined && a.trim().toLowerCase() === b;
+
 const geocodeCache = new TtlCache<GeoPlace | null>(GEOCODE_TTL_MS);
 
-/** Open-Meteo geocoding. `null` when nothing matches; rejects when the provider fails. */
+/**
+ * Open-Meteo geocoding. Accepts "Paris" or "Paris, France" (what the destination dropdown fills in): the part
+ * after the comma picks the hit in that country or region, so "England" no longer lands on a town in Arkansas.
+ * `null` when nothing matches; rejects when the provider fails.
+ */
 export async function geocode(name: string, deps: Pick<WeatherDeps, 'fetch'>, signal?: AbortSignal): Promise<GeoPlace | null> {
   return geocodeCache.remember(normalizeKey(name), async () => {
-    const url = `${GEOCODE_URL}?name=${encodeURIComponent(name)}&count=1&language=en&format=json`;
-    const first = GeocodeSchema.parse(await fetchJson(deps.fetch, url, signal)).results?.[0];
-    return first
+    const [city = name, ...rest] = (aliasFor(name) ?? name).split(',');
+    const hint = rest.join(',').trim().toLowerCase();
+    const hits = await searchGeocode(city.trim() || name, hint ? GEOCODE_HINT_COUNT : 1, deps, signal);
+    const hit = (hint && hits.find((h) => sameText(h.country, hint) || sameText(h.country_code, hint) || sameText(h.admin1, hint))) || hits[0];
+    return hit
       ? {
-          name: first.name,
-          country: first.country ?? null,
-          countryCode: first.country_code ?? null,
-          lat: first.latitude,
-          lng: first.longitude,
-          timezone: first.timezone ?? null,
+          name: hit.name,
+          country: hit.country ?? null,
+          countryCode: hit.country_code ?? null,
+          lat: hit.latitude,
+          lng: hit.longitude,
+          timezone: hit.timezone ?? null,
         }
       : null;
   });
