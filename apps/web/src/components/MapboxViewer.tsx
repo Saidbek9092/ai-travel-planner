@@ -33,6 +33,8 @@ export default function MapboxViewer({ itinerary, hotel, activeDay, labels }: Ma
     [itinerary, hotel, activeDay],
   );
 
+  useEffect(() => () => setLoaded(false), []);
+
   useEffect(() => {
     if (bounds) mapRef.current?.fitBounds(bounds, { padding: 48, duration: 600 });
   }, [bounds]);
@@ -46,7 +48,9 @@ export default function MapboxViewer({ itinerary, hotel, activeDay, labels }: Ma
       initialViewState={bounds ? { bounds, fitBoundsOptions: { padding: 48 } } : undefined}
       mapStyle="mapbox://styles/mapbox/light-v11"
       style={{ width: '100%', height: '100%' }}
-      onLoad={() => {
+      onLoad={(e) => {
+        // A load event from a map instance that was already torn down (remount / strict mode) must not enable markers.
+        if (mapRef.current?.getMap() !== e.target) return;
         setLoaded(true);
         if (bounds) mapRef.current?.fitBounds(bounds, { padding: 48, duration: 0 });
       }}
