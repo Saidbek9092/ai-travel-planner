@@ -1,10 +1,7 @@
 'use client';
 
-import { CheckIcon, ChevronDownIcon, PauseIcon, ShieldCheckIcon } from 'lucide-react';
-import Link from 'next/link';
+import { ChevronDownIcon, ShieldCheckIcon } from 'lucide-react';
 import { AgentAvatar } from '@/components/AgentAvatar';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { useTripHistory } from '@/hooks/useTripHistory';
 import { AGENT_ORDER, agentDisplayNames } from '@/lib/labels';
 
 const AGENT_ROLES: Record<(typeof AGENT_ORDER)[number], string> = {
@@ -15,19 +12,17 @@ const AGENT_ROLES: Record<(typeof AGENT_ORDER)[number], string> = {
   BudgetAuditor: "Checks the total and re-plans up to twice if it's over.",
 };
 
-const created = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
-
 /** Dark band at the top of the start page; the form card overlaps its lower edge. */
 export function StartHero() {
   return (
     <section aria-labelledby="plan-title" className="bg-[#0b1726] text-white">
-      <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-2 px-4 pt-8 pb-20 sm:px-8 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-2 px-4 pt-8 pb-20 sm:px-8 lg:px-8 [@media(min-width:1024px)_and_(max-height:980px)]:pt-5">
         <p className="font-mono text-[11px] tracking-[0.14em] text-white/70 uppercase">Plan a trip</p>
-        <h1 id="plan-title" className="text-4xl font-semibold tracking-tight sm:text-[44px] sm:leading-[1.1]">
+        <h1 id="plan-title" className="text-4xl font-semibold tracking-tight sm:text-[44px] sm:leading-[1.1] [@media(min-width:1024px)_and_(max-height:980px)]:text-[34px]">
           Where do you want to go?
         </h1>
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <p className="max-w-[44rem] text-base leading-relaxed text-white/80">
+          <p className="max-w-[44rem] text-base leading-relaxed text-white/80 [@media(min-width:1024px)_and_(max-height:980px)]:sr-only">
             Describe the trip in one sentence. Five agents find the flights, a hotel and a day-by-day plan — and keep it all under your budget.
           </p>
           <p className="flex items-center gap-3 text-sm text-white/80">
@@ -47,17 +42,17 @@ export function StartHero() {
 }
 
 /** Extra information, closed by default: who the five agents are and what each does. */
-export function HowItWorks() {
+export function HowItWorks({ embedded = false }: { embedded?: boolean }) {
   return (
-    <details className="group rounded-2xl border bg-card shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl p-5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+    <details className={embedded ? 'group border-t' : 'group rounded-2xl border bg-card shadow-sm'}>
+      <summary className={`flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl outline-none ${embedded ? 'pt-4' : 'p-5'} focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden`}>
         <span>
           <span className="block text-[15px] font-semibold">How the five agents plan it</span>
           <span className="block text-sm text-ink-2">You watch them talk it through in the Agent Chat.</span>
         </span>
         <ChevronDownIcon className="size-5 shrink-0 text-ink-2 transition-transform group-open:rotate-180" aria-hidden="true" />
       </summary>
-      <div className="flex flex-col gap-5 border-t p-5">
+      <div className={embedded ? 'flex flex-col gap-5 pt-5' : 'flex flex-col gap-5 border-t p-5'}>
         <ol className="flex flex-col">
           {AGENT_ORDER.map((agent, index) => (
             <li key={agent} className="relative flex gap-4 pb-5 last:pb-0">
@@ -78,61 +73,5 @@ export function HowItWorks() {
         </p>
       </div>
     </details>
-  );
-}
-
-/** Latest finished and paused trips from this browser. Hidden when there are none. */
-export function PickUp({ disabled, onResume }: { disabled: boolean; onResume: (threadId: string) => void }) {
-  const { trips } = useTripHistory();
-  const latestDone = trips.find((t) => t.status !== 'paused');
-  const latestPaused = trips.find((t) => t.status === 'paused');
-  const items = [latestDone, latestPaused].filter((t): t is NonNullable<typeof t> => !!t);
-  if (items.length === 0) return null;
-
-  return (
-    <section aria-labelledby="pick-up" className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <header className="flex items-baseline justify-between gap-3 px-5 py-4">
-        <h2 id="pick-up" className="text-lg font-semibold">
-          Pick up where you left off
-        </h2>
-        <Link href="/trips" className="text-[13px] text-primary underline underline-offset-2">
-          All trips
-        </Link>
-      </header>
-      <ul>
-        {items.map((trip) => {
-          const paused = trip.status === 'paused';
-          return (
-            <li key={trip.threadId} className="flex items-center gap-4 border-t px-5 py-4">
-              <span
-                className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${paused ? 'bg-live-soft text-live-foreground' : 'bg-success-soft text-success'}`}
-                aria-hidden="true"
-              >
-                {paused ? <PauseIcon className="size-4" /> : <CheckIcon className="size-5" />}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{trip.title}</p>
-                <p className="truncate text-[13px] text-ink-2">
-                  {paused ? 'Paused' : 'Ready'} · {created.format(trip.createdAt)}
-                </p>
-              </div>
-              {paused ? (
-                <Button className="h-10 px-4" disabled={disabled} onClick={() => onResume(trip.threadId)} aria-label={`Resume ${trip.title}`}>
-                  Resume
-                </Button>
-              ) : (
-                <Link
-                  href={`/?trip=${encodeURIComponent(trip.threadId)}`}
-                  aria-label={`Open ${trip.title}`}
-                  className={buttonVariants({ variant: 'outline', className: 'h-10 px-4' })}
-                >
-                  Open
-                </Link>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }

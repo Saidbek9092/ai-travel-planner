@@ -18,22 +18,31 @@ interface PlaceInputProps {
   onCommit: (value: string) => void;
   /** Escape: leave without saving. */
   onCancel: () => void;
-  /** Focus left the input and the list: save what is typed. */
+  /** Focus left the field with text that is a known place (or free text is allowed): save it. */
   onBlurCommit: (value: string) => void;
+  /** Focus left the field with half-typed text that matches no place: close without saving. */
+  onDismiss: () => void;
 }
 
 /** Text input with a searchable list of cities and countries. Typing a name that is not listed still works. */
-export function PlaceInput({ id, value, placeholder, onChange, onCommit, onCancel, onBlurCommit }: PlaceInputProps) {
+export function PlaceInput({ id, value, placeholder, onChange, onCommit, onCancel, onBlurCommit, onDismiss }: PlaceInputProps) {
   const listId = useId();
   const [open, setOpen] = useState(true);
   const [active, setActive] = useState(-1);
-  const { places, loading } = usePlaceSearch(value);
+  const { places, loading, unavailable } = usePlaceSearch(value);
   const showList = open && value.trim().length >= 2;
   const activeId = active >= 0 && active < places.length ? `${listId}-${active}` : undefined;
 
   const pick = (place: PlaceSuggestion) => {
     onChange(place.label);
     onCommit(place.label);
+  };
+
+  /** The place the typed text stands for: an exact match, or the text itself when there is nothing to check against. */
+  const resolve = (): string | null => {
+    const typed = value.trim().toLowerCase();
+    const exact = places.find((place) => place.label.toLowerCase() === typed || place.name.toLowerCase() === typed);
+    return exact?.label ?? (unavailable ? value : null);
   };
 
   return (
@@ -64,16 +73,21 @@ export function PlaceInput({ id, value, placeholder, onChange, onCommit, onCance
             setActive((current) => (current <= 0 ? places.length - 1 : current - 1));
           } else if (event.key === 'Enter') {
             event.preventDefault();
-            const place = places[active];
-            if (showList && place) pick(place);
-            else onCommit(value);
+            // Nothing highlighted: take the nearest match, so half-typed text never gets saved as is.
+            const place = places[active] ?? places[0];
+            if (place) pick(place);
+            else if (unavailable) onCommit(value);
           } else if (event.key === 'Escape') {
             event.preventDefault();
             if (showList && places.length > 0) setOpen(false);
             else onCancel();
           }
         }}
-        onBlur={() => onBlurCommit(value)}
+        onBlur={() => {
+          const resolved = resolve();
+          if (resolved === null) onDismiss();
+          else onBlurCommit(resolved);
+        }}
       />
       {showList && (
         <ul
@@ -107,7 +121,7 @@ export function PlaceInput({ id, value, placeholder, onChange, onCommit, onCance
           {places.length === 0 && (
             <li role="presentation" className="flex items-center gap-2 px-2.5 py-2 text-sm text-ink-2">
               {loading ? <Loader2Icon className="size-4 animate-spin" aria-hidden="true" /> : null}
-              {loading ? 'Searching…' : 'No match. Press Enter to use what you typed.'}
+              {loading ? 'Searching…' : 'No match. Try another spelling.'}
             </li>
           )}
         </ul>

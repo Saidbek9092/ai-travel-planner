@@ -12,7 +12,7 @@ import { RunDetails } from '@/components/RunDetails';
 import { RunProgress } from '@/components/RunProgress';
 import { TopBar } from '@/components/TopBar';
 import { TripActions } from '@/components/TripActions';
-import { HowItWorks, PickUp, StartHero } from '@/components/StartExtras';
+import { HowItWorks, StartHero } from '@/components/StartExtras';
 import { TripInputForm } from '@/components/TripInputForm';
 import type { DaySelection } from '@/components/ItineraryTimeline';
 import { FinishedOverview, LiveOverview } from '@/components/TripOverview';
@@ -169,7 +169,7 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
         origin={origin}
       />
       {view === 'idle' && <StartHero />}
-      <main className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col gap-5 px-4 pt-6 pb-12 sm:px-8">
+      <main className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col gap-5 px-4 pt-6 pb-12 sm:px-8 [@media(min-width:1024px)_and_(max-height:980px)]:pt-2 [@media(min-width:1024px)_and_(max-height:980px)]:pb-3">
         {view === 'idle' && (
           <div className="-mt-20">
             <TripInputForm
@@ -204,12 +204,7 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
                   )}
                 </>
               }
-              aside={
-                <>
-                  <PickUp disabled={live || uiOnly} onResume={stream.resumeTrip} />
-                  <HowItWorks />
-                </>
-              }
+              footer={<HowItWorks embedded />}
             />
           </div>
         )}

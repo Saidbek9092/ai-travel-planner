@@ -2,6 +2,7 @@
 
 import { TripRequestSchema, type Interest, type TripRequest } from '@ai-travel/contracts';
 import { ArrowRightIcon, CheckIcon, CircleDotIcon, CloudSunIcon, CoinsIcon, ClockIcon, InfoIcon, PlusIcon } from 'lucide-react';
+import Image from 'next/image';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Notice } from '@/components/Notice';
 import { PlaceInput } from '@/components/PlaceInput';
@@ -20,9 +21,36 @@ const WARN_AT = 900;
 const DEBOUNCE_MS = 300;
 
 const EXAMPLES = [
-  { title: 'Istanbul', price: '$600', blurb: 'A weekend from Tashkent · street food and the Bosphorus', prompt: 'Weekend in Istanbul from Tashkent, $600. Street food and the Bosphorus.' },
-  { title: 'Paris', price: '$1,000', blurb: '5 days from Tashkent in mid-November · museums and food', prompt: '5 days in Paris from Tashkent in November, $1,000. Museums and good food.' },
-  { title: 'Tokyo', price: '$2,500', blurb: '7 days from Tashkent · temples and food markets', prompt: '7 days in Tokyo from Tashkent, $2,500. Temples and food markets.' },
+  {
+    title: 'Istanbul',
+    country: 'Türkiye',
+    days: 4,
+    price: '$1,500',
+    blurb: 'Street food and the Bosphorus',
+    prompt: '4 days in Istanbul from Tashkent, $1,500. Street food and the Bosphorus.',
+    image: '/examples/istanbul.jpg',
+    credit: 'Photo: Hunanuk, CC0',
+  },
+  {
+    title: 'Paris',
+    country: 'France',
+    days: 5,
+    price: '$2,500',
+    blurb: 'Museums and good food, mid-November',
+    prompt: '5 days in Paris from Tashkent in November, $2,500. Museums and good food.',
+    image: '/examples/paris.jpg',
+    credit: 'Photo: Yann Caradec, CC BY-SA 2.0',
+  },
+  {
+    title: 'Tokyo',
+    country: 'Japan',
+    days: 7,
+    price: '$4,000',
+    blurb: 'Temples and food markets',
+    prompt: '7 days in Tokyo from Tashkent, $4,000. Temples and food markets.',
+    image: '/examples/tokyo.jpg',
+    credit: 'Photo: Morio, CC BY-SA 3.0',
+  },
 ];
 
 const INTERESTS: { value: Interest; label: string }[] = [
@@ -60,12 +88,12 @@ interface TripInputFormProps {
   retryAt: number | null;
   /** Notices above the form card (left column). */
   notices?: ReactNode;
-  /** Extra cards under the examples (right column). */
-  aside?: ReactNode;
+  /** Bottom of the input card, under the Plan button. */
+  footer?: ReactNode;
 }
 
 /** The start page's input: one sentence, the fields the agents understood from it, interests and examples. */
-export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside }: TripInputFormProps) {
+export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: TripInputFormProps) {
   const waitSeconds = useCountdown(retryAt);
   const { homeCity, setHomeCity } = useHomeCity();
   const [prompt, setPrompt] = useState('');
@@ -106,7 +134,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside }: T
       addLabel: 'a city',
     },
     { key: 'days', label: 'How long', value: validDays ? `${validDays} ${validDays === 1 ? 'day' : 'days'}` : null, state: validDays ? 'found' : 'missing', editValue: daysText ?? '', placeholder: 'Days, 1–30', addLabel: 'days', inputMode: 'numeric' },
-    { key: 'budget', label: 'Budget, all-in', value: validBudget ? formatUsd(validBudget) : null, state: validBudget ? 'found' : 'missing', editValue: budgetText ?? '', placeholder: 'USD, total', addLabel: 'a budget', inputMode: 'numeric' },
+    { key: 'budget', label: 'Budget, all-in', value: validBudget ? formatUsd(validBudget) : null, state: validBudget ? 'found' : 'missing', editValue: budgetText ?? '', placeholder: 'USD, total', addLabel: 'budget', inputMode: 'numeric' },
     {
       key: 'when',
       label: 'When',
@@ -172,11 +200,11 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside }: T
         event.preventDefault();
         submit();
       }}
-      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-start"
+      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]"
     >
       <div className="flex min-w-0 flex-col gap-6">
         {notices}
-      <div className="flex flex-col gap-6 rounded-2xl border bg-card p-6 shadow-sm">
+      <div className="flex flex-col gap-6 rounded-2xl border bg-card p-6 shadow-sm [@media(min-width:1024px)_and_(max-height:980px)]:gap-4 [@media(min-width:1024px)_and_(max-height:980px)]:p-5">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4">
             <label htmlFor={promptId} className="text-lg font-semibold">
@@ -191,8 +219,8 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside }: T
             value={prompt}
             disabled={disabled}
             aria-describedby={`${promptId}-hint`}
-            placeholder="e.g. 5 days in Paris from Tashkent in mid-November, $1,000 all-in. Museums and good food."
-            className="min-h-[100px] resize-none rounded-xl bg-card px-5 py-4 text-[20px] leading-snug md:text-[20px]"
+            placeholder="e.g. 5 days in Paris from Tashkent in mid-November, $2,500 all-in. Museums and good food."
+            className="min-h-[100px] resize-none rounded-xl bg-card px-5 py-4 text-[20px] leading-snug [@media(min-width:1024px)_and_(max-height:980px)]:min-h-[80px] md:text-[20px]"
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -213,7 +241,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside }: T
             </h2>
             <span className="text-[13px] text-ink-2">Click any item to change it</span>
           </div>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 [@media(min-width:1024px)_and_(max-height:980px)]:grid-cols-5 [@media(min-width:1024px)_and_(max-height:980px)]:gap-2">
             {fields.map((field) => (
               <UnderstoodField
                 key={field.key}
@@ -267,41 +295,60 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside }: T
             Lots of trips are being planned right now. Your prompt is kept.
           </Notice>
         )}
+        {footer}
       </div>
 
       </div>
 
-      <div className="flex min-w-0 flex-col gap-6">
-        <section aria-labelledby={`${promptId}-examples`} className="flex flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm">
-          <div>
+      <div className="flex min-w-0 flex-col lg:relative">
+        {/* On large screens the card is pinned to the row (the form card sets its height) and its list scrolls. */}
+        <section aria-labelledby={`${promptId}-examples`} className="flex flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm lg:absolute lg:inset-0">
+          <div className="shrink-0">
             <h2 id={`${promptId}-examples`} className="text-lg font-semibold">
               Not sure where to start?
             </h2>
             <p className="text-sm text-ink-2">Pick one: it fills the form, and you can edit it after.</p>
           </div>
-          <ul className="flex flex-col gap-3">
+          {/* Only this list scrolls, so the photos never make the whole page taller. The padding keeps focus rings from being clipped. */}
+          <ul className="-mx-1 flex min-h-0 flex-col gap-3 overflow-y-auto px-1 py-1">
             {EXAMPLES.map((example) => (
               <li key={example.title}>
                 <button
                   type="button"
                   disabled={disabled}
                   onClick={() => fill(example.prompt)}
-                  className="group flex w-full flex-col gap-1 rounded-xl border bg-card p-4 text-left outline-none transition-colors hover:border-primary hover:bg-primary-soft/40 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                  className="group flex w-full flex-col overflow-hidden rounded-xl border bg-card text-left outline-none transition-colors hover:border-primary focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
                 >
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="text-[17px] font-semibold">{example.title}</span>
-                    <span className="font-mono text-sm font-semibold">{example.price}</span>
+                  <span className="relative block h-36 w-full overflow-hidden bg-muted">
+                    <Image
+                      src={example.image}
+                      alt={`${example.title}, ${example.country}`}
+                      fill
+                      sizes="(min-width: 1024px) 440px, 100vw"
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <span className="absolute right-2 bottom-2 rounded-full bg-card px-2.5 py-1 font-mono text-sm font-semibold shadow-sm">{example.price}</span>
                   </span>
-                  <span className="text-[13px] text-ink-2">{example.blurb}</span>
-                  <span className="flex items-center gap-1 pt-1 text-[13px] font-semibold text-primary">
-                    Use this <ArrowRightIcon className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  <span className="flex flex-col gap-1 p-4">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="text-[17px] font-semibold">
+                        {example.title} <span className="text-[13px] font-normal text-ink-2">· {example.country}</span>
+                      </span>
+                      <span className="text-[13px] font-medium text-ink-2">{example.days} days</span>
+                    </span>
+                    <span className="text-[13px] text-ink-2">From Tashkent · {example.blurb}</span>
+                    <span className="flex items-center justify-between gap-2 pt-1">
+                      <span className="flex items-center gap-1 text-[13px] font-semibold text-primary">
+                        Use this <ArrowRightIcon className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                      </span>
+                      <span className="text-[11px] text-ink-2">{example.credit}</span>
+                    </span>
                   </span>
                 </button>
               </li>
             ))}
           </ul>
         </section>
-        {aside}
       </div>
     </form>
   );
@@ -353,6 +400,7 @@ function UnderstoodField({
               onChange(value);
               onClose();
             }}
+            onDismiss={onClose}
           />
         ) : (
           <Input
