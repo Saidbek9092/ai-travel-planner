@@ -204,7 +204,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
     >
       <div className="flex min-w-0 flex-col gap-6">
         {notices}
-      <div className="flex flex-col gap-6 rounded-2xl border bg-card p-6 shadow-sm [@media(min-width:1024px)_and_(max-height:880px)]:gap-4 [@media(min-width:1024px)_and_(max-height:880px)]:p-5">
+      <div className="flex flex-col gap-6 rounded-2xl border bg-card p-6 shadow-sm [@media(min-width:1024px)_and_(max-height:980px)]:gap-4 [@media(min-width:1024px)_and_(max-height:980px)]:p-5">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4">
             <label htmlFor={promptId} className="text-lg font-semibold">
@@ -220,7 +220,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
             disabled={disabled}
             aria-describedby={`${promptId}-hint`}
             placeholder="e.g. 5 days in Paris from Tashkent in mid-November, $2,500 all-in. Museums and good food."
-            className="min-h-[100px] resize-none rounded-xl bg-card px-5 py-4 text-[20px] leading-snug [@media(min-width:1024px)_and_(max-height:880px)]:min-h-[80px] md:text-[20px]"
+            className="min-h-[100px] resize-none rounded-xl bg-card px-5 py-4 text-[20px] leading-snug [@media(min-width:1024px)_and_(max-height:980px)]:min-h-[80px] md:text-[20px]"
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -241,7 +241,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
             </h2>
             <span className="text-[13px] text-ink-2">Click any item to change it</span>
           </div>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 [@media(min-width:1024px)_and_(max-height:880px)]:grid-cols-5 [@media(min-width:1024px)_and_(max-height:880px)]:gap-2">
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 [@media(min-width:1024px)_and_(max-height:980px)]:grid-cols-5 [@media(min-width:1024px)_and_(max-height:980px)]:gap-2">
             {fields.map((field) => (
               <UnderstoodField
                 key={field.key}
