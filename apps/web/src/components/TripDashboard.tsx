@@ -169,7 +169,7 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
         origin={origin}
       />
       {view === 'idle' && <StartHero />}
-      <main className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col gap-5 px-4 pt-6 pb-12 sm:px-8 [@media(min-width:1024px)_and_(max-height:880px)]:pt-2 [@media(min-width:1024px)_and_(max-height:880px)]:pb-3">
+      <main className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col gap-5 px-4 pt-6 pb-12 sm:px-8 [@media(min-width:1024px)_and_(max-height:980px)]:pt-2 [@media(min-width:1024px)_and_(max-height:980px)]:pb-3">
         {view === 'idle' && (
           <div className="-mt-20">
             <TripInputForm
