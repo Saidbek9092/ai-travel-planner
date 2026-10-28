@@ -16,6 +16,7 @@ const MOCK_CONTEXT: TripContext = {
   timeZone: 'Europe/Paris',
   originTimeZone: null,
   source: 'mock',
+  fetchedAt: '2026-01-01T00:00:00.000Z',
 };
 
 /**
@@ -47,5 +48,6 @@ export async function lookupTripContext(
     timeZone: place.timezone,
     originTimeZone: origin.status === 'fulfilled' ? (origin.value?.timezone ?? null) : null,
     source: 'live',
+    fetchedAt: deps.now().toISOString(),
   });
 }

@@ -42,17 +42,17 @@ export function AgentStatusChip({ status }: { status: AgentRunStatus }) {
   );
 }
 
-/** Muted "Sample data" tag for `source: 'mock'` options. */
-export function EstimateTag() {
+/** Muted "Estimated" tag for `source: 'mock'` options. */
+export function EstimateTag({ className }: { className?: string }) {
   return (
     <Tooltip>
       <TooltipTrigger
         render={<span tabIndex={0} />}
-        className="inline-flex h-6 items-center gap-1 rounded-full bg-secondary px-2.5 text-xs font-medium text-muted-foreground"
+        className={cn('inline-flex h-6 items-center gap-1 rounded-full bg-secondary px-2.5 text-xs font-medium text-muted-foreground', className)}
       >
-        <CircleAlertIcon className="size-3.5" aria-hidden="true" /> Sample data
+        <CircleAlertIcon className="size-3.5" aria-hidden="true" /> Estimated
       </TooltipTrigger>
-      <TooltipContent>Live prices were unavailable</TooltipContent>
+      <TooltipContent>Live prices unavailable, check before booking</TooltipContent>
     </Tooltip>
   );
 }

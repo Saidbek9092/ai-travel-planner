@@ -82,7 +82,7 @@ export function TopBar({ status, data, startDate, durationDays, origin }: TopBar
       label={`Destination: ${data.location}`}
       heading={
         <>
-          <span className="size-1.5 rounded-full bg-live" aria-hidden="true" /> Destination · Live
+          <span className="size-1.5 rounded-full bg-live" aria-hidden="true" /> Destination{data.source === 'live' ? ' · Live' : ' · Estimate'}
         </>
       }
     >

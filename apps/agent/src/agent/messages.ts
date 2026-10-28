@@ -119,7 +119,7 @@ export function overBudget(args: { totalCost: number; budget: number; overBudget
   const { totalCost, budget, overBudgetBy, attempt, max } = args;
   return {
     text: `That comes to ${formatUsd(totalCost)} against ${formatUsd(budget)}. We need to find about ${formatUsd(overBudgetBy)} before we lock anything in.`,
-    label: `Over budget by ${formatUsd(overBudgetBy)} · re-plan ${attempt} of ${max}`,
+    label: `Finding cheaper options, try ${attempt} of ${max}`,
   };
 }
 

@@ -77,7 +77,7 @@ export const budgetNode = (): TravelNode => async (state) => {
   if (state.retryCount < MAX_BUDGET_RETRIES) {
     const notice = overBudget({ totalCost, budget: state.budget, overBudgetBy, attempt: state.retryCount + 1, max: MAX_BUDGET_RETRIES });
     return {
-      messages: [say(state, 'BudgetAuditor', notice.text, { callout: { tone: 'warn', label: notice.label } })],
+      messages: [say(state, 'BudgetAuditor', notice.text, { callout: { tone: 'info', label: notice.label } })],
       totalCost,
       overBudgetBy,
       retryCount: state.retryCount + 1,

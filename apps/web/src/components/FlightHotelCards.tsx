@@ -106,6 +106,7 @@ function TransferRow({ transfer, confirmed }: { transfer: Transfer; confirmed: b
         <p className="line-clamp-2 text-sm leading-5 text-ink-2" title={transferSub(transfer)}>
           {transferSub(transfer)}
         </p>
+        {transfer.source === 'estimate' && <EstimateTag className="mt-1" />}
         {safeUrl(transfer.url) && <ExternalLink href={safeUrl(transfer.url)!}>Timetable and fares</ExternalLink>}
       </div>
       {confirmed && (

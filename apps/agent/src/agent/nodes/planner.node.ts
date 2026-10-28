@@ -104,7 +104,9 @@ export const plannerNode =
         signal,
       ),
     );
-    let transfers = transferPlan.transfers.map((transfer) => TransferSchema.parse(transfer));
+    let transfers = transferPlan.transfers.map((transfer) =>
+      TransferSchema.parse({ ...transfer, source: 'estimate', fetchedAt: new Date().toISOString() }),
+    );
     if (transfers.length !== 2) throw new Error(`Planner returned ${transfers.length} transfers, expected 2`);
     let dailyExpensesEstimate = Math.max(0, transferPlan.dailyExpensesEstimate);
     if (replan && cheaper) {

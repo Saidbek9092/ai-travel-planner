@@ -1,7 +1,7 @@
 'use client';
 
 import type { ResultPayload, TripRequest } from '@ai-travel/contracts';
-import { InfoIcon, RotateCcwIcon } from 'lucide-react';
+import { RotateCcwIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AgentBoard } from '@/components/AgentBoard';
@@ -16,7 +16,7 @@ import { HowItWorks, PickUp, StartHero } from '@/components/StartExtras';
 import { TripInputForm } from '@/components/TripInputForm';
 import type { DaySelection } from '@/components/ItineraryTimeline';
 import { FinishedOverview, LiveOverview } from '@/components/TripOverview';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Notice } from '@/components/Notice';
 import { Button } from '@/components/ui/button';
 import { useAgentStream } from '@/hooks/useAgentStream';
 import { useTripContext } from '@/hooks/useTripContext';
@@ -62,7 +62,6 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
   const tripContext = useTripContext(destination || null, origin);
   const rows = useMemo(() => agentRows(logs, stream.passStart, progress, status), [logs, stream.passStart, progress, status]);
   const phases = useMemo(() => phaseStates(decisions, trip, progress, finished), [decisions, trip, progress, finished]);
-  const estimates = [...(trip.flights ?? []), ...(trip.hotels ?? [])].some((o) => o.source === 'mock');
   const hasRun = logs.length > 0 || messages.length > 0 || !!draft.destination;
   // A fresh run keeps the (disabled) form until the stream opens, so a 400/429 leaves the prompt in place.
   const view: 'idle' | 'live' | 'finished' = finished ? 'finished' : hasRun || (live && status !== 'connecting') ? 'live' : 'idle';
@@ -147,15 +146,11 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
     <RunBanners
       status={status}
       threadId={threadId}
-      logs={logs}
       result={result}
-      error={error}
       reconnect={stream.reconnect}
       lastProgress={progress}
-      estimates={estimates}
       onResume={stream.resume}
       onStartOver={startOver}
-      onReconnect={stream.reconnectNow}
       onRaiseBudget={(budget) => replanRequest && start({ ...replanRequest, budget })}
       onTryDays={(durationDays) => replanRequest && start({ ...replanRequest, durationDays })}
     />
@@ -184,28 +179,28 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
               notices={
                 <>
                   {uiOnly && (
-                    <Alert>
-                      <InfoIcon aria-hidden="true" />
-                      <AlertTitle>Preview</AlertTitle>
-                      <AlertDescription>The planning agent isn&apos;t connected yet.</AlertDescription>
-                    </Alert>
+                    <Notice tone="info" placement="inline" title="Preview">
+                      The planning agent isn&apos;t connected yet.
+                    </Notice>
                   )}
                   {unfinished && (
-                    <Alert>
-                      <AlertTitle>This trip didn&apos;t finish</AlertTitle>
-                      <AlertDescription className="flex flex-wrap items-center gap-2">
-                        Pick up where the agents left off.
+                    <Notice
+                      tone="info"
+                      placement="inline"
+                      title="This trip didn't finish"
+                      actions={
                         <Button size="sm" variant="outline" onClick={stream.resume}>
                           <RotateCcwIcon aria-hidden="true" /> Resume
                         </Button>
-                      </AlertDescription>
-                    </Alert>
+                      }
+                    >
+                      Pick up where the agents left off.
+                    </Notice>
                   )}
-                  {error && !threadId && (
-                    <Alert variant="destructive">
-                      <AlertTitle>Couldn&apos;t start the trip</AlertTitle>
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
+                  {error && !threadId && !stream.retryAt && (
+                    <Notice tone="error" placement="inline" title="Couldn't start the trip">
+                      {error}
+                    </Notice>
                   )}
                 </>
               }

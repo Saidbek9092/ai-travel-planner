@@ -3,6 +3,7 @@
 import { TripRequestSchema, type Interest, type TripRequest } from '@ai-travel/contracts';
 import { ArrowRightIcon, CheckIcon, CircleDotIcon, CloudSunIcon, CoinsIcon, ClockIcon, InfoIcon, PlusIcon } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Notice } from '@/components/Notice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -260,6 +261,11 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside }: T
             {waitSeconds > 0 ? `Plan in ${formatCountdown(waitSeconds)}` : 'Plan my trip'} <ArrowRightIcon aria-hidden="true" />
           </Button>
         </div>
+        {waitSeconds > 0 && (
+          <Notice tone="info" placement="inline" title={`You can plan another trip in ${formatCountdown(waitSeconds)}`}>
+            Lots of trips are being planned right now. Your prompt is kept.
+          </Notice>
+        )}
       </div>
 
       </div>
