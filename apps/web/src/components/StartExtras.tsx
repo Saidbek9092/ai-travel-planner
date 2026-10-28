@@ -1,10 +1,7 @@
 'use client';
 
-import { CheckIcon, ChevronDownIcon, PauseIcon, ShieldCheckIcon } from 'lucide-react';
-import Link from 'next/link';
+import { ChevronDownIcon, ShieldCheckIcon } from 'lucide-react';
 import { AgentAvatar } from '@/components/AgentAvatar';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { useTripHistory } from '@/hooks/useTripHistory';
 import { AGENT_ORDER, agentDisplayNames } from '@/lib/labels';
 
 const AGENT_ROLES: Record<(typeof AGENT_ORDER)[number], string> = {
@@ -14,8 +11,6 @@ const AGENT_ROLES: Record<(typeof AGENT_ORDER)[number], string> = {
   Planner: 'Builds each day on a map, around the weather.',
   BudgetAuditor: "Checks the total and re-plans up to twice if it's over.",
 };
-
-const created = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 
 /** Dark band at the top of the start page; the form card overlaps its lower edge. */
 export function StartHero() {
@@ -78,61 +73,5 @@ export function HowItWorks({ embedded = false }: { embedded?: boolean }) {
         </p>
       </div>
     </details>
-  );
-}
-
-/** Latest finished and paused trips from this browser. Hidden when there are none. */
-export function PickUp({ disabled, onResume }: { disabled: boolean; onResume: (threadId: string) => void }) {
-  const { trips } = useTripHistory();
-  const latestDone = trips.find((t) => t.status !== 'paused');
-  const latestPaused = trips.find((t) => t.status === 'paused');
-  const items = [latestDone, latestPaused].filter((t): t is NonNullable<typeof t> => !!t);
-  if (items.length === 0) return null;
-
-  return (
-    <section aria-labelledby="pick-up" className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <header className="flex items-baseline justify-between gap-3 px-5 py-4">
-        <h2 id="pick-up" className="text-lg font-semibold">
-          Pick up where you left off
-        </h2>
-        <Link href="/trips" className="text-[13px] text-primary underline underline-offset-2">
-          All trips
-        </Link>
-      </header>
-      <ul>
-        {items.map((trip) => {
-          const paused = trip.status === 'paused';
-          return (
-            <li key={trip.threadId} className="flex items-center gap-4 border-t px-5 py-4">
-              <span
-                className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${paused ? 'bg-live-soft text-live-foreground' : 'bg-success-soft text-success'}`}
-                aria-hidden="true"
-              >
-                {paused ? <PauseIcon className="size-4" /> : <CheckIcon className="size-5" />}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{trip.title}</p>
-                <p className="truncate text-[13px] text-ink-2">
-                  {paused ? 'Paused' : 'Ready'} · {created.format(trip.createdAt)}
-                </p>
-              </div>
-              {paused ? (
-                <Button className="h-10 px-4" disabled={disabled} onClick={() => onResume(trip.threadId)} aria-label={`Resume ${trip.title}`}>
-                  Resume
-                </Button>
-              ) : (
-                <Link
-                  href={`/?trip=${encodeURIComponent(trip.threadId)}`}
-                  aria-label={`Open ${trip.title}`}
-                  className={buttonVariants({ variant: 'outline', className: 'h-10 px-4' })}
-                >
-                  Open
-                </Link>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }
