@@ -2,7 +2,7 @@
 
 import { TripRequestSchema, type Interest, type TripRequest } from '@ai-travel/contracts';
 import { ArrowRightIcon, CheckIcon, CircleDotIcon, CloudSunIcon, CoinsIcon, ClockIcon, InfoIcon, PlusIcon } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -56,10 +56,14 @@ interface TripInputFormProps {
   disabled: boolean;
   /** Epoch ms when the rate limit lifts; the submit button counts down until then. */
   retryAt: number | null;
+  /** Notices above the form card (left column). */
+  notices?: ReactNode;
+  /** Extra cards under the examples (right column). */
+  aside?: ReactNode;
 }
 
 /** The start page's input: one sentence, the fields the agents understood from it, interests and examples. */
-export function TripInputForm({ onSubmit, disabled, retryAt }: TripInputFormProps) {
+export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside }: TripInputFormProps) {
   const waitSeconds = useCountdown(retryAt);
   const { homeCity, setHomeCity } = useHomeCity();
   const [prompt, setPrompt] = useState('');
@@ -166,8 +170,10 @@ export function TripInputForm({ onSubmit, disabled, retryAt }: TripInputFormProp
         event.preventDefault();
         submit();
       }}
-      className="flex flex-col gap-8"
+      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-start"
     >
+      <div className="flex min-w-0 flex-col gap-6">
+        {notices}
       <div className="flex flex-col gap-6 rounded-2xl border bg-card p-6 shadow-sm">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4">
@@ -256,35 +262,40 @@ export function TripInputForm({ onSubmit, disabled, retryAt }: TripInputFormProp
         </div>
       </div>
 
-      <section aria-labelledby={`${promptId}-examples`} className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4">
-          <h2 id={`${promptId}-examples`} className="text-lg font-semibold">
-            Not sure? Start from one of these
-          </h2>
-          <span className="text-[13px] text-ink-2">You can edit it after</span>
-        </div>
-        <ul className="grid gap-4 sm:grid-cols-3">
-          {EXAMPLES.map((example) => (
-            <li key={example.title}>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => fill(example.prompt)}
-                className="flex h-full w-full flex-col gap-2 rounded-xl border bg-card p-5 text-left outline-none transition-colors hover:border-primary focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-              >
-                <span className="flex items-baseline justify-between gap-2">
-                  <span className="text-lg font-semibold">{example.title}</span>
-                  <span className="font-mono text-sm font-semibold">{example.price}</span>
-                </span>
-                <span className="text-[13px] text-ink-2">{example.blurb}</span>
-                <span className="mt-auto flex items-center gap-1 pt-1 text-[13px] font-semibold text-primary">
-                  Use this <ArrowRightIcon className="size-3.5" aria-hidden="true" />
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-6">
+        <section aria-labelledby={`${promptId}-examples`} className="flex flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm">
+          <div>
+            <h2 id={`${promptId}-examples`} className="text-lg font-semibold">
+              Not sure where to start?
+            </h2>
+            <p className="text-sm text-ink-2">Pick one: it fills the form, and you can edit it after.</p>
+          </div>
+          <ul className="flex flex-col gap-3">
+            {EXAMPLES.map((example) => (
+              <li key={example.title}>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => fill(example.prompt)}
+                  className="group flex w-full flex-col gap-1 rounded-xl border bg-card p-4 text-left outline-none transition-colors hover:border-primary hover:bg-primary-soft/40 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                >
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="text-[17px] font-semibold">{example.title}</span>
+                    <span className="font-mono text-sm font-semibold">{example.price}</span>
+                  </span>
+                  <span className="text-[13px] text-ink-2">{example.blurb}</span>
+                  <span className="flex items-center gap-1 pt-1 text-[13px] font-semibold text-primary">
+                    Use this <ArrowRightIcon className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+        {aside}
+      </div>
     </form>
   );
 }

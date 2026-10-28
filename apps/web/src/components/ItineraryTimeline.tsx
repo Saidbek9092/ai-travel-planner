@@ -16,7 +16,7 @@ function weatherText(day: ItineraryDay): string | null {
 }
 
 /** Arrow keys move focus between the day buttons of a group. */
-function useArrowKeys(count: number) {
+export function useArrowKeys(count: number) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const onKeyDown = (event: KeyboardEvent, index: number) => {
     const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
@@ -122,7 +122,7 @@ export function DayStrip({ itinerary, totalDays, selected, onSelect }: DayStripP
       role="tablist"
       aria-label="Days"
       // `relative`: the tabs' `sr-only` (absolute) labels must be clipped by this scroller, not widen the page.
-      className="relative flex snap-x gap-2.5 overflow-x-auto border-b px-5 py-3"
+      className="relative flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 py-3"
     >
       {[
         { key: 'all' as const, day: null as ItineraryDay | null, n: 0 },
@@ -146,31 +146,23 @@ export function DayStrip({ itinerary, totalDays, selected, onSelect }: DayStripP
             onKeyDown={(e) => keys.onKeyDown(e, i)}
             onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })}
             className={cn(
-              'flex min-h-[72px] w-40 shrink-0 snap-start flex-col gap-1 rounded-xl border-2 bg-card px-3.5 py-2.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
-              !active && 'border-border hover:border-muted-foreground/40',
+              'flex h-10 shrink-0 snap-start items-center gap-2 rounded-full border px-4 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+              !active && 'border-border bg-card hover:border-muted-foreground/40',
               !planned && 'cursor-default text-muted-foreground hover:border-border',
             )}
             style={active ? { borderColor: color ?? 'var(--foreground)', backgroundColor: color ? `color-mix(in srgb, ${color} 10%, white)` : 'var(--muted)' } : undefined}
           >
             {tab.key === 'all' ? (
-              <>
-                <span className="text-[15px] leading-5 font-semibold">All days</span>
-                <span className="text-[13px] leading-[18px] text-muted-foreground">{itinerary.length} planned</span>
-              </>
+              <span className="font-semibold">All days</span>
             ) : (
               <>
-                <span className="flex items-center gap-2 text-[13px] leading-[18px]">
-                  <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: color! }} aria-hidden="true" />
-                  <span className="truncate font-semibold">
-                    Day {tab.n}
-                    {tab.day?.date && ` · ${formatDay(tab.day.date, 'short')}`}
-                  </span>
-                </span>
+                <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: color! }} aria-hidden="true" />
+                <span className="font-semibold">Day {tab.n}</span>
                 {tab.day ? (
                   <>
-                    <span className="truncate text-[15px] leading-5 font-semibold">{tab.day.title}</span>
+                    {tab.day.date && <span className="text-ink-2">{formatDay(tab.day.date, 'short')}</span>}
                     {tab.day.weather && Icon && (
-                      <span className="flex items-center gap-1.5 text-[13px] leading-[18px] text-ink-2">
+                      <span className="flex items-center gap-1 text-ink-2">
                         <Icon className="size-3.5" aria-hidden="true" />
                         {formatTemperature(tab.day.weather.highC)}
                         <span className="sr-only"> {tab.day.weather.condition}</span>
@@ -178,7 +170,7 @@ export function DayStrip({ itinerary, totalDays, selected, onSelect }: DayStripP
                     )}
                   </>
                 ) : (
-                  <span className="text-[13px] leading-[18px]">planning…</span>
+                  <span>planning…</span>
                 )}
               </>
             )}

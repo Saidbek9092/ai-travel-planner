@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckIcon, PauseIcon, ShieldCheckIcon } from 'lucide-react';
+import { CheckIcon, ChevronDownIcon, PauseIcon, ShieldCheckIcon } from 'lucide-react';
 import Link from 'next/link';
 import { AgentAvatar } from '@/components/AgentAvatar';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -46,34 +46,38 @@ export function StartHero() {
   );
 }
 
+/** Extra information, closed by default: who the five agents are and what each does. */
 export function HowItWorks() {
   return (
-    <section aria-labelledby="how-it-works" className="flex flex-col gap-5 rounded-2xl border bg-card p-6 shadow-sm">
-      <div>
-        <h2 id="how-it-works" className="text-lg font-semibold">
-          What happens after you press Plan
-        </h2>
-        <p className="text-sm text-ink-2">You watch five agents talk it through in the Agent Chat.</p>
-      </div>
-      <ol className="flex flex-col">
-        {AGENT_ORDER.map((agent, index) => (
-          <li key={agent} className="relative flex gap-4 pb-5 last:pb-0">
-            {index < AGENT_ORDER.length - 1 && <span className="absolute top-9 bottom-0 left-[17px] w-px bg-border" aria-hidden="true" />}
-            <AgentAvatar agent={agent} />
-            <div>
-              <p className="font-semibold">{agentDisplayNames[agent]}</p>
-              <p className="text-sm text-ink-2">{AGENT_ROLES[agent]}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <p className="flex items-start gap-3 rounded-xl border border-success/30 bg-success-soft p-4 text-sm text-success">
-        <ShieldCheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+    <details className="group rounded-2xl border bg-card shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl p-5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
         <span>
-          <strong>Safe to step away.</strong> Progress is saved after every step, so a paused plan picks up where it stopped.
+          <span className="block text-[15px] font-semibold">How the five agents plan it</span>
+          <span className="block text-sm text-ink-2">You watch them talk it through in the Agent Chat.</span>
         </span>
-      </p>
-    </section>
+        <ChevronDownIcon className="size-5 shrink-0 text-ink-2 transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="flex flex-col gap-5 border-t p-5">
+        <ol className="flex flex-col">
+          {AGENT_ORDER.map((agent, index) => (
+            <li key={agent} className="relative flex gap-4 pb-5 last:pb-0">
+              {index < AGENT_ORDER.length - 1 && <span className="absolute top-9 bottom-0 left-[17px] w-px bg-border" aria-hidden="true" />}
+              <AgentAvatar agent={agent} />
+              <div>
+                <p className="font-semibold">{agentDisplayNames[agent]}</p>
+                <p className="text-sm text-ink-2">{AGENT_ROLES[agent]}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+        <p className="flex items-start gap-3 rounded-xl border border-success/30 bg-success-soft p-4 text-sm text-success">
+          <ShieldCheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>
+            <strong>Safe to step away.</strong> Progress is saved after every step, so a paused plan picks up where it stopped.
+          </span>
+        </p>
+      </div>
+    </details>
   );
 }
 

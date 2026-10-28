@@ -2,7 +2,7 @@
 
 import type { Flight, FlightLeg, Hotel, Transfer } from '@ai-travel/contracts';
 import { motion, useReducedMotion } from 'motion/react';
-import { BedDoubleIcon, CheckIcon, PlaneIcon } from 'lucide-react';
+import { BedDoubleIcon, CarIcon, CheckIcon, PlaneIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { ExternalLink } from '@/components/ExternalLink';
 import { ConfirmedTag, EstimateTag } from '@/components/Tags';
@@ -115,6 +115,43 @@ function TransferRow({ transfer, confirmed }: { transfer: Transfer; confirmed: b
         </>
       )}
     </div>
+  );
+}
+
+interface TransfersCardProps {
+  transfers: Transfer[];
+  /** Arrival transfers are on this itinerary day; the rest are on the way home. */
+  firstDay: number;
+  confirmed: boolean;
+}
+
+/** Every transfer of the trip, from the airport in and back out. */
+export function TransfersCard({ transfers, firstDay, confirmed }: TransfersCardProps) {
+  if (transfers.length === 0) return null;
+  const groups = [
+    { title: 'Arrival', items: transfers.filter((t) => t.day <= firstDay) },
+    { title: 'Departure', items: transfers.filter((t) => t.day > firstDay) },
+  ].filter((g) => g.items.length > 0);
+  return (
+    <Appear index={0}>
+      <section aria-labelledby="transfers-title" className="flex flex-col gap-3 rounded-xl border bg-card px-6 pt-4 pb-[18px]">
+        <header className="flex flex-wrap items-center gap-2">
+          <CarIcon className="size-5 text-primary" aria-hidden="true" />
+          <h2 id="transfers-title" className="text-xl font-semibold">
+            Transfers
+          </h2>
+          <span className="ml-auto flex gap-2">{confirmed && <ConfirmedTag />}</span>
+        </header>
+        {groups.map((g) => (
+          <div key={g.title} className="flex flex-col gap-2.5">
+            <p className="label-mono text-muted-foreground">{g.title}</p>
+            {g.items.map((t) => (
+              <TransferRow key={`${t.day}-${t.description}`} transfer={t} confirmed={confirmed} />
+            ))}
+          </div>
+        ))}
+      </section>
+    </Appear>
   );
 }
 
