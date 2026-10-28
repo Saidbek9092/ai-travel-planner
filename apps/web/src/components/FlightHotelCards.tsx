@@ -35,7 +35,7 @@ function RouteStrip({ leg, full }: { leg: FlightLeg; full: boolean }) {
   const arrival = `${formatLegTime(leg.arrival)}${nextDay > 0 ? ` · +${nextDay} day` : ''}${leg.terminal ? ` · T${leg.terminal}` : ''}`;
   return (
     <div className="flex items-start gap-3" role="img" aria-label={legLabel(leg)}>
-      <div className="shrink-0">
+      <div className="min-w-0 shrink">
         <p className={cn('font-mono font-semibold', full ? 'text-[28px] leading-8' : 'text-[22px] leading-7')}>{leg.from.code}</p>
         <p className={cn(full ? 'text-[15px] leading-5 font-semibold' : 'text-[13px] leading-[18px] text-muted-foreground')}>{formatLegTime(leg.departure)}</p>
         {full && <p className="text-[13px] leading-[18px] text-muted-foreground">{leg.from.name}</p>}
@@ -47,7 +47,7 @@ function RouteStrip({ leg, full }: { leg: FlightLeg; full: boolean }) {
         leg.stops.map((stop, i) => (
           <div key={stop.airport.code} className="contents">
             {i > 0 && <Dots />}
-            <div className={cn('shrink-0 text-center', full && 'rounded-lg bg-muted px-3 py-1.5')}>
+            <div className={cn('min-w-0 shrink text-center', full && 'rounded-lg bg-muted px-3 py-1.5')}>
               <p className="font-mono text-[15px] font-semibold">{stop.airport.code}</p>
               <p className="text-xs text-muted-foreground">
                 {formatDuration(stop.layoverMinutes)}
@@ -59,7 +59,7 @@ function RouteStrip({ leg, full }: { leg: FlightLeg; full: boolean }) {
         ))
       )}
       <Dots />
-      <div className="shrink-0 text-right">
+      <div className="min-w-0 shrink text-right">
         <p className={cn('font-mono font-semibold', full ? 'text-[28px] leading-8' : 'text-[22px] leading-7')}>{leg.to.code}</p>
         <p className={cn(full ? 'text-[15px] leading-5 font-semibold' : 'text-[13px] leading-[18px] text-muted-foreground')}>{arrival}</p>
         {full && <p className="text-[13px] leading-[18px] text-muted-foreground">{leg.to.name}</p>}
@@ -98,8 +98,12 @@ function TransferRow({ transfer, confirmed }: { transfer: Transfer; confirmed: b
         <Icon className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[15px] leading-5 font-semibold">{transferTitle(transfer)}</p>
-        <p className="text-sm leading-5 text-ink-2">{transferSub(transfer)}</p>
+        <p className="line-clamp-2 text-[15px] leading-5 font-semibold" title={transferTitle(transfer)}>
+          {transferTitle(transfer)}
+        </p>
+        <p className="line-clamp-2 text-sm leading-5 text-ink-2" title={transferSub(transfer)}>
+          {transferSub(transfer)}
+        </p>
       </div>
       {confirmed && (
         <>
