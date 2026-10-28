@@ -47,17 +47,17 @@ export function StartHero() {
 }
 
 /** Extra information, closed by default: who the five agents are and what each does. */
-export function HowItWorks() {
+export function HowItWorks({ embedded = false }: { embedded?: boolean }) {
   return (
-    <details className="group rounded-2xl border bg-card shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl p-5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+    <details className={embedded ? 'group border-t' : 'group rounded-2xl border bg-card shadow-sm'}>
+      <summary className={`flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl outline-none ${embedded ? 'pt-4' : 'p-5'} focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden`}>
         <span>
           <span className="block text-[15px] font-semibold">How the five agents plan it</span>
           <span className="block text-sm text-ink-2">You watch them talk it through in the Agent Chat.</span>
         </span>
         <ChevronDownIcon className="size-5 shrink-0 text-ink-2 transition-transform group-open:rotate-180" aria-hidden="true" />
       </summary>
-      <div className="flex flex-col gap-5 border-t p-5">
+      <div className={embedded ? 'flex flex-col gap-5 pt-5' : 'flex flex-col gap-5 border-t p-5'}>
         <ol className="flex flex-col">
           {AGENT_ORDER.map((agent, index) => (
             <li key={agent} className="relative flex gap-4 pb-5 last:pb-0">
