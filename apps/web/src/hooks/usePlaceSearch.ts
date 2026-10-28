@@ -15,7 +15,7 @@ export function usePlaceSearch(query: string) {
   const text = query.trim();
   const key = text.toLowerCase();
   const enabled = env.agentUrl !== null && text.length >= MIN_CHARS;
-  const [fetched, setFetched] = useState<{ key: string; places: PlaceSuggestion[] } | null>(null);
+  const [fetched, setFetched] = useState<{ key: string; places: PlaceSuggestion[]; failed: boolean } | null>(null);
 
   useEffect(() => {
     if (!enabled || env.agentUrl === null || cache.has(key)) return;
@@ -26,10 +26,10 @@ export function usePlaceSearch(query: string) {
         .then((json) => {
           const { places } = PlacesResponseSchema.parse(json);
           cache.set(key, places);
-          setFetched({ key, places });
+          setFetched({ key, places, failed: false });
         })
         .catch(() => {
-          if (!controller.signal.aborted) setFetched({ key, places: [] });
+          if (!controller.signal.aborted) setFetched({ key, places: [], failed: true });
         });
     }, DEBOUNCE_MS);
     return () => {
@@ -38,7 +38,9 @@ export function usePlaceSearch(query: string) {
     };
   }, [enabled, key, text]);
 
-  if (!enabled) return { places: [] as PlaceSuggestion[], loading: false };
+  // `unavailable`: no agent, or the lookup failed. Nothing to check typed text against, so free text is allowed.
+  const unavailable = env.agentUrl === null || (fetched?.key === key && fetched.failed);
+  if (!enabled) return { places: [] as PlaceSuggestion[], loading: false, unavailable };
   const places = cache.get(key) ?? (fetched?.key === key ? fetched.places : null);
-  return { places: places ?? [], loading: places === null };
+  return { places: places ?? [], loading: places === null && !unavailable, unavailable };
 }
