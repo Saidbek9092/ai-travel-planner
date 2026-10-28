@@ -20,9 +20,9 @@ const WARN_AT = 900;
 const DEBOUNCE_MS = 300;
 
 const EXAMPLES = [
-  { title: 'Istanbul', price: '$600', blurb: 'A weekend from Tashkent · street food and the Bosphorus', prompt: 'Weekend in Istanbul from Tashkent, $600. Street food and the Bosphorus.' },
-  { title: 'Paris', price: '$1,000', blurb: '5 days from Tashkent in mid-November · museums and food', prompt: '5 days in Paris from Tashkent in November, $1,000. Museums and good food.' },
-  { title: 'Tokyo', price: '$2,500', blurb: '7 days from Tashkent · temples and food markets', prompt: '7 days in Tokyo from Tashkent, $2,500. Temples and food markets.' },
+  { title: 'Istanbul', price: '$1,500', blurb: '4 days from Tashkent · street food and the Bosphorus', prompt: '4 days in Istanbul from Tashkent, $1,500. Street food and the Bosphorus.' },
+  { title: 'Paris', price: '$2,500', blurb: '5 days from Tashkent in mid-November · museums and food', prompt: '5 days in Paris from Tashkent in November, $2,500. Museums and good food.' },
+  { title: 'Tokyo', price: '$4,000', blurb: '7 days from Tashkent · temples and food markets', prompt: '7 days in Tokyo from Tashkent, $4,000. Temples and food markets.' },
 ];
 
 const INTERESTS: { value: Interest; label: string }[] = [
@@ -191,7 +191,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, aside }: T
             value={prompt}
             disabled={disabled}
             aria-describedby={`${promptId}-hint`}
-            placeholder="e.g. 5 days in Paris from Tashkent in mid-November, $1,000 all-in. Museums and good food."
+            placeholder="e.g. 5 days in Paris from Tashkent in mid-November, $2,500 all-in. Museums and good food."
             className="min-h-[100px] resize-none rounded-xl bg-card px-5 py-4 text-[20px] leading-snug md:text-[20px]"
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => {
