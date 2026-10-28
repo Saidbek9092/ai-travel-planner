@@ -21,13 +21,13 @@ const created = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short
 export function StartHero() {
   return (
     <section aria-labelledby="plan-title" className="bg-[#0b1726] text-white">
-      <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-3 px-4 pt-10 pb-[104px] sm:px-8 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-2 px-4 pt-8 pb-20 sm:px-8 lg:px-8">
         <p className="font-mono text-[11px] tracking-[0.14em] text-white/70 uppercase">Plan a trip</p>
         <h1 id="plan-title" className="text-4xl font-semibold tracking-tight sm:text-[44px] sm:leading-[1.1]">
           Where do you want to go?
         </h1>
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <p className="max-w-[44rem] text-[17px] leading-relaxed text-white/80">
+          <p className="max-w-[44rem] text-base leading-relaxed text-white/80">
             Describe the trip in one sentence. Five agents find the flights, a hotel and a day-by-day plan — and keep it all under your budget.
           </p>
           <p className="flex items-center gap-3 text-sm text-white/80">
