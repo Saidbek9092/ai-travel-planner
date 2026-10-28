@@ -81,6 +81,13 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
   const replanRequest = lastRequest ?? (result ? requestFromResult(result, new Date().toISOString().slice(0, 10)) : null);
   const startOver = () => (replanRequest ? start(replanRequest) : stream.reset());
 
+  // Switching between the form, the live run and the result starts at the top of the page, not where the last view was scrolled to.
+  const previousView = useRef(view);
+  useEffect(() => {
+    if (previousView.current !== view) window.scrollTo({ top: 0 });
+    previousView.current = view;
+  }, [view]);
+
   // "Plan a trip" in the header resets an open dashboard to the form.
   const { reset } = stream;
   useEffect(() => {
@@ -169,7 +176,7 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
       {view === 'idle' && <StartHero />}
       <main className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col gap-5 px-4 pt-6 pb-12 sm:px-8">
         {view === 'idle' && (
-          <div className="-mt-26 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-start">
+          <div className="-mt-20 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-start">
             <div className="flex flex-col gap-6">
               {uiOnly && (
                 <Alert>
@@ -220,7 +227,7 @@ export function TripDashboard({ initialThreadId, initialResult }: TripDashboardP
                   overBudget={overBudget}
                 />
               </div>
-              <div className="lg:sticky lg:top-5 lg:col-span-5 lg:max-h-[calc(100dvh-2.5rem)] lg:overflow-y-auto lg:overscroll-contain">
+              <div className="min-w-0 lg:col-span-5">
                 <LiveOverview trip={trip} decisions={decisions} progress={progress} selectedDay={selectedDay} onSelectDay={setActiveDay} />
               </div>
             </div>

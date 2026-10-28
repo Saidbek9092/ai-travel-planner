@@ -184,7 +184,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt }: TripInputFormProp
             disabled={disabled}
             aria-describedby={`${promptId}-hint`}
             placeholder="e.g. 5 days in Paris from Tashkent in mid-November, $1,000 all-in. Museums and good food."
-            className="min-h-[124px] resize-none rounded-xl bg-card px-5 py-4 text-[20px] leading-snug md:text-[20px]"
+            className="min-h-[100px] resize-none rounded-xl bg-card px-5 py-4 text-[20px] leading-snug md:text-[20px]"
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {

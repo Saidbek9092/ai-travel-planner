@@ -121,7 +121,8 @@ export function DayStrip({ itinerary, totalDays, selected, onSelect }: DayStripP
     <div
       role="tablist"
       aria-label="Days"
-      className="flex snap-x gap-2.5 overflow-x-auto border-b px-5 py-3"
+      // `relative`: the tabs' `sr-only` (absolute) labels must be clipped by this scroller, not widen the page.
+      className="relative flex snap-x gap-2.5 overflow-x-auto border-b px-5 py-3"
     >
       {[
         { key: 'all' as const, day: null as ItineraryDay | null, n: 0 },
