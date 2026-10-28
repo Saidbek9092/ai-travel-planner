@@ -353,6 +353,7 @@ function UnderstoodField({
               onChange(value);
               onClose();
             }}
+            onDismiss={onClose}
           />
         ) : (
           <Input
