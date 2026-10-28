@@ -62,13 +62,21 @@ apps/web/
 │   │   ├── MapboxViewer.tsx        # interactive route map (client-only)
 │   │   ├── FlightHotelCards.tsx    # flight (with transfers) & hotel cards
 │   │   ├── ItineraryTimeline.tsx   # day tabs + the selected day's stops
-│   │   ├── TripActions.tsx         # + Stop run · Re-plan · Share trip
+│   │   ├── TripActions.tsx         # + Stop planning · Re-plan · Share trip (portalled into the header)
+│   │   ├── RunProgress.tsx         # + percent, ETA and the six phase steps
+│   │   ├── SchematicMap.tsx        # + map without a Mapbox token: stops plotted from their coordinates
+│   │   ├── MapPins.tsx             # + stop and hotel markers shared by both maps
+│   │   ├── AgentAvatar.tsx         # + round agent badge with a status dot
+│   │   ├── Tags.tsx                # + Confirmed / pending / agent-status / estimate chips
+│   │   ├── SiteNav.tsx             # + header nav (Plan a trip · My trips)
+│   │   ├── TripHistoryList.tsx     # + the "My trips" list with availability check
 │   │   └── ui/                     # shadcn/ui generated components (do not hand-edit)
 │   ├── hooks/
 │   │   ├── useAgentStream.ts       # SSE hook, typed by @ai-travel/contracts
 │   │   ├── useTripContext.ts       # + weather / rate / time-zone lookup for the destination bar
 │   │   ├── useTripHistory.ts       # + "My trips": thread ids kept in localStorage
 │   │   ├── useCountdown.ts         # + seconds left until a timestamp (rate-limit button)
+│   │   ├── useNow.ts               # + ticking clock (ETA, reconnect wait, local time)
 │   │   └── useStickToBottom.ts     # + shared auto-scroll behaviour of chat and terminal
 │   └── lib/
 │       ├── utils.ts                # cn() (re-exported from the `cn` package) + formatUsd/formatTime/formatDate
@@ -76,6 +84,8 @@ apps/web/
 │       ├── labels.ts               # + agent names/colours, day colours, log styles, status & phase labels, decision labels, weather icons, rating words
 │       ├── links.ts                # + "Maps" and fare/room link helpers
 │       ├── time.ts                 # + local time and time-zone difference via Intl
+│       ├── trip.ts                 # + derived view data: budget parts, agent rows, phase states, ETA, decision summaries
+│       ├── dom.ts                  # + header-slot id and the "new trip" event name
 │       └── sse.ts                  # + framework-free SSE parser
 ├── test/                           # Vitest + RTL (setup.ts); test/e2e/ for Playwright
 ├── components.json                 # shadcn config (style base-nova)
@@ -209,6 +219,8 @@ interface AgentStreamState {
   retryAt: number | null;          // epoch ms when the rate limit lifts (429), else null
   reconnect: { attempt: number; max: number; nextAt: number | null } | null;
   lastRequest: TripRequest | null; // for Re-plan, Start over and the over-budget actions
+  startedAt: number | null;        // epoch ms the run started (ETA)
+  passStart: number;               // index in `logs` where the current search pass began (AgentBoard)
 }
 
 function useAgentStream(initial?: { threadId?: string; result?: ResultPayload | null }): AgentStreamState & {
@@ -304,6 +316,22 @@ function useTripContext(destination: string | null, origin?: string | null): { s
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+**As built (the design wins over the sketch above):**
+- **Idle:** "Plan a trip" card with the form (left, 5/12) and the empty Trip Overview (right, 7/12). A fresh run keeps the disabled form
+  until the stream opens, so a `400`/`429` leaves the prompt in place.
+- **Live run** (`Web-Live`, `design-agents-planning.png`): `RunBanners`, then a full-width `RunProgress` card ("Planning your trip · 82% ·
+  about 20 s left" + the six phase steps), then Agent Chat on the left (**7/12**) and the live Trip Overview on the right (**5/12**): budget card,
+  selected flight, selected hotel, map ("Days 1–3 placed"), "Day by day" list. The agent board, run details and terminal sit behind the chat's
+  "Technical log" button instead of being stacked in the column. A failed or stopped run stays visible, dimmed, under its banner.
+- **Finished trip** (`Web-Trip`, `design-trip-overview.png`): "Trip overview" label, "5 days in Paris" heading and subtitle, with the compact
+  `BudgetMeter` on the right; below, a 12-column grid: chat summary (3) · selected flights with transfers (6) · selected hotel (3); the map card
+  with the selected-day panel beside it (9); the day cards (9). The finished view always shows a day (Day 1 until the user picks another).
+- The brief one-liner ("Tashkent → Paris · 5 days · $1,000") lives in the progress card; the form is not shown during a run.
+- "Trip ready" is a toast when a watched run completes (the design has no banner for it); over-budget, warnings, failed, stopped and
+  reconnecting are banners.
+- Header actions: "Stop planning" while live; "Re-plan" + "Share trip" when finished. "Plan a trip" in the nav resets an open dashboard.
+- Mobile layouts (T25) are not built yet; below `lg` the columns simply stack.
+
 - Below `lg` the columns stack. **Live run (mobile):** brief title, progress, agent list, the latest two log lines
   with "Show all logs", "Stop run". **Trip ready (mobile):** headline with total and day tabs, the selected day's stops,
   flight and hotel summary rows, "Open map" (a sheet), "Share trip".
@@ -314,10 +342,13 @@ function useTripContext(destination: string | null, origin?: string | null): { s
 - **Trip Overview** reads `result ?? draft`. It is empty-state ("fills in as agents decide") until the first `DRAFT`; sections appear as their
   data arrives, each with a "Confirmed" tag once `decisions[topic]` exists (`flight`, `hotel`, `transfers`, `itinerary`) and a pending note
   ("Final check pending") until `budget` is confirmed. Day cards show "drafting" for the day in `progress.detail` and "waiting" for the rest.
+  Until `budget` is confirmed the meter shows the running total of the parts known so far (a draft's `totalCost` can be from an earlier pass).
 - **Progress:** shadcn `Progress` bound to `progress.progressPercent`; the label comes from `currentStatus` (`parsing` → "Understanding your
   request", `searching` → "Searching flights & hotels", `planning` → "Building your itinerary", `auditing` → "Checking the budget",
   `completed` → "Done") plus `progress.detail` ("Day 4 of 5"). Six **phase chips** — Brief, Flights, Hotel, Transfers, Itinerary, Budget check —
-  are done when their decision exists (budget check: when the result is in) and current while they are the first without one. "About 20 s left"
+  are done when their decision exists **or their data is already in the draft** (the agents confirm flight, hotel and transfers only at the end
+  of a first-pass run, so decisions alone would leave "Flights" current for the whole run; itinerary needs its decision or the audit to have
+  started; budget check: when the result is in) and current while they are the first not done. `progress.detail` shows under Itinerary only. "About 20 s left"
   is estimated from the elapsed time and the percent and is hidden below 15 % and after completion.
 - **Budget:** `BudgetMeter` shows `totalCost` vs `budget` ("$100 under", "Within $15", "Over by $84"); the bar rescales past 100 % and a tick marks the
   budget. The breakdown (flight, hotel × `durationDays`, transfers, daily × days) is display only — the agent's `totalCost` is authoritative.
@@ -375,8 +406,12 @@ All components are typed with contracts types only. Props listed are the full pu
 
 - The primary feed: a conversation list in a `ScrollArea`, per message the agent's display name and colour (from `lib/labels.ts`), `HH:mm` time and
   `text`. `@Name` tokens in the text are highlighted. Messages are read-only; there is no input box. A header shows "Agent Chat · N decisions confirmed".
-- `decision !== null` → a **confirmed decision**: "Confirmed" `Badge` with a check icon, the topic label (`decisionLabels[decision]`, e.g. "Flight") and the
-  message's detail line, plus an accent border. Never infer a decision from the text.
+- `decision !== null` → a **confirmed decision**: a green chip with a check icon, "Flight confirmed" (`decisionChipLabel`; budget reads "Budget approved",
+  or "Budget checked · over budget" in amber when the trip ends over budget) and, when the message also carries an `info` callout, its label as the
+  detail ("· TAS → IST → CDG · $420"). Never infer a decision from the text.
+- Avatars: a round badge per agent (white lucide icon on the agent's colour, `lib/labels.ts`); consecutive messages from one agent are grouped
+  under one avatar. The header shows the five avatars with a status dot (done / running / waiting / failed, from the same derivation as `AgentBoard`)
+  and a "Technical log" button that swaps the feed for the agent board, run details and terminal.
 - `callout !== null` → a tag under the text: amber for `warn` ("Over budget by $125 · re-plan 1 of 2"), neutral for `info` ("Weather prep · Day 3 moved indoors").
 - A banner line "Itinerary Planner is drafting Day 4" from `progress.detail` while streaming; typing indicator (three animated dots) otherwise;
   static when `prefers-reduced-motion`.
@@ -389,7 +424,7 @@ All components are typed with contracts types only. Props listed are the full pu
 ### `AgentBoard.tsx`
 
 ```typescript
-{ logs: LogPayload[]; progress: ProgressPayload | null; status: StreamStatus }
+{ rows: AgentRow[]; progress: ProgressPayload | null }   // rows = agentRows(logs, passStart, progress, status) from lib/trip.ts
 ```
 
 - One row per agent (Supervisor, Flight Agent, Hotel Agent, Itinerary Planner, Budget Auditor): step number, **Latest** (that agent's newest log line),
@@ -431,7 +466,9 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 | Over budget after 2 re-plans | `result.suggestions !== null` | "Best options found, $84 over." Actions are the three over-budget buttons from §6 |
 | Run stopped at step N | `status = 'failed'` with a `threadId` | "Steps 1–N−1 are saved." **Resume from step N** / **Start over**; the last run stays visible but dimmed |
 | Reconnecting | `status = 'reconnecting'` | "Reconnecting · attempt 2", "Last update · 65% planning", "The run keeps going on the server." **Reconnect now** |
-| Trip ready | `status = 'completed'`, no warnings | "Trip ready · $100 under — re-planned once to fit your budget." (`replans`) |
+| Trip ready | `status = 'completed'` after a watched run, no suggestions | **A toast**, not a banner (the design's finished screen has none): "Trip ready · $35 to spare", "Re-planned once to fit your budget." |
+| Warnings | each `result.warnings` entry not already covered by the over-budget or estimates banner | amber, the warning text |
+| You stopped the run | `status = 'aborted'` | "The agents saved their work up to step N." **Resume** / **Start over** |
 
 ### `RunDetails.tsx`
 
@@ -477,6 +514,10 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 - **Hotel card:** photo (`photoUrl`, a neutral placeholder block when `null`), name, `area`, rating as a score out of 10 with a word from `lib/labels.ts`
   (`ratingWords`: ≥ 9 "Superb", ≥ 8 "Very good", ≥ 7 "Good", else "Fair"), check-in / check-out, `transit`, `$66 × 5 nights = $330`. Links: "View rooms", "Maps".
 - `source === 'mock'` → muted "Estimate" badge with a tooltip "Live prices were unavailable".
+- **As built (design wins):** the finished cards show no "Dropped option" rows and no separate link rows (the design has neither); the airline
+  line links to `bookingUrl` ("View fare") and the hotel's price line to its `bookingUrl` ("View rooms"). Leg times are Geist Sans, airport codes
+  Geist Mono. Transfers read "Taxi · CDG Terminal 1 → hotel"; a description that already names the service ("RER B · …") is shown as is. The
+  hotel facts label transit "Metro". The re-plan passes table ("What changed on re-plan") lives in the technical view, not on the budget card.
 - Staggered entrance animation on first render of a result. Dates and times use `Intl.DateTimeFormat` in the leg's own offset.
 
 ### `ItineraryTimeline.tsx`
@@ -505,7 +546,8 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 - Caption "Showing Day 2 · Fri 13 Nov — pick a day below to change the route"; a legend for selected stop, other days, hotel and route.
 - `fitBounds` to all places on result, to the active day's places when `activeDay` changes (padding 48, animated).
 - Marker popup: place name + "Day N".
-- No token or no places → placeholder card listing the places instead of a broken map.
+- No token → `SchematicMap`: the same pins, hotel marker and dashed straight-leg routes plotted from the coordinates on a plain ground, framed
+  like `fitBounds` (the selected day with padding so neighbouring days stay in view, faded). No places → the map card is not rendered.
 
 ### `TripActions.tsx`
 
@@ -526,7 +568,7 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 
 - **Visual identity — "Departure board"** (design: Foundations board). Cool paper ground, navy ink, one blue for actions and amber only for what is live
   right now. Geist Sans for the interface, Geist Mono for anything the agents produce (prices, codes, logs), via `next/font`. Light theme only —
-  no `ThemeProvider`. The wordmark is the text "AI Travel Planner" with the lucide `Plane` icon.
+  no `ThemeProvider`. The wordmark is the text "AI Travel Planner" next to a navy rounded square with the lucide `Route` icon (as in the design).
 - **Tokens** live in `globals.css` and override the shadcn `base-nova` variables, so components keep using the shadcn names:
 
 | Token | Value | Use |
@@ -541,7 +583,7 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 | `--success` | `#0F7B5F` | Completed, under budget |
 | `--destructive` | `#C2361F` | Failed, over budget |
 | budget segments | `#1F3FA3` flights · `#4F78E0` hotel · transfers between · `#A9BDF0` daily · `#EEF0F3` left | `BudgetMeter` |
-| day colours 1–5 | `#0F7B5F` `#2952CC` `#C46A00` `#7A4CD9` `#C2361F` | Day tabs and map pins |
+| day colours 1–5 | `#2952CC` `#C46A00` `#7A4CD9` `#0F7B5F` `#C2361F` (the design PNGs' order; the Foundations board lists green first) | Day tabs and map pins |
 
   Agent colours for terminal tags and the chat live in `lib/labels.ts` next to the display names.
 - **Type scale:** Display 36/40 · 600; Heading 20/28 · 600; Body 15/22; Small 13/18; Label Mono 11/16 caps; Figure Mono 36/40 · 600 (`$900 · TAS`); Log Mono 13/20.
@@ -619,7 +661,7 @@ schemas so they cannot drift from the protocol. The test plan from earlier revis
 | **M3 · UI** | T8 – T13 | Dashboard and all its components, driven by the mock agent | — |
 | **M4 · Resilience & ship** | T14 – T17 | Failure/resume/deep links, polish, end-to-end tests, CI and Vercel deploy | — |
 | **M5 · Chat & top bar** | T18 – T20 | `MESSAGE` packets in the hook, `AgentChat` with "Confirmed" decisions, destination bar with weather, rate and local time | — |
-| **M6 · Design v2** | T21 – T26 | The design's look and live Trip Overview: tokens and layout, `DRAFT` handling, agent board and banners, reconnect / cancel / countdown, mobile layouts, My trips | — |
+| **M6 · Design v2** | T21 – T26 | The design's look and live Trip Overview: tokens and layout, `DRAFT` handling, agent board and banners, reconnect / cancel / countdown, mobile layouts, My trips | ✅ Web done (2026-10-28): T21–T24, T26; T25 (mobile) not started |
 
 #### Dependency graph
 
@@ -1097,7 +1139,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 > Mobile-Result. The agent side is B24 – B25 in [`../agent/PLAN.md`](../agent/PLAN.md). Extend the mock agent with `DRAFT`, `PROGRESS.detail` /
 > `pass` / `run`, checkpoint log rows, a dropped-stream scenario (`#drop`) and a rate-limit scenario (`#ratelimit`) as each ticket needs them.
 
-#### T21 — Design tokens and layout shell · M
+#### T21 — Design tokens and layout shell · M · ✅ Done (2026-10-28)
 
 **Goal:** the "Departure board" look and the two-column live layout (§6, §8).
 
@@ -1113,7 +1155,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-#### T22 — `DRAFT` handling and the live Trip Overview · L
+#### T22 — `DRAFT` handling and the live Trip Overview · L · ✅ Done (2026-10-28)
 
 **Goal:** the right column fills in as agents decide (§6, §7).
 
@@ -1129,7 +1171,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-#### T23 — Agent board, run banners and run details · M
+#### T23 — Agent board, run banners and run details · M · ✅ Done (2026-10-28)
 
 **Goal:** the status furniture around the chat (§7).
 
@@ -1144,7 +1186,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-#### T24 — Reconnect, cancel and rate-limit countdown · M
+#### T24 — Reconnect, cancel and rate-limit countdown · M · ✅ Done (2026-10-28)
 
 **Goal:** the resilience states from the design that depend on the connection (§5.2, §7).
 
@@ -1160,7 +1202,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-#### T25 — Mobile layouts · M
+#### T25 — Mobile layouts · M · ⏸ Not started (web first, by request)
 
 **Goal:** the Mobile-Live and Mobile-Result boards (§6).
 
@@ -1176,7 +1218,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 
 ---
 
-#### T26 — My trips and share · S
+#### T26 — My trips and share · S · ✅ Done (2026-10-28)
 
 **Goal:** the header's "My trips" and "Share trip" (§7).
 
@@ -1197,7 +1239,7 @@ pnpm dlx shadcn@latest add card input textarea field label progress badge \
 | --- | --- | --- |
 | 1 | Next.js 15 or 16? | **Next.js 16** (current stable line; 15 only receives backports). Turbopack by default, ESLint CLI instead of `next lint`, async-only request APIs. Specs updated. |
 | 2 | Vercel previews before the backend exists | **UI only.** No hosted mock agent; deployed builds run without `NEXT_PUBLIC_AGENT_URL` and show an "agent not connected" banner. The mock agent stays local/CI-only. |
-| 3 | Branding | **The design's "Departure board" system** (§8): custom palette over the shadcn `base-nova` variables, Geist fonts, text wordmark + lucide `Plane` icon. Replaces the earlier "shadcn defaults, no branding" decision. |
+| 3 | Branding | **The design's "Departure board" system** (§8): custom palette over the shadcn `base-nova` variables, Geist fonts, text wordmark + lucide `Route` icon in a navy square. Replaces the earlier "shadcn defaults, no branding" decision. |
 | 4 | Chat vs terminal | **Separate `MESSAGE` packet.** `LOG` stays technical for the terminal; the chat shows friendly text and a "Confirmed" badge for decisions. The terminal becomes a collapsible "Technical log". |
 | 5 | When the destination bar loads | **As soon as the destination is known**: from the first `DRAFT` (right after the Supervisor) during a run, or from the `RESULT` when a stored trip reopens. Straight from the browser to the agent. Replaces "after the `RESULT`" — the design shows the bar while agents plan. |
 | 6 | Lookup failure | **Hide the chip.** No mock weather or rate — fake values in the header would look real. |

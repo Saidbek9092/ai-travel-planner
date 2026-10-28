@@ -62,3 +62,22 @@ export function formatDuration(minutes: number): string {
 export function nightsFor(durationDays: number): number {
   return Math.max(1, durationDays - 1);
 }
+
+/** `2026-11-12` + 5 → `2026-11-17` (calendar days, UTC). */
+export function addDays(isoDate: string, days: number): string {
+  return new Date(Date.parse(`${isoDate.slice(0, 10)}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+const dayFormats = {
+  long: new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }),
+  short: new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'UTC' }),
+  weekday: new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' }),
+};
+
+/**
+ * Calendar date of a `YYYY-MM-DD` (or the date part of a timestamp, in its own offset):
+ * `long` → `Thu 12 Nov`, `short` → `Thu 12`, `weekday` → `Thu`.
+ */
+export function formatDay(iso: string, style: keyof typeof dayFormats = 'long'): string {
+  return dayFormats[style].format(new Date(`${iso.slice(0, 10)}T00:00:00Z`));
+}

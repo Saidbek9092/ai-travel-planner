@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { formatCountdown, useCountdown } from '@/hooks/useCountdown';
 
 const MAX_PROMPT = 1000;
 
@@ -38,9 +39,12 @@ export function toRequest(values: FormValues): Record<string, unknown> {
 interface TripInputFormProps {
   onSubmit: (request: TripRequest) => void;
   disabled: boolean;
+  /** Epoch ms when the rate limit lifts; the submit button counts down until then. */
+  retryAt: number | null;
 }
 
-export function TripInputForm({ onSubmit, disabled }: TripInputFormProps) {
+export function TripInputForm({ onSubmit, disabled, retryAt }: TripInputFormProps) {
+  const waitSeconds = useCountdown(retryAt);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const {
     control,
@@ -118,6 +122,7 @@ export function TripInputForm({ onSubmit, disabled }: TripInputFormProps) {
               type="button"
               size="sm"
               variant="outline"
+              className="h-8 rounded-full px-3 text-[13px]"
               disabled={disabled}
               onClick={() => setValue('prompt', example, { shouldValidate: false })}
             >
@@ -146,8 +151,8 @@ export function TripInputForm({ onSubmit, disabled }: TripInputFormProps) {
         </div>
       </div>
 
-      <Button type="submit" disabled={disabled} className="self-start">
-        <SendIcon aria-hidden="true" /> Plan my trip
+      <Button type="submit" disabled={disabled || waitSeconds > 0} className="h-10 self-start px-4 text-[15px]">
+        <SendIcon aria-hidden="true" /> {waitSeconds > 0 ? `Plan trip in ${formatCountdown(waitSeconds)}` : 'Plan trip'}
       </Button>
     </form>
   );
