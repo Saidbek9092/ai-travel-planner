@@ -152,7 +152,7 @@ Cross-field rules: in `production`, `WEB_ORIGIN` must be set explicitly (no loca
 
 1. `app.set('trust proxy', 1)` — Render sits behind one proxy; rate limiting needs the client IP.
 2. `helmet()`
-3. `cors({ origin: config.WEB_ORIGIN, methods: ['GET', 'POST'], exposedHeaders: ['X-Thread-Id', 'Retry-After'] })` (request headers such as `Last-Event-ID` and `X-Owner-Id` are allowed by reflection)
+3. `cors({ origin: config.WEB_ORIGIN, methods: ['GET', 'POST'], exposedHeaders: ['X-Thread-Id', 'Retry-After'] })` (allowed request headers: `Content-Type`, `Accept`, `Last-Event-ID`, `Authorization`, `X-Owner-Id`). Under `/api`, `identify` reads `Authorization: Bearer` into `res.locals.user`: no header = guest, an invalid or expired token = `401 UNAUTHORIZED`. A stored trip with a `user_id` answers `404` to any other caller on `GET /api/trips/:id`, `…/record`, `…/resume`, `…/stream` and `…/cancel`; the `trips.user_id` column is added on boot
 4. `express.json({ limit: '10kb' })`
 5. `generalLimiter` on all `/api` routes; `runLimiter` additionally on the two run-starting routes (not on `stream` or `cancel`)
 6. Routes
@@ -168,7 +168,9 @@ Cross-field rules: in `production`, `WEB_ORIGIN` must be set explicitly (no loca
 | `GET /health` | `200 { status: "ok" }`. No rate limit. |
 | `GET /readyz` | `200 { status: "ready" }`, or `503` with `problems` (database unreachable within 2 s, missing key in `live` mode). No rate limit. |
 | `POST /api/trips` | `TripRequestSchema.safeParse(body)`; invalid → `400 VALIDATION_ERROR`. Otherwise `threadId = crypto.randomUUID()`, `registry.start({ threadId, request, ownerId })` (`ownerId` from a valid `X-Owner-Id` header, else `null`; never an error), open SSE and subscribe the response to the run. |
-| `GET /api/trips` | Header `X-Owner-Id` must be a UUID, else `400 VALIDATION_ERROR`. `TripListResponse` from the trip store: that owner's trips, newest first, at most 50. |
+| `POST /api/auth/google` | `GoogleLoginRequestSchema`; `404` unless `GOOGLE_CLIENT_ID` and `SESSION_SECRET` are set. `auth/google.ts` has Google check the credential (`tokeninfo`: audience = our client id, Google issuer, not expired, verified email) → `401 UNAUTHORIZED` if not acceptable, `502` if Google cannot be reached. Returns `GoogleLoginResponse` with a 30-day HS256 session token (`auth/session.ts`). |
+| `GET /api/trips` | Signed in (`Authorization: Bearer`): that account's trips. Guest: header `X-Owner-Id` must be a UUID, else `400 VALIDATION_ERROR`, and the list is that owner's trips that no account has claimed. Newest first, at most 50. |
+| `POST /api/trips/claim` | Needs a session (`401` otherwise) and a valid `X-Owner-Id`; sets `user_id` on that owner's unclaimed trips and returns `{ claimed }`. |
 | `POST /api/trips/:threadId/resume` | `threadId` must be a UUID and have a checkpoint (`graph.getState`), else `404`. If the run already reached `END` (`state.next` is empty), send its `RESULT` and close. Otherwise `registry.start({ threadId, resume: true })`, open SSE and subscribe. |
 | `GET /api/trips/:threadId/stream` | Reconnect. Unknown or expired run → `404`. Otherwise open SSE, replay the buffered packets with an id greater than the `Last-Event-ID` header (all of them when absent), then follow the live run until its `RESULT`. |
 | `POST /api/trips/:threadId/cancel` | Run in the registry → abort it (the stream ends with `RESULT failed: "Run stopped"`, the checkpoint stays) and answer `204`. Finished run → `204` (idempotent). Unknown → `404`. |
@@ -626,6 +628,7 @@ the whole Express app in memory.
 | `test/budget.node.test.ts` | Cost formula (nights = days − 1, transfers, cents); conditions 1, 2 (retry, `cheaper`, pass number, callout) and 3 (warning, `suggestions`, never fewer than 1 day); confirms only unconfirmed topics; the audit router |
 | `test/runTrip.test.ts` | Full graph run: packets parse, one `RESULT` last, monotonic progress ending at 100, all six decisions confirmed, `Day N of M` progress and `DRAFT`s, rain day callout, over-budget loop runs twice with cheaper passes and `suggestions`, a failed parse confirms nothing, `onResult` gets the result and the whole chat |
 | `test/reconnect.test.ts` | `Run` buffer: replay after `Last-Event-ID` then live without duplicates, cap drops the oldest, monotonic `PROGRESS`; `GET …/stream` replays exactly the missed packets; unknown run → `404` |
+| `test/auth.test.ts` | Session token (round trip, tampered, foreign secret, expired); Google credential check (wrong audience, unverified email, rejected token); login `200`/`401`/`404`; per-account trip list; `404` for another account or a guest; guest trips claimed on sign-in |
 | `test/trips.test.ts` | Memory trip store (first owner and `createdAt` kept, per-owner list, v0 upgrade); `GET /api/trips` by owner id, `…/record` with the chat, `400` without an owner id, `404` record; daily cap `429` with `retryAfterSeconds` |
 | `test/tripStore.postgres.test.ts` | The same store rules against real Postgres. Skipped unless `TEST_DATABASE_URL` is set (CI sets it) |
 

@@ -6,6 +6,7 @@ import {
   type ResultPayload,
   type TripSummary,
 } from '@ai-travel/contracts';
+import { authHeaders, dropSessionIf401 } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { ownerHeaders } from '@/lib/owner';
 
@@ -24,13 +25,15 @@ export async function fetchStoredTrip(threadId: string): Promise<StoredTrip | 'n
   if (env.agentUrl === null) return null;
   const base = `${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}`;
   try {
-    const record = await fetch(`${base}/record`, { cache: 'no-store' });
+    const headers = authHeaders();
+    const record = await fetch(`${base}/record`, { headers, cache: 'no-store' });
+    dropSessionIf401(record);
     if (record.ok) {
       const parsed = TripRecordSchema.safeParse(await record.json());
       if (parsed.success) return { result: parsed.data.result, messages: parsed.data.messages };
     }
     if (record.status !== 404) return null;
-    const plain = await fetch(base, { cache: 'no-store' });
+    const plain = await fetch(base, { headers, cache: 'no-store' });
     if (plain.status === 404) return 'not-found';
     if (!plain.ok) return null;
     const result = parseStoredResult(await plain.json());
@@ -40,11 +43,12 @@ export async function fetchStoredTrip(threadId: string): Promise<StoredTrip | 'n
   }
 }
 
-/** "My trips" for this browser's owner id, newest first; `null` when the agent cannot be asked (UI-only, offline, error). Browser only. */
+/** "My trips" for the signed-in account, else for this browser's owner id, newest first; `null` when the agent cannot be asked (UI-only, offline, error). Browser only. */
 export async function fetchMyTrips(signal?: AbortSignal): Promise<TripSummary[] | null> {
   if (env.agentUrl === null) return null;
   try {
-    const response = await fetch(`${env.agentUrl}/api/trips`, { headers: ownerHeaders(), cache: 'no-store', ...(signal && { signal }) });
+    const response = await fetch(`${env.agentUrl}/api/trips`, { headers: { ...ownerHeaders(), ...authHeaders() }, cache: 'no-store', ...(signal && { signal }) });
+    dropSessionIf401(response);
     if (!response.ok) return null;
     const parsed = TripListResponseSchema.safeParse(await response.json());
     return parsed.success ? parsed.data.trips : null;

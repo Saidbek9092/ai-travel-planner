@@ -590,6 +590,13 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 - The source of truth is the agent's trip store: `TripHistoryList` calls `GET /api/trips` with the `X-Owner-Id`
   header (`lib/owner.ts`: a random UUID in the first-party cookie `ai-travel-owner`, 400 days) and lists those trips
   newest first, each linking to `/?trip=<threadId>`; a failed or stopped one says "Didn't finish".
+- **Signed in (Google):** `AccountMenu` (header) shows Google's button when `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is set, trades
+  the credential at `POST /api/auth/google` and keeps the agent's session in `localStorage` (`lib/auth.ts`, hook
+  `hooks/useSession.ts`). Every agent call adds `Authorization: Bearer` (`authHeaders()`); `GET /api/trips` then lists
+  only that account's trips and the local list and "Copy link for another device" are not shown. Right after sign-in
+  the guest trips of this browser are claimed for the account. A `401` drops the session. The server-rendered
+  `/?trip=` lookup has no token, so `DeepLinkedTrip` asks again in the browser when the server said "not found" and
+  someone is signed in.
 - `hooks/useTripHistory.ts` still keeps a local list (`localStorage`, max 20, also used for "paused" runs). It is merged
   in for trips the server does not know (from before the store, or when the agent is unreachable); only those are
   checked against `GET /api/trips/:id`, and a `404` shows "No longer available" with a remove button.
@@ -706,7 +713,7 @@ Before calling a change done: `pnpm lint && pnpm typecheck && pnpm build`, and `
 | 6 | Lookup failure | **Hide the chip.** No mock weather or rate — fake values in the header would look real. |
 | 7 | Live Trip Overview | **New `DRAFT` packet** (the trip so far) instead of rebuilding it from `LOG`/`MESSAGE` text. Sections show a "Confirmed" tag when their decision message has arrived. |
 | 8 | Dropped stream | **Reconnect and catch up** (`Last-Event-ID`), as in the design's "Stream dropped — reconnecting" state. The run no longer dies with the connection (agent B25). |
-| 9 | Accounts, avatar, run history | **No accounts in v1.** The design's avatar is left out. "My trips" lives in the agent's `trips` table under an anonymous owner id in a cookie, shareable to another device by link (TP-34). Revisit with auth. |
+| 9 | Accounts, avatar, run history | Accounts are optional (TP-42): Google sign-in shows a small avatar and "Sign out" in the header. Without it, "My trips" lives in the agent's `trips` table under an anonymous owner id in a cookie, shareable to another device by link (TP-34). |
 | 12 | Mobile | **Usable at 375 px** (TP-36): the destination band becomes a 2-column grid without icons, the budget bar takes its own row, and the phase steps collapse into a progress bar. The e2e `mobile` project guards against sideways scroll. |
 | 13 | Swapping an agent's pick | **No** (ARCHITECTURE.md §16): the planner is automatic; the traveller steers it with the prompt, the fields and the over-budget actions. |
 | 10 | Stack labels in the design | The design boards say "Next.js 15" and "OpenAI GPT-4o". The repo stays on **Next.js 16** and **Anthropic Claude**; those labels are stale in the design. |

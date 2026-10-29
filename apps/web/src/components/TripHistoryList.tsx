@@ -7,8 +7,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { notify } from '@/components/Notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useSession } from '@/hooks/useSession';
 import { useTripHistory, type TripHistoryEntry } from '@/hooks/useTripHistory';
 import { fetchMyTrips } from '@/lib/api';
+import { authHeaders } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { adoptOwnerId, ownerId } from '@/lib/owner';
 import { tripTitle } from '@/lib/trip';
@@ -26,7 +28,7 @@ function useAvailability(threadIds: string[]) {
     if (env.agentUrl === null || key === '') return;
     const controller = new AbortController();
     for (const id of key.split(',')) {
-      fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(id)}`, { signal: controller.signal })
+      fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(id)}`, { headers: authHeaders(), signal: controller.signal })
         .then((response) => {
           if (response.status === 404) setKnown((k) => ({ ...k, [id]: 'gone' }));
           else if (response.ok) setKnown((k) => ({ ...k, [id]: 'available' }));
@@ -42,10 +44,13 @@ function useAvailability(threadIds: string[]) {
  * Adopts the owner id from an "Open on another device" link (`/trips?owner=…`), then loads this owner's trips from
  * the agent. `trips` is `null` while loading, or when the agent cannot be asked (the list then falls back to this browser's).
  */
-function useServerTrips() {
+function useServerTrips(account: string | null) {
   const [trips, setTrips] = useState<TripSummary[] | null>(null);
   const [loading, setLoading] = useState(env.agentUrl !== null);
   useEffect(() => {
+    // Signing in or out switches whose trips are shown.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reload state when the account changes
+    setLoading(env.agentUrl !== null);
     const url = new URL(window.location.href);
     const shared = url.searchParams.get('owner');
     if (shared !== null) {
@@ -61,7 +66,7 @@ function useServerTrips() {
       setLoading(false);
     });
     return () => controller.abort();
-  }, []);
+  }, [account]);
   return { trips, loading };
 }
 
@@ -86,8 +91,10 @@ function mergeTrips(server: TripSummary[] | null, local: TripHistoryEntry[]): Ro
 
 export function TripHistoryList() {
   const { trips: local, remove } = useTripHistory();
-  const { trips: server, loading } = useServerTrips();
-  const trips = useMemo(() => mergeTrips(server, local), [server, local]);
+  const session = useSession();
+  const { trips: server, loading } = useServerTrips(session?.user.id ?? null);
+  // A signed-in account sees only its own trips: this browser's local list may hold a guest's or another account's.
+  const trips = useMemo(() => mergeTrips(server, session ? [] : local), [server, local, session]);
   const availability = useAvailability(trips.filter((t) => !t.stored).map((t) => t.threadId));
 
   return (
@@ -141,8 +148,20 @@ export function TripHistoryList() {
           })}
         </ul>
       )}
-      {server !== null && <OtherDeviceLink />}
+      {server !== null && (session ? <AccountNote email={session.user.email} /> : <OtherDeviceLink />)}
     </div>
+  );
+}
+
+/** Signed in: the same trips follow the account to any device. */
+function AccountNote({ email }: { email: string }) {
+  return (
+    <p className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-[14px] text-ink-2">
+      <LaptopIcon className="size-5 shrink-0 text-muted-foreground max-sm:hidden" aria-hidden="true" />
+      <span>
+        Showing the trips of <span className="font-medium text-foreground">{email}</span>. Sign in with the same Google account on another device to see them there.
+      </span>
+    </p>
   );
 }
 

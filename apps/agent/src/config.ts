@@ -25,6 +25,11 @@ const EnvSchema = z
     /** How long a flight or hotel search is reused (re-plans and repeat searches). */
     SEARCH_CACHE_TTL_MS: positiveInt.default(1_800_000),
 
+    /** Google OAuth client id (public). With `SESSION_SECRET` it turns on "Sign in with Google". */
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    /** Signs the agent's session tokens; at least 32 characters. */
+    SESSION_SECRET: z.string().min(32).optional(),
+
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }).optional(),
 
     RUN_TIMEOUT_MS: positiveInt.default(120_000),
@@ -44,6 +49,9 @@ const EnvSchema = z
     }
     if (env.NODE_ENV === 'production' && env.DATABASE_URL === undefined) {
       ctx.addIssue({ code: 'custom', path: ['DATABASE_URL'], message: 'Required in production: resuming a run depends on the Postgres checkpointer' });
+    }
+    if (env.GOOGLE_CLIENT_ID !== undefined && env.SESSION_SECRET === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['SESSION_SECRET'], message: 'Required when GOOGLE_CLIENT_ID is set' });
     }
     if (env.TOOLS_MODE === 'live' && env.SERPAPI_API_KEY === undefined) {
       ctx.addIssue({ code: 'custom', path: ['SERPAPI_API_KEY'], message: 'Required when TOOLS_MODE=live' });
