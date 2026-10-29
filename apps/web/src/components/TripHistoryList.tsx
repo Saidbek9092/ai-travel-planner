@@ -2,8 +2,8 @@
 
 import type { TripSummary } from '@ai-travel/contracts';
 import Link from 'next/link';
-import { ChevronRightIcon, LaptopIcon, PlaneIcon, Trash2Icon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { ChevronRightIcon, LaptopIcon, LockIcon, PlaneIcon, Trash2Icon } from 'lucide-react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { notify } from '@/components/Notice';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
@@ -92,7 +92,43 @@ function mergeTrips(server: TripSummary[] | null, local: TripHistoryEntry[]): Ro
   return [...fromServer, ...localOnly].sort((a, b) => b.createdAt - a.createdAt);
 }
 
+const noopSubscribe = () => () => undefined;
+
+/** Trip history is private to an account: with Google sign-in set up, a guest sees a prompt instead of any trip. */
 export function TripHistoryList() {
+  const session = useSession();
+  // `useSession` is `null` until hydration, so wait for it before telling a signed-in person to sign in.
+  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
+  const signInAvailable = env.agentUrl !== null && env.googleClientId !== null;
+  if (signInAvailable && !session) return hydrated ? <SignInPrompt /> : <HistorySkeleton />;
+  return <TripList />;
+}
+
+function HistorySkeleton() {
+  return (
+    <div className="flex flex-col gap-3" role="status">
+      <span className="sr-only">Loading your trips…</span>
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} className="h-[70px] rounded-xl border bg-card" />
+      ))}
+    </div>
+  );
+}
+
+/** The header has Google's sign-in button; this only says why the list is empty. */
+function SignInPrompt() {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed bg-card/60 p-10 text-center text-ink-2">
+      <LockIcon className="size-7" aria-hidden="true" />
+      <p>Sign in with Google (top right) to see the trips you planned.</p>
+      <Link href="/" className="text-primary underline-offset-4 hover:underline">
+        Plan a trip
+      </Link>
+    </div>
+  );
+}
+
+function TripList() {
   const { trips: local, remove } = useTripHistory();
   const session = useSession();
   const { trips: server, loading, drop } = useServerTrips(session?.user.id ?? null);
@@ -121,12 +157,7 @@ export function TripHistoryList() {
     <div className="flex flex-col gap-6" aria-busy={loading}>
       {trips.length === 0 && loading ? (
         // Not "No trips yet" before the agent has answered.
-        <div className="flex flex-col gap-3" role="status">
-          <span className="sr-only">Loading your trips…</span>
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-[70px] rounded-xl border bg-card" />
-          ))}
-        </div>
+        <HistorySkeleton />
       ) : trips.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed bg-card/60 p-10 text-center text-ink-2">
           <PlaneIcon className="size-7" aria-hidden="true" />
