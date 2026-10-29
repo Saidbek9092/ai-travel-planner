@@ -404,6 +404,7 @@ active and for 10 minutes after it ends.
   with a "Reconnect now" button. When the stream is back, the log catches up from the buffer.
 - If the agent process restarts the buffer is gone; the run is recovered from its checkpoint with `resume`.
 - The registry is per process. **Run exactly one agent instance**: the agent logs a single-instance warning at startup, and a second instance would not find the other's runs or replay buffers. Scaling out needs a shared store.
+- **Health checks.** Point the Render health check at `GET /health` (liveness), not `/readyz`. With one instance and in-memory runs, a short Postgres outage would make `/readyz` return `503`, Render would restart the instance, and every live run and replay buffer would be lost, although the process itself was fine. Point an external monitor (for example UptimeRobot) at `/readyz` instead: it alerts on `503` but restarts nothing. Revisit this if the agent ever runs several instances with a shared run store.
 
 Beyond the buffer, `LOG` and `DRAFT` packets are live-only. The chat (`MESSAGE`) is stored with the finished trip
 (§4.5), so `GET /api/trips/:threadId/record` returns the result and the conversation for a reopened trip.
