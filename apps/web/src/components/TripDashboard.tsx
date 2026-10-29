@@ -2,7 +2,7 @@
 
 import type { MessagePayload, ResultPayload, TripRequest } from '@ai-travel/contracts';
 import { RotateCcwIcon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { AgentBoard } from '@/components/AgentBoard';
 import { AgentChat, ChatSummary } from '@/components/AgentChat';
 import { AgentTerminalLogs } from '@/components/AgentTerminalLogs';
@@ -16,6 +16,7 @@ import { TripInputForm } from '@/components/TripInputForm';
 import type { DaySelection } from '@/components/ItineraryTimeline';
 import { FinishedOverview, LiveOverview } from '@/components/TripOverview';
 import { Notice, notify } from '@/components/Notice';
+import { SignInDialog } from '@/components/SignInDialog';
 import { Button } from '@/components/ui/button';
 import { useAgentStream } from '@/hooks/useAgentStream';
 import { useSession } from '@/hooks/useSession';
@@ -77,17 +78,28 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
       ? chosenDay
       : defaultDay(itinerary, new Date().toISOString().slice(0, 10));
 
-  // Every run costs money, so a guest is asked to sign in first (the agent refuses guests too); the typed trip stays in the form.
+  // Every run costs money, so a guest is asked to sign in first (the agent refuses guests too). The request waits in
+  // `pending` and starts by itself once they are signed in; the typed trip stays in the form meanwhile.
   const session = useSession();
   const needsSignIn = env.agentUrl !== null && env.googleClientId !== null && !session;
-  const askToSignIn = () =>
-    notify('error', 'Sign in to plan a trip', { id: 'sign-in-to-plan', description: 'Use “Sign in with Google” at the top right, then press the button again. Your trip is kept.' });
-  const start = (request: TripRequest) => {
-    if (needsSignIn) return askToSignIn();
-    setActiveDay(null);
-    stream.start(request);
+  const [pending, setPending] = useState<{ kind: 'start'; request: TripRequest } | { kind: 'resume' } | null>(null);
+  const run = (action: NonNullable<typeof pending>) => {
+    if (action.kind === 'start') {
+      setActiveDay(null);
+      stream.start(action.request);
+    } else stream.resume();
   };
-  const resume = () => (needsSignIn ? askToSignIn() : stream.resume());
+  const runNow = useEffectEvent(run);
+  useEffect(() => {
+    if (!session || !pending) return;
+    // The person just signed in: run the request that was waiting, then release it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- `run` sets state through the stream hook
+    runNow(pending);
+    setPending(null);
+  }, [session, pending]);
+  const request = (action: NonNullable<typeof pending>) => (needsSignIn ? setPending(action) : run(action));
+  const start = (tripRequest: TripRequest) => request({ kind: 'start', request: tripRequest });
+  const resume = () => request({ kind: 'resume' });
   const replanRequest = lastRequest ?? (result ? requestFromResult(result, new Date().toISOString().slice(0, 10)) : null);
   const startOver = () => (replanRequest ? start(replanRequest) : stream.reset());
 
@@ -192,6 +204,7 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
 
   return (
     <>
+      {env.googleClientId !== null && <SignInDialog open={pending !== null && !session} onOpenChange={(open) => !open && setPending(null)} clientId={env.googleClientId} />}
       <TripActions status={status} threadId={threadId} canReplan={replanRequest !== null} onStop={stream.cancel} onReplan={startOver} />
       <TopBar
         status={tripContext.status}

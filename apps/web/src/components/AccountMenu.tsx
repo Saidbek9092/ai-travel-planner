@@ -51,7 +51,7 @@ async function onCredential(credential: string) {
 }
 
 /** Google's own button (their branding rules), icon-only on phones so the header does not overflow. */
-function GoogleSignInButton({ clientId }: { clientId: string }) {
+export function GoogleSignInButton({ clientId, alwaysWide = false }: { clientId: string; alwaysWide?: boolean }) {
   const slot = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let cancelled = false;
@@ -59,14 +59,14 @@ function GoogleSignInButton({ clientId }: { clientId: string }) {
       .then((google) => {
         if (cancelled || !slot.current) return;
         google.accounts.id.initialize({ client_id: clientId, callback: (response) => void onCredential(response.credential) });
-        const wide = window.matchMedia('(min-width: 640px)').matches;
+        const wide = alwaysWide || window.matchMedia('(min-width: 640px)').matches;
         google.accounts.id.renderButton(slot.current, wide ? { type: 'standard', theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill' } : { type: 'icon', theme: 'outline', size: 'large', shape: 'circle' });
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, alwaysWide]);
   // Reserve the button's height so the header does not jump when Google's script draws it.
   return <div ref={slot} className="flex h-10 min-w-10 items-center pointer-coarse:h-11" aria-label="Sign in with Google" />;
 }
