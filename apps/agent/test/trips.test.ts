@@ -30,6 +30,15 @@ describe('trip store (memory)', () => {
     expect(await store.list(OWNER)).toHaveLength(1);
   });
 
+  it('removes a trip', async () => {
+    const store = createMemoryTripStore();
+    const threadId = crypto.randomUUID();
+    await store.save({ ownerId: OWNER, result: result(threadId), messages: [] });
+    expect(await store.remove(threadId)).toBe(true);
+    expect(await store.remove(threadId)).toBe(false);
+    expect(await store.list(OWNER)).toEqual([]);
+  });
+
   it('upgrades a result stored before schemaVersion existed', async () => {
     const store = createMemoryTripStore();
     const threadId = crypto.randomUUID();

@@ -127,4 +127,20 @@ describe('own trips only', () => {
     expect((await request(app).get(`/api/trips/${guestTrip}/record`)).status).toBe(404);
     expect((await request(app).post('/api/trips/claim').set('X-Owner-Id', OWNER)).status).toBe(401);
   });
+
+  it('lets only the owner delete a trip', async () => {
+    const { app } = authedApp();
+    const guestTrip = await plan(app);
+    expect((await request(app).delete(`/api/trips/${guestTrip}`)).status).toBe(404);
+    expect((await request(app).delete(`/api/trips/${guestTrip}`).set('X-Owner-Id', OWNER)).status).toBe(204);
+    const guestList = TripListResponseSchema.parse((await request(app).get('/api/trips').set('X-Owner-Id', OWNER)).body);
+    expect(guestList.trips).toEqual([]);
+
+    const alice = (await signIn(app, 'alice-token')).token;
+    const bob = (await signIn(app, 'bob-token')).token;
+    const aliceTrip = await plan(app, alice);
+    expect((await request(app).delete(`/api/trips/${aliceTrip}`).set('Authorization', `Bearer ${bob}`)).status).toBe(404);
+    expect((await request(app).delete(`/api/trips/${aliceTrip}`).set('Authorization', `Bearer ${alice}`)).status).toBe(204);
+    expect(await list(app, alice)).toEqual([]);
+  });
 });

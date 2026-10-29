@@ -56,3 +56,18 @@ export async function fetchMyTrips(signal?: AbortSignal): Promise<TripSummary[] 
     return null;
   }
 }
+
+/** Deletes a stored trip. `true` when it is gone (or the agent never had it); `false` when the agent refused or could not be reached. */
+export async function deleteTrip(threadId: string): Promise<boolean> {
+  if (env.agentUrl === null) return true;
+  try {
+    const response = await fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}`, {
+      method: 'DELETE',
+      headers: { ...ownerHeaders(), ...authHeaders() },
+    });
+    dropSessionIf401(response);
+    return response.ok || response.status === 404;
+  } catch {
+    return false;
+  }
+}

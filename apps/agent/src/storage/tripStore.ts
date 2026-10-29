@@ -45,7 +45,9 @@ export interface TripStore {
    */
   list(ownerId: string, userId?: string | null): Promise<TripSummary[]>;
   /** Who a stored trip belongs to; `null` when the trip is not stored. `userId` is `null` for a guest trip. */
-  ownership(threadId: string): Promise<{ userId: string | null } | null>;
+  ownership(threadId: string): Promise<{ userId: string | null; ownerId: string | null } | null>;
+  /** Deletes a stored trip. Returns whether there was one. */
+  remove(threadId: string): Promise<boolean>;
   /** Moves this browser's guest trips to the account. Returns how many moved. */
   claim(userId: string, ownerId: string): Promise<number>;
   close(): Promise<void>;
@@ -107,7 +109,10 @@ export function createMemoryTripStore(): TripStore {
     },
     async ownership(threadId) {
       const row = rows.get(threadId);
-      return row ? { userId: row.userId } : null;
+      return row ? { userId: row.userId, ownerId: row.ownerId } : null;
+    },
+    async remove(threadId) {
+      return rows.delete(threadId);
     },
     async claim(userId, ownerId) {
       const mine = [...rows.values()].filter((row) => row.ownerId === ownerId && row.userId === null);
@@ -176,8 +181,12 @@ export async function createPostgresTripStore(connectionString: string): Promise
       return rows[0] ? fromPg(rows[0]) : null;
     },
     async ownership(threadId) {
-      const { rows } = await pool.query<{ user_id: string | null }>('SELECT user_id FROM trips WHERE thread_id = $1', [threadId]);
-      return rows[0] ? { userId: rows[0].user_id } : null;
+      const { rows } = await pool.query<{ user_id: string | null; owner_id: string | null }>('SELECT user_id, owner_id FROM trips WHERE thread_id = $1', [threadId]);
+      return rows[0] ? { userId: rows[0].user_id, ownerId: rows[0].owner_id } : null;
+    },
+    async remove(threadId) {
+      const { rowCount } = await pool.query('DELETE FROM trips WHERE thread_id = $1', [threadId]);
+      return (rowCount ?? 0) > 0;
     },
     async claim(userId, ownerId) {
       const { rowCount } = await pool.query('UPDATE trips SET user_id = $1 WHERE owner_id = $2 AND user_id IS NULL', [userId, ownerId]);

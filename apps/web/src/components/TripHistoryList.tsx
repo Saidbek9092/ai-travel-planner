@@ -6,11 +6,13 @@ import { ChevronRightIcon, LaptopIcon, PlaneIcon, Trash2Icon } from 'lucide-reac
 import { useEffect, useMemo, useState } from 'react';
 import { notify } from '@/components/Notice';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/hooks/useSession';
 import { useTripHistory, type TripHistoryEntry } from '@/hooks/useTripHistory';
-import { fetchMyTrips } from '@/lib/api';
+import { deleteTrip, fetchMyTrips } from '@/lib/api';
 import { authHeaders } from '@/lib/auth';
+import { keepTabInside } from '@/lib/dom';
 import { env } from '@/lib/env';
 import { adoptOwnerId, ownerId } from '@/lib/owner';
 import { tripTitle } from '@/lib/trip';
@@ -67,7 +69,8 @@ function useServerTrips(account: string | null) {
     });
     return () => controller.abort();
   }, [account]);
-  return { trips, loading };
+  const drop = (threadId: string) => setTrips((list) => list && list.filter((trip) => trip.threadId !== threadId));
+  return { trips, loading, drop };
 }
 
 interface Row extends TripHistoryEntry {
@@ -92,10 +95,27 @@ function mergeTrips(server: TripSummary[] | null, local: TripHistoryEntry[]): Ro
 export function TripHistoryList() {
   const { trips: local, remove } = useTripHistory();
   const session = useSession();
-  const { trips: server, loading } = useServerTrips(session?.user.id ?? null);
+  const { trips: server, loading, drop } = useServerTrips(session?.user.id ?? null);
+  const [pending, setPending] = useState<Row | null>(null);
+  const [deleting, setDeleting] = useState(false);
   // A signed-in account sees only its own trips: this browser's local list may hold a guest's or another account's.
   const trips = useMemo(() => mergeTrips(server, session ? [] : local), [server, local, session]);
   const availability = useAvailability(trips.filter((t) => !t.stored).map((t) => t.threadId));
+
+  const confirmDelete = async () => {
+    if (!pending) return;
+    setDeleting(true);
+    const ok = await deleteTrip(pending.threadId);
+    setDeleting(false);
+    if (!ok) {
+      notify('error', "Couldn't delete the trip", { description: 'Please try again.' });
+      return;
+    }
+    remove(pending.threadId);
+    drop(pending.threadId);
+    notify('success', 'Trip deleted');
+    setPending(null);
+  };
 
   return (
     <div className="flex flex-col gap-6" aria-busy={loading}>
@@ -138,16 +158,30 @@ export function TripHistoryList() {
                     {gone && ' · No longer available'}
                   </p>
                 </div>
-                {gone && (
-                  <Button variant="ghost" className="h-11" onClick={() => remove(trip.threadId)} aria-label={`Remove ${trip.title}`}>
-                    <Trash2Icon aria-hidden="true" /> Remove
-                  </Button>
-                )}
+                <Button variant="ghost" className="h-11" onClick={() => setPending(trip)} aria-label={`Delete ${trip.title}`}>
+                  <Trash2Icon aria-hidden="true" /> <span className="max-sm:sr-only">Delete</span>
+                </Button>
               </li>
             );
           })}
         </ul>
       )}
+      <Dialog open={pending !== null} onOpenChange={(open) => !open && !deleting && setPending(null)}>
+        <DialogContent onKeyDown={keepTabInside}>
+          <DialogTitle>Delete this trip?</DialogTitle>
+          <DialogDescription>
+            {pending ? `“${pending.title}” will be deleted for good, with its plan and chat. This can't be undone.` : ''}
+          </DialogDescription>
+          <DialogFooter>
+            <Button variant="outline" disabled={deleting} onClick={() => setPending(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={deleting} onClick={confirmDelete}>
+              {deleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {server !== null && (session ? <AccountNote email={session.user.email} /> : <OtherDeviceLink />)}
     </div>
   );
