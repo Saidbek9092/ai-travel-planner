@@ -14,6 +14,7 @@ import {
 } from '@ai-travel/contracts';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { env } from '@/lib/env';
+import { authHeaders, dropSessionIf401 } from '@/lib/auth';
 import { ownerHeaders } from '@/lib/owner';
 import { readSseEvents } from '@/lib/sse';
 
@@ -85,6 +86,7 @@ type ClientErrorCode = ErrorCode | 'NETWORK' | 'CONNECTION_LOST';
 const ERROR_MESSAGES: Record<ClientErrorCode, string> = {
   VALIDATION_ERROR: 'Please check your request and try again.',
   RATE_LIMITED: "You've reached the request limit for now.",
+  UNAUTHORIZED: 'Your sign-in expired. Sign in again.',
   NOT_FOUND: 'We could not find that trip. It may have expired.',
   CONFLICT: 'This trip is still being planned. Give it a moment.',
   INTERNAL: 'Something went wrong on our side. Please try again.',
@@ -290,6 +292,7 @@ export function useAgentStream(initial?: InitialRun) {
           response = await fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}/stream`, {
             headers: {
               Accept: 'text/event-stream',
+              ...authHeaders(),
               ...(lastEventIdRef.current ? { 'Last-Event-ID': lastEventIdRef.current } : {}),
             },
             signal: controller.signal,
@@ -314,7 +317,7 @@ export function useAgentStream(initial?: InitialRun) {
   const follow = useCallback(
     async (threadId: string, controller: AbortController) => {
       const response = await fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}/stream`, {
-        headers: { Accept: 'text/event-stream' },
+        headers: { Accept: 'text/event-stream', ...authHeaders() },
         signal: controller.signal,
       }).catch(() => null);
       if (!response?.ok || !response.body || controller.signal.aborted) return;
@@ -359,7 +362,7 @@ export function useAgentStream(initial?: InitialRun) {
       try {
         response = await fetch(`${env.agentUrl}${path}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...ownerHeaders() },
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...ownerHeaders(), ...authHeaders() },
           body: body ? JSON.stringify(body) : undefined,
           signal: controller.signal,
         });
@@ -376,6 +379,7 @@ export function useAgentStream(initial?: InitialRun) {
         return;
       }
       if (!response.ok || !response.body) {
+        dropSessionIf401(response);
         const json = (await response.json().catch(() => null)) as {
           error?: { code?: string; message?: string; retryAfterSeconds?: number };
         } | null;
@@ -431,7 +435,7 @@ export function useAgentStream(initial?: InitialRun) {
     dispatch({ type: 'ABORTED' });
     // Best effort: the agent stops the graph and keeps the checkpoint, so the run stays resumable.
     if (threadId && env.agentUrl !== null) {
-      void fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}/cancel`, { method: 'POST' }).catch(() => undefined);
+      void fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}/cancel`, { method: 'POST', headers: authHeaders() }).catch(() => undefined);
     }
   }, []);
 

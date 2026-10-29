@@ -110,12 +110,15 @@ export class RunRegistry {
     request,
     resume = false,
     ownerId = null,
+    userId = null,
   }: {
     threadId: string;
     request?: TripRequest;
     resume?: boolean;
     /** Anonymous browser id the finished trip is listed under. */
     ownerId?: string | null;
+    /** Signed-in account the finished trip belongs to. */
+    userId?: string | null;
   }): Run {
     if (this.runs.get(threadId)?.done === false) {
       throw new AppError('CONFLICT', 'This trip is still running', 409);
@@ -136,7 +139,7 @@ export class RunRegistry {
       resume,
       signal,
       logger,
-      onResult: (result, messages) => trips.save({ ownerId, result, messages }),
+      onResult: (result, messages) => trips.save({ ownerId, userId, result, messages }),
     }).finally(() => {
       run.finish();
       setTimeout(() => {

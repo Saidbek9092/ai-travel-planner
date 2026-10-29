@@ -31,6 +31,8 @@ interface Run {
   refuse: number;
   /** `X-Owner-Id` of the request that started it ("My trips"). */
   ownerId: string | null;
+  /** Signed-in account that started it (`Authorization: Bearer mock-session:<id>`); `null` for a guest. */
+  userId: string | null;
   createdAt: string;
 }
 const runs = new Map<string, Run>();
@@ -39,7 +41,7 @@ const STOPPED_ERROR = 'Trip planning stopped before it finished, resume to conti
 
 function cors(res: ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', `Content-Type, Accept, Last-Event-ID, ${OWNER_ID_HEADER}`);
+  res.setHeader('Access-Control-Allow-Headers', `Content-Type, Accept, Last-Event-ID, Authorization, ${OWNER_ID_HEADER}`);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Expose-Headers', 'X-Thread-Id, Retry-After');
 }
@@ -58,6 +60,14 @@ function ownerOf(req: IncomingMessage): string | null {
   const parsed = OwnerIdSchema.safeParse(req.headers[OWNER_ID_HEADER.toLowerCase()]);
   return parsed.success ? parsed.data : null;
 }
+
+/** The account of a request. The mock trusts `Bearer mock-session:<id>` (e2e seeds one); the real agent verifies a signed token. */
+function userOf(req: IncomingMessage): string | null {
+  return /^Bearer mock-session:(\S+)$/.exec(req.headers.authorization ?? '')?.[1] ?? null;
+}
+
+/** An account's trip is hidden from everyone else, like the agent does. */
+const hiddenFrom = (run: Run | undefined, req: IncomingMessage) => !!run?.userId && run.userId !== userOf(req);
 
 /** The chat of a run, from its MESSAGE packets (what the agent stores with the trip). */
 function messagesOf(run: Run): MessagePayload[] {
@@ -138,7 +148,7 @@ function attach(res: ServerResponse, threadId: string, run: Run, lastId: number)
   });
 }
 
-function startRun(res: ServerResponse, threadId: string, steps: Step[], ownerId: string | null) {
+function startRun(res: ServerResponse, threadId: string, steps: Step[], ownerId: string | null, userId: string | null) {
   const previous = runs.get(threadId);
   const run: Run = {
     events: [],
@@ -149,6 +159,7 @@ function startRun(res: ServerResponse, threadId: string, steps: Step[], ownerId:
     result: null,
     refuse: steps.some((step) => 'drop' in step) ? 2 : 0,
     ownerId: previous?.ownerId ?? ownerId,
+    userId: previous?.userId ?? userId,
     createdAt: previous?.createdAt ?? new Date().toISOString(),
   };
   runs.set(threadId, run);
@@ -184,14 +195,15 @@ createServer(async (req, res) => {
       return fail(res, 429, 'RATE_LIMITED', "You've reached today's limit of trips from this address, please try again tomorrow", { retryAfterSeconds: 75_600 }, { 'Retry-After': '75600' });
     }
     const threadId = newThreadId();
-    return startRun(res, threadId, scenarios[pickScenario(prompt)]!(threadId), ownerOf(req));
+    return startRun(res, threadId, scenarios[pickScenario(prompt)]!(threadId), ownerOf(req), userOf(req));
   }
 
   if (req.method === 'GET' && url.pathname === '/api/trips') {
     const ownerId = ownerOf(req);
-    if (!ownerId) return fail(res, 400, 'VALIDATION_ERROR', `${OWNER_ID_HEADER} header must be a UUID`);
+    const userId = userOf(req);
+    if (!ownerId && !userId) return fail(res, 400, 'VALIDATION_ERROR', `${OWNER_ID_HEADER} header must be a UUID`);
     const trips: TripListResponse['trips'] = [...runs.values()]
-      .filter((run) => run.ownerId === ownerId && run.result !== null)
+      .filter((run) => (userId ? run.userId === userId : run.ownerId === ownerId && run.userId === null) && run.result !== null)
       .map((run) => {
         const result = run.result as ResultPayload;
         const { threadId, status, origin, destination, durationDays, startDate, totalCost, budget } = result;
@@ -238,7 +250,7 @@ createServer(async (req, res) => {
   if (req.method === 'GET' && reattach) {
     const threadId = reattach[1]!;
     const run = runs.get(threadId);
-    if (!run || run.lost) return fail(res, 404, 'NOT_FOUND', 'Run not found');
+    if (!run || run.lost || hiddenFrom(run, req)) return fail(res, 404, 'NOT_FOUND', 'Run not found');
     if (run.refuse > 0) {
       run.refuse -= 1;
       return fail(res, 503, 'INTERNAL', 'Agent restarting');
@@ -249,7 +261,7 @@ createServer(async (req, res) => {
   const cancel = /^\/api\/trips\/([^/]+)\/cancel$/.exec(url.pathname);
   if (req.method === 'POST' && cancel) {
     const run = runs.get(cancel[1]!);
-    if (!run) return fail(res, 404, 'NOT_FOUND', 'Run not found');
+    if (!run || hiddenFrom(run, req)) return fail(res, 404, 'NOT_FOUND', 'Run not found');
     console.log(`cancel ${cancel[1]}`);
     if (!run.done) {
       run.cancelled = true;
@@ -267,13 +279,13 @@ createServer(async (req, res) => {
     // can't be a thread is unknown.
     if (runs.get(threadId)?.done === false) return fail(res, 409, 'CONFLICT', 'This trip is still running');
     if (!runs.has(threadId) && !/^[0-9a-f-]{36}$/i.test(threadId)) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
-    return startRun(res, threadId, scenarios.happy!(threadId), ownerOf(req));
+    return startRun(res, threadId, scenarios.happy!(threadId), ownerOf(req), userOf(req));
   }
 
   const record = /^\/api\/trips\/([^/]+)\/record$/.exec(url.pathname);
   if (req.method === 'GET' && record) {
     const run = runs.get(record[1]!);
-    if (!run) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
+    if (!run || hiddenFrom(run, req)) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
     const result = (run.result as ResultPayload | null) ?? resultPayload(record[1]!, { status: 'failed', error: STOPPED_ERROR });
     return json(res, 200, { result, messages: messagesOf(run), createdAt: run.createdAt, updatedAt: run.createdAt } satisfies TripRecord);
   }
@@ -282,6 +294,7 @@ createServer(async (req, res) => {
   if (req.method === 'GET' && lookup) {
     const threadId = lookup[1]!;
     const run = runs.get(threadId);
+    if (hiddenFrom(run, req)) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
     if (run) {
       return json(res, 200, run.result ?? resultPayload(threadId, { status: 'failed', error: STOPPED_ERROR }));
     }

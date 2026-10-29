@@ -254,10 +254,12 @@ interface TravelAgentState {
 **Finished trips** are stored separately from checkpoints, in a `trips` table in the same database
 (`storage/tripStore.ts`; in memory without `DATABASE_URL`). When a run ends, completed or failed, the agent saves the
 `ResultPayload` and the whole chat (`messages` from the final state, so a resumed run keeps the earlier ones), keyed by
-`threadId` and by the browser's anonymous owner id. There are no accounts: the web app keeps a random UUID in a
-first-party cookie and sends it as `X-Owner-Id` (§7, §9). "My trips" lists that owner's trips, and a reopened trip
-shows its result and chat on any device that has the same id ("Copy link for another device" on `/trips`). The
-checkpointer still owns resuming; the store only keeps outcomes.
+`threadId`, by the browser's anonymous owner id and, when the traveller was signed in, by their account (`user_id`).
+A guest's web app keeps a random UUID in a first-party cookie and sends it as `X-Owner-Id` (§7, §9); "My trips" lists
+that owner's guest trips, and a reopened trip shows its result and chat on any device that has the same id ("Copy link
+for another device" on `/trips`). A signed-in traveller (§9, Google sign-in) sees only their account's trips on any
+device, and a trip that belongs to an account answers `404` to everyone else. The checkpointer still owns resuming;
+the store only keeps outcomes.
 
 ### 4.6 Chat messages & confirmed decisions
 
@@ -420,13 +422,15 @@ Beyond the buffer, `LOG` and `DRAFT` packets are live-only. The chat (`MESSAGE`)
 | --- | --- | --- |
 | `GET /health` | — | `200 {"status":"ok"}` (liveness; Render health check) |
 | `GET /readyz` | — | `200 {"status":"ready"}`, or `503 {"status":"unavailable","problems":[…]}` when Postgres is unreachable or a required key is missing |
-| `POST /api/trips` | `TripRequest`; header `X-Owner-Id` (optional) | `200 text/event-stream` + `X-Thread-Id` header |
+| `POST /api/auth/google` | `GoogleLoginRequest` (`credential`: a Google ID token) | `200 GoogleLoginResponse` (`token`, `expiresAt`, `user`); `401` if Google refuses it or it is for another app; `404` if sign-in is not configured |
+| `POST /api/trips/claim` | `Authorization`, header `X-Owner-Id` | `200 ClaimTripsResponse`: this browser's guest trips now belong to the account; `401` as a guest |
+| `POST /api/trips` | `TripRequest`; header `X-Owner-Id` (optional), `Authorization` (optional) | `200 text/event-stream` + `X-Thread-Id` header |
 | `GET /api/trips/:threadId/stream` | header `Last-Event-ID` (optional) | `200 text/event-stream`: replays missed packets, then follows the live run; `404` if the run is not in the registry |
 | `POST /api/trips/:threadId/cancel` | — | `204`; aborts the run, which ends with `RESULT failed` ("Run stopped") and stays resumable; `404` if unknown |
 | `POST /api/trips/:threadId/resume` | — | `200 text/event-stream`, continues from last checkpoint |
 | `GET /api/trips/:threadId` | — | `200 ResultPayload` from the trip store, else built from the latest checkpoint; `404` if unknown |
 | `GET /api/trips/:threadId/record` | — | `200 TripRecord` (result + chat + timestamps), same sources; `404` if unknown |
-| `GET /api/trips` | header `X-Owner-Id` (UUID) | `200 TripListResponse`: the owner's finished trips, newest first (max 50); `400` without a valid id |
+| `GET /api/trips` | `Authorization`, or header `X-Owner-Id` (UUID) | `200 TripListResponse`: the account's trips, or else the guest owner's, newest first (max 50); `400` as a guest without a valid id |
 | `GET /api/trip-context?destination=…&origin=…` | query: `TripContextQuery` | `200 TripContext`, `400` bad query, `404` destination not found |
 
 Errors **before** the stream opens are JSON `ErrorBody` (`src/errors.ts`): `{ "error": { "code": "VALIDATION_ERROR", "message": "…" } }`
@@ -508,6 +512,15 @@ say where a value came from ("Estimate", "Live").
   with it sees that list, which is why the web app only reveals it through "Copy link for another device". Trip ids
   were already capabilities (anyone with a trip link sees that trip). It lives in a first-party cookie on the web
   domain because the agent is on another site, where a cookie would be third-party and blocked.
+- **Google sign-in** (optional; on when `GOOGLE_CLIENT_ID` and `SESSION_SECRET` are set): the browser gets a Google ID
+  token from Google Identity Services and posts it to `POST /api/auth/google`. The agent has Google verify it
+  (`oauth2.googleapis.com/tokeninfo`), checks audience, issuer, expiry and a verified email, then returns its own HS256
+  session token (30 days, signed with `SESSION_SECRET`). The browser keeps it in `localStorage` and sends it as
+  `Authorization: Bearer` (again a cookie would be third-party). The account id is Google's `sub`, taken from the verified
+  token only, never from a client-sent value. A bad or expired token is `401 UNAUTHORIZED` and the web app drops it.
+  A trip saved by a signed-in traveller gets `user_id`; reads, `resume`, `stream` and `cancel` of that trip answer `404`
+  to anyone else. Guest trips keep working as before (open by link). After signing in, `POST /api/trips/claim` moves the
+  guest trips of that browser's owner id to the account.
 
 ---
 

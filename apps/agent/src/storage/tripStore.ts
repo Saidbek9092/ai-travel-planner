@@ -23,6 +23,8 @@ const MessagesSchema = z.array(MessagePayloadSchema);
 export interface SaveTripArgs {
   /** Anonymous browser id (`X-Owner-Id`); `null` when the request had none. */
   ownerId: string | null;
+  /** Signed-in account that planned the trip; `null` for a guest. */
+  userId?: string | null;
   result: ResultPayload;
   messages: MessagePayload[];
 }
@@ -37,8 +39,15 @@ export interface TripStore {
   save(args: SaveTripArgs): Promise<void>;
   /** `null` when the trip is unknown or its stored result can no longer be read. */
   get(threadId: string): Promise<TripRecord | null>;
-  /** The owner's trips, newest first. */
-  list(ownerId: string): Promise<TripSummary[]>;
+  /**
+   * Newest first. A signed-in `userId` gets that account's trips; without one, the guest trips of this browser's
+   * `ownerId` (trips already claimed by an account are not listed to guests).
+   */
+  list(ownerId: string, userId?: string | null): Promise<TripSummary[]>;
+  /** Who a stored trip belongs to; `null` when the trip is not stored. `userId` is `null` for a guest trip. */
+  ownership(threadId: string): Promise<{ userId: string | null } | null>;
+  /** Moves this browser's guest trips to the account. Returns how many moved. */
+  claim(userId: string, ownerId: string): Promise<number>;
   close(): Promise<void>;
 }
 
@@ -67,6 +76,7 @@ function toRecord(raw: { result: unknown; messages: unknown; createdAt: string; 
 
 interface MemoryRow {
   ownerId: string | null;
+  userId: string | null;
   result: unknown;
   messages: unknown;
   createdAt: string;
@@ -77,12 +87,13 @@ export function createMemoryTripStore(): TripStore {
   const rows = new Map<string, MemoryRow>();
   return {
     kind: 'memory',
-    async save({ ownerId, result, messages }) {
+    async save({ ownerId, userId = null, result, messages }) {
       const now = new Date().toISOString();
       const previous = rows.get(result.threadId);
       rows.delete(result.threadId);
       rows.set(result.threadId, {
         ownerId: previous?.ownerId ?? ownerId,
+        userId: previous?.userId ?? userId,
         result: structuredClone(result),
         messages: structuredClone(messages),
         createdAt: previous?.createdAt ?? now,
@@ -94,9 +105,18 @@ export function createMemoryTripStore(): TripStore {
       const row = rows.get(threadId);
       return row ? toRecord(row) : null;
     },
-    async list(ownerId) {
+    async ownership(threadId) {
+      const row = rows.get(threadId);
+      return row ? { userId: row.userId } : null;
+    },
+    async claim(userId, ownerId) {
+      const mine = [...rows.values()].filter((row) => row.ownerId === ownerId && row.userId === null);
+      for (const row of mine) row.userId = userId;
+      return mine.length;
+    },
+    async list(ownerId, userId = null) {
       return [...rows.values()]
-        .filter((row) => row.ownerId === ownerId)
+        .filter((row) => (userId === null ? row.ownerId === ownerId && row.userId === null : row.userId === userId))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .flatMap((row) => {
           const record = toRecord(row);
@@ -112,12 +132,15 @@ const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS trips (
   thread_id uuid PRIMARY KEY,
   owner_id uuid,
+  user_id text,
   result jsonb NOT NULL,
   messages jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS trips_owner_created_idx ON trips (owner_id, created_at DESC);
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS user_id text;
+CREATE INDEX IF NOT EXISTS trips_user_created_idx ON trips (user_id, created_at DESC);
 `;
 
 interface PgRow {
@@ -136,25 +159,35 @@ export async function createPostgresTripStore(connectionString: string): Promise
   await pool.query(SCHEMA_SQL);
   return {
     kind: 'postgres',
-    async save({ ownerId, result, messages }) {
+    async save({ ownerId, userId = null, result, messages }) {
       await pool.query(
-        `INSERT INTO trips (thread_id, owner_id, result, messages) VALUES ($1, $2, $3, $4)
+        `INSERT INTO trips (thread_id, owner_id, user_id, result, messages) VALUES ($1, $2, $5, $3, $4)
          ON CONFLICT (thread_id) DO UPDATE SET
            result = EXCLUDED.result,
            messages = EXCLUDED.messages,
            owner_id = COALESCE(trips.owner_id, EXCLUDED.owner_id),
+           user_id = COALESCE(trips.user_id, EXCLUDED.user_id),
            updated_at = now()`,
-        [result.threadId, ownerId, JSON.stringify(result), JSON.stringify(messages)],
+        [result.threadId, ownerId, JSON.stringify(result), JSON.stringify(messages), userId],
       );
     },
     async get(threadId) {
       const { rows } = await pool.query<PgRow>('SELECT result, messages, created_at, updated_at FROM trips WHERE thread_id = $1', [threadId]);
       return rows[0] ? fromPg(rows[0]) : null;
     },
-    async list(ownerId) {
+    async ownership(threadId) {
+      const { rows } = await pool.query<{ user_id: string | null }>('SELECT user_id FROM trips WHERE thread_id = $1', [threadId]);
+      return rows[0] ? { userId: rows[0].user_id } : null;
+    },
+    async claim(userId, ownerId) {
+      const { rowCount } = await pool.query('UPDATE trips SET user_id = $1 WHERE owner_id = $2 AND user_id IS NULL', [userId, ownerId]);
+      return rowCount ?? 0;
+    },
+    async list(ownerId, userId = null) {
+      const where = userId === null ? 'owner_id = $1 AND user_id IS NULL' : 'user_id = $1';
       const { rows } = await pool.query<PgRow>(
-        `SELECT result, '[]'::jsonb AS messages, created_at, updated_at FROM trips WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2`,
-        [ownerId, LIST_LIMIT],
+        `SELECT result, '[]'::jsonb AS messages, created_at, updated_at FROM trips WHERE ${where} ORDER BY created_at DESC LIMIT $2`,
+        [userId ?? ownerId, LIST_LIMIT],
       );
       return rows.flatMap((row) => {
         const record = fromPg(row);

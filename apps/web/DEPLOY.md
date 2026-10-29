@@ -10,6 +10,10 @@ The agent runs on Render (`ARCHITECTURE.md` §13).
      Without it a build runs in UI-only mode and shows the "agent not connected" notice.
    - `NEXT_PUBLIC_MAPBOX_TOKEN`: a URL-restricted public token. Add the production domain and the
      preview pattern (`https://ai-travel-web-*.vercel.app/*`) to the token's allowed URLs.
+   - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (optional): the Google OAuth web client id for "Sign in with Google". In Google Cloud
+     Console add the production and preview origins to the client's **Authorized JavaScript origins**. Without it
+     there is no sign-in and everyone is a guest. Set the same id as `GOOGLE_CLIENT_ID` on the agent, plus a
+     `SESSION_SECRET` (32+ random characters) there.
 3. **Agent side:** the agent's `WEB_ORIGIN` must list the production domain and the preview domains, or the browser's
    calls are blocked by CORS.
 4. **Production branch:** `main`. Every PR then gets a preview deployment.

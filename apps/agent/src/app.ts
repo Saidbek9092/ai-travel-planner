@@ -1,11 +1,14 @@
+import { OWNER_ID_HEADER } from '@ai-travel/contracts';
 import cors from 'cors';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
 import type { RunRegistry } from './agent/runRegistry.js';
 import type { CompiledTravelGraph } from './agent/graph.js';
 import type { Config } from './config.js';
+import { identify } from './middlewares/auth.js';
 import { createErrorHandler } from './middlewares/errorHandler.js';
 import { createRateLimiters, type RateLimiters } from './middlewares/rateLimiter.js';
+import { createAuthRouter } from './routes/auth.js';
 import { createPlacesRouter } from './routes/places.js';
 import { createTripContextRouter } from './routes/tripContext.js';
 import { createTripsRouter } from './routes/trips.js';
@@ -23,6 +26,8 @@ export interface AppDeps {
   readiness?: () => Promise<string[]>;
   /** Injected by tests to use low limits; built from `config` otherwise. */
   rateLimiters?: RateLimiters;
+  /** Reaches Google to check sign-in tokens; tests inject a fake. */
+  fetch?: typeof fetch;
 }
 
 /**
@@ -37,6 +42,7 @@ export function createApp({
   trips,
   readiness = async () => [],
   rateLimiters = createRateLimiters(config),
+  fetch: fetchImpl = fetch,
 }: AppDeps): Express {
   const app = express();
 
@@ -49,6 +55,7 @@ export function createApp({
     cors({
       origin: config.WEB_ORIGIN,
       methods: ['GET', 'POST'],
+      allowedHeaders: ['Content-Type', 'Accept', 'Last-Event-ID', 'Authorization', OWNER_ID_HEADER],
       exposedHeaders: ['X-Thread-Id', 'Retry-After'],
     }),
   );
@@ -78,6 +85,8 @@ export function createApp({
   });
 
   app.use('/api', rateLimiters.generalLimiter);
+  app.use('/api', identify(config));
+  app.use('/api', createAuthRouter({ config, fetch: fetchImpl }));
   app.use('/api', createTripsRouter({ graph, registry, runLimiter: rateLimiters.runLimiter, trips }));
   app.use('/api', createTripContextRouter({ config }));
   app.use('/api', createPlacesRouter({ config }));

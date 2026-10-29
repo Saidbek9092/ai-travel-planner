@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Public error codes of the agent's JSON error responses. The web app maps each one to a message. */
-export const ErrorCodeSchema = z.enum(['VALIDATION_ERROR', 'NOT_FOUND', 'CONFLICT', 'RATE_LIMITED', 'INTERNAL']);
+export const ErrorCodeSchema = z.enum(['VALIDATION_ERROR', 'UNAUTHORIZED', 'NOT_FOUND', 'CONFLICT', 'RATE_LIMITED', 'INTERNAL']);
 
 /** Body of every JSON error response (errors before an SSE stream opens). */
 export const ErrorBodySchema = z.object({

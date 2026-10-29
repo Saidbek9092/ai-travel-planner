@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { TripDashboard } from '@/components/TripDashboard';
+import { DeepLinkedTrip } from '@/components/DeepLinkedTrip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchStoredTrip } from '@/lib/api';
 
@@ -9,7 +9,7 @@ async function DeepLinkedDashboard({ searchParams }: Pick<PageProps<'/'>, 'searc
   const lookup = threadId ? await fetchStoredTrip(threadId) : null;
   const stored = lookup === 'not-found' ? null : lookup;
   return (
-    <TripDashboard
+    <DeepLinkedTrip
       initialThreadId={threadId}
       initialResult={stored?.result ?? null}
       initialMessages={stored?.messages ?? []}
