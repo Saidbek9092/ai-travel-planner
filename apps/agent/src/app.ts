@@ -87,7 +87,7 @@ export function createApp({
   app.use('/api', rateLimiters.generalLimiter);
   app.use('/api', identify(config));
   app.use('/api', createAuthRouter({ config, fetch: fetchImpl }));
-  app.use('/api', createTripsRouter({ graph, registry, runLimiter: rateLimiters.runLimiter, trips }));
+  app.use('/api', createTripsRouter({ config, graph, registry, runLimiter: rateLimiters.runLimiter, trips }));
   app.use('/api', createTripContextRouter({ config }));
   app.use('/api', createPlacesRouter({ config }));
 

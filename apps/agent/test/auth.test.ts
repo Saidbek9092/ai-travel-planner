@@ -81,7 +81,42 @@ describe('POST /api/auth/google', () => {
   });
 });
 
+describe('planning needs an account', () => {
+  const body = { prompt: '3 days in Paris from Tashkent' };
+
+  it('refuses a guest before any agent runs, for a new trip and for a resume', async () => {
+    const { app, llm } = authedApp();
+    const planned = await request(app).post('/api/trips').set('X-Owner-Id', OWNER).send(body);
+    expect(planned.status).toBe(401);
+    expect(planned.body.error.code).toBe('UNAUTHORIZED');
+    const resumed = await request(app).post('/api/trips/0b6f8f9e-2c1d-4c3b-9a8e-7f6d5c4b3a22/resume').set('X-Owner-Id', OWNER);
+    expect(resumed.status).toBe(401);
+    expect(llm.calls).toEqual([]);
+  });
+
+  it('lets a signed-in account plan', async () => {
+    const { app } = authedApp();
+    const { token } = await signIn(app, 'alice-token');
+    const response = await request(app).post('/api/trips').set('Authorization', `Bearer ${token}`).send(body).buffer(true).parse(sseText);
+    expect(response.status).toBe(200);
+  });
+
+  it('keeps guests allowed when sign-in is not configured', async () => {
+    const response = await request(testApp().app).post('/api/trips').send(body).buffer(true).parse(sseText);
+    expect(response.status).toBe(200);
+  });
+});
+
 describe('own trips only', () => {
+  /** A trip planned by a guest, from before sign-in was configured: only an app without sign-in lets a guest plan. */
+  async function planAsGuest() {
+    const open = testApp();
+    const threadId = await plan(open.app);
+    return { threadId, app: authedAppOver(open.trips) };
+  }
+  const authedAppOver = (trips: ReturnType<typeof testApp>['trips']) =>
+    testApp({ env: { GOOGLE_CLIENT_ID: CLIENT_ID, SESSION_SECRET: SECRET }, fetch: googleFetch, trips }).app;
+
   async function plan(app: ReturnType<typeof testApp>['app'], token?: string) {
     const post = request(app).post('/api/trips').set('X-Owner-Id', OWNER).send({ prompt: '3 days in Paris from Tashkent' });
     if (token) post.set('Authorization', `Bearer ${token}`);
@@ -114,8 +149,7 @@ describe('own trips only', () => {
   });
 
   it('keeps guest trips open by link and moves them to the account on claim', async () => {
-    const { app } = authedApp();
-    const guestTrip = await plan(app);
+    const { threadId: guestTrip, app } = await planAsGuest();
     expect((await request(app).get(`/api/trips/${guestTrip}/record`)).status).toBe(200);
 
     const alice = (await signIn(app, 'alice-token')).token;
@@ -129,8 +163,7 @@ describe('own trips only', () => {
   });
 
   it('lets only the owner delete a trip', async () => {
-    const { app } = authedApp();
-    const guestTrip = await plan(app);
+    const { threadId: guestTrip, app } = await planAsGuest();
     expect((await request(app).delete(`/api/trips/${guestTrip}`)).status).toBe(404);
     expect((await request(app).delete(`/api/trips/${guestTrip}`).set('X-Owner-Id', OWNER)).status).toBe(204);
     const guestList = TripListResponseSchema.parse((await request(app).get('/api/trips').set('X-Owner-Id', OWNER)).body);
