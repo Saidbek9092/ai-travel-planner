@@ -2,9 +2,12 @@ import type { Config } from '../config.js';
 import { createMockTravelTool } from './mockTravel.tool.js';
 import { createSerpApiTool } from './serpApi.tool.js';
 import { ToolUnavailableError, type SearchTool, type TravelSearchTool } from './types.js';
-import { getForecast, mockForecast } from './weather.js';
+import { placePhoto } from './placePhotos.js';
+import { geocode, getForecast, mockForecast } from './weather.js';
 
 export * from './types.js';
+
+const USER_AGENT = 'ai-travel-planner/0.1 (place photos)';
 
 /** Tries `primary`; when it reports `ToolUnavailableError` (or times out) it calls `onFallback` and answers from `mock`. */
 export function withFallback(
@@ -56,5 +59,23 @@ export function createTravelTool(
     searchHotels: (query, signal) => search.searchHotels(query, signal),
     getForecast: async (destination, startDate, days, signal) =>
       config.TOOLS_MODE === 'mock' ? mockForecast(days) : getForecast(destination, startDate, days, deps, signal),
+    getPlacePhoto: async (name, destination, signal) => {
+      if (config.TOOLS_MODE === 'mock') return null;
+      try {
+        return await placePhoto(name, destination, { fetch: (url, init) => fetch(url, { ...init, headers: { 'User-Agent': USER_AGENT } }) }, signal);
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        return null;
+      }
+    },
+    getCenter: async (destination, signal) => {
+      if (config.TOOLS_MODE === 'mock') return null;
+      try {
+        return (await geocode(destination, deps, signal)) ?? null;
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        return null;
+      }
+    },
   };
 }

@@ -2,11 +2,11 @@
 
 import type { Flight, FlightLeg, Hotel, Transfer } from '@ai-travel/contracts';
 import { motion, useReducedMotion } from 'motion/react';
-import { BedDoubleIcon, CarIcon, CheckIcon, PlaneIcon } from 'lucide-react';
+import { BedDoubleIcon, CarIcon, CheckIcon, PlaneIcon, SparklesIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { ExternalLink } from '@/components/ExternalLink';
 import { ConfirmedTag, EstimateTag } from '@/components/Tags';
-import { AGENT_AVATAR_COLORS, TRANSFER_MODES, ratingWord } from '@/lib/labels';
+import { AGENT_AVATAR_COLORS, TRANSFER_MODES, pickedLine, ratingWord } from '@/lib/labels';
 import { mapUrl, safeUrl, sourceLabel } from '@/lib/links';
 import { addDays, cn, dayDifference, formatDay, formatDuration, formatLegTime, formatUsd, nightsFor } from '@/lib/utils';
 
@@ -156,6 +156,16 @@ export function TransfersCard({ transfers, firstDay, confirmed }: TransfersCardP
   );
 }
 
+function PickedLine({ reasons }: { reasons: Flight['picked'] }) {
+  const text = pickedLine(reasons);
+  if (!text) return null;
+  return (
+    <p className="flex items-center gap-1.5 text-[13px] text-ink-2">
+      <SparklesIcon className="size-3.5 text-primary" aria-hidden="true" /> {text}
+    </p>
+  );
+}
+
 function stopsWord(leg: FlightLeg): string {
   return leg.stops.length === 0 ? 'direct' : `${leg.stops.length} stop${leg.stops.length > 1 ? 's' : ''} · ${leg.stops.map((s) => s.airport.code).join(', ')}`;
 }
@@ -191,6 +201,7 @@ export function SelectedFlightCard({ flights, transfers, firstDay, confirmed, co
             </span>
           </header>
           <RouteStrip leg={flight.outbound} full={false} />
+          <PickedLine reasons={flight.picked} />
           <div className="mt-0.5 flex items-center gap-2 border-t pt-3 text-[15px] text-ink-2">
             {first ? (
               <>
@@ -235,6 +246,7 @@ export function SelectedFlightCard({ flights, transfers, firstDay, confirmed, co
             {confirmed && <ConfirmedTag />}
           </span>
         </header>
+        <PickedLine reasons={flight.picked} />
         <div className="flex flex-col gap-2.5">
           <p className="label-mono text-muted-foreground">Outbound · {formatDay(flight.outbound.departure)}</p>
           <RouteStrip leg={flight.outbound} full />
@@ -299,6 +311,7 @@ export function SelectedHotelCard({ hotels, durationDays, startDate, confirmed, 
             <p className="mt-1 truncate text-sm">
               {hotel.name} · <span className="font-mono font-semibold">{hotel.rating.toFixed(1)}</span>
             </p>
+            <PickedLine reasons={hotel.picked} />
             <p className="text-[13px] text-ink-2">
               {priceLine} = <span className="font-mono font-semibold text-foreground">{formatUsd(total)}</span>
             </p>
@@ -338,6 +351,9 @@ export function SelectedHotelCard({ hotels, durationDays, startDate, confirmed, 
               <span className="inline-block rounded-lg bg-foreground px-2.5 py-1 font-mono text-[15px] font-semibold text-white">{hotel.rating.toFixed(1)}</span>
               <p className="mt-1 text-[13px] text-ink-2">{ratingWord(hotel.rating)}</p>
             </div>
+          </div>
+          <div className="mt-2">
+            <PickedLine reasons={hotel.picked} />
           </div>
           {facts.length > 0 && (
             <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-[15px] leading-[22px]">

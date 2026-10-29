@@ -1,4 +1,4 @@
-import type { AgentName, DecisionTopic, LogLevel, TransferMode, TripStatus, WeatherIcon } from '@ai-travel/contracts';
+import type { AgentName, DecisionTopic, LogLevel, PickReason, TransferMode, TripStatus, WeatherIcon } from '@ai-travel/contracts';
 import {
   BedDoubleIcon,
   BusIcon,
@@ -170,4 +170,20 @@ export function formatTemperature(value: number): string {
 /** `1 USD = 0.92 EUR` */
 export function formatRate(rate: number, quote: string): string {
   return `1 USD = ${rateFormat.format(rate)} ${quote}`;
+}
+
+const PICK_REASONS: Record<PickReason, string> = {
+  direct: 'direct',
+  short_layover: 'short layover',
+  daytime: 'daytime',
+  cheaper: 'cheaper',
+  central: 'central',
+  high_rating: 'high rating',
+  quiet_area: 'quiet area',
+  family_friendly: 'family friendly',
+};
+
+/** "Picked for you: direct, daytime"; `null` when the traveller's preferences did not decide the pick. */
+export function pickedLine(reasons: PickReason[] | null | undefined): string | null {
+  return reasons?.length ? `Picked for you: ${reasons.map((reason) => PICK_REASONS[reason]).join(', ')}` : null;
 }

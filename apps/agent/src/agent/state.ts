@@ -15,6 +15,7 @@ import type {
   TripRequest,
   TripStatus,
 } from '@ai-travel/contracts';
+import type { Preferences } from './pick.js';
 
 export interface LogEntry {
   timestamp: string;
@@ -52,6 +53,8 @@ export const TravelAgentStateAnnotation = Annotation.Root({
   budget: replace<number>(() => 0),
   durationDays: replace<number>(() => 0),
   startDate: replace<string | null>(() => null),
+  /** What the traveller asked for: hard flags are code filters, `notes` guides the LLM pick. */
+  preferences: replace<Preferences>(() => ({ directOnly: false, maxStops: null, notes: null })),
 
   flights: replace<Flight[]>(() => []),
   hotels: replace<Hotel[]>(() => []),

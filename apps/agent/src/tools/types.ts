@@ -1,4 +1,6 @@
 import type { DayWeather, Flight, Hotel } from '@ai-travel/contracts';
+import type { PlacePhoto } from './placePhotos.js';
+import type { LatLng } from '../utils/geo.js';
 
 export type SearchMode = 'standard' | 'cheaper';
 
@@ -37,6 +39,10 @@ export interface TravelSearchTool extends SearchTool {
     days: number,
     signal?: AbortSignal,
   ): Promise<(DayWeather | null)[]>;
+  /** Centre of the destination (cached geocoding); `null` when it cannot be found. Never rejects except on abort. */
+  /** One photo per place; `null` when there is none or the lookup fails. Never rejects except on abort. */
+  getPlacePhoto(name: string, destination: string, signal?: AbortSignal): Promise<PlacePhoto | null>;
+  getCenter(destination: string, signal?: AbortSignal): Promise<LatLng | null>;
 }
 
 /** The live provider could not answer; the caller may fall back to the mock tool. */

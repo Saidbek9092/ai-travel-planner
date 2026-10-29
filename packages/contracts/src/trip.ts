@@ -6,6 +6,18 @@ export const DataSourceSchema = z.enum(['serpapi', 'mock']);
 /** Weather bucket the UI maps to an icon. Shared by the top bar and the per-day forecast. */
 export const WeatherIconSchema = z.enum(['clear', 'partly-cloudy', 'cloudy', 'fog', 'rain', 'snow', 'storm']);
 
+/** Why the picker chose an option. Tags only, so the model cannot state wrong facts; the UI words them. */
+export const PickReasonSchema = z.enum([
+  'direct',
+  'short_layover',
+  'daytime',
+  'cheaper',
+  'central',
+  'high_rating',
+  'quiet_area',
+  'family_friendly',
+]);
+
 export const AirportSchema = z.object({
   /** IATA code, e.g. "TAS". */
   code: z.string().min(3).max(4),
@@ -44,6 +56,8 @@ export const FlightSchema = z.object({
   source: DataSourceSchema,
   /** When the tool fetched this option. */
   fetchedAt: z.iso.datetime({ offset: true }).nullish(),
+  /** Set only when the traveller's preferences decided the pick ("Picked for you"). */
+  picked: z.array(PickReasonSchema).nullish(),
 });
 
 export const PlaceSchema = z.object({
@@ -55,6 +69,10 @@ export const PlaceSchema = z.object({
   /** Official website, passed through from tool data. */
   url: z.url().nullish(),
   fetchedAt: z.iso.datetime({ offset: true }).nullish(),
+  /** Small thumbnail; `null`/absent = none found, the UI shows a placeholder. */
+  photoUrl: z.url().nullish(),
+  /** Who to credit for the photo, as the source's licence requires. */
+  photoCredit: z.object({ name: z.string().min(1), url: z.url() }).nullish(),
 });
 
 export const HotelSchema = z.object({
@@ -77,6 +95,8 @@ export const HotelSchema = z.object({
   source: DataSourceSchema,
   /** When the tool fetched this option. */
   fetchedAt: z.iso.datetime({ offset: true }).nullish(),
+  /** Set only when the traveller's preferences decided the pick ("Picked for you"). */
+  picked: z.array(PickReasonSchema).nullish(),
 });
 
 export const TransferModeSchema = z.enum(['taxi', 'train', 'metro', 'bus', 'shuttle', 'walk']);
@@ -157,6 +177,7 @@ export const TripRequestSchema = z.object({
   interests: z.array(InterestSchema).max(6).optional(),
 });
 
+export type PickReason = z.infer<typeof PickReasonSchema>;
 export type Interest = z.infer<typeof InterestSchema>;
 export type DecisionTopic = z.infer<typeof DecisionTopicSchema>;
 export type DataSource = z.infer<typeof DataSourceSchema>;

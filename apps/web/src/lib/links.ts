@@ -13,6 +13,7 @@ const ALLOWED_HOSTS = [
   'trip.com',
   'agoda.com',
   'wikipedia.org',
+  'wikimedia.org',
   'openstreetmap.org',
 ];
 

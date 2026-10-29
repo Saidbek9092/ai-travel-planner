@@ -3,7 +3,8 @@
 [scripts]
 # Corepack ships with Node 24 and provides the pnpm version pinned in package.json#packageManager.
 # `corepack enable pnpm` puts a `pnpm` shim on PATH, which Turborepo needs to spawn tasks.
-setup = "corepack enable pnpm && pnpm install"
+# contracts is consumed from dist/ (gitignored), so build it once for apps that run lint/typecheck outside turbo.
+setup = "corepack enable pnpm && pnpm install && pnpm --filter @ai-travel/contracts build"
 run_mode = "concurrent"
 
 [scripts.run.dev]

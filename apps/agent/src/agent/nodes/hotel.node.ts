@@ -1,27 +1,20 @@
-import type { Hotel } from '@ai-travel/contracts';
 import { hotelConfirmed, hotelProposal } from '../messages.js';
-import { formatUsd, log, say, searchFallbackLog, type TravelNode } from '../state.js';
+import type { LlmFactory } from '../llm.js';
+import { applyPick, reasonsText, softPreferences } from '../pick.js';
+import { describeBreakdown, rankHotels } from '../ranking.js';
+import { formatUsd, llmFallbackLog, log, say, searchFallbackLog, type TravelNode } from '../state.js';
 import { addDays, nightsFor } from '../../utils/dates.js';
 import type { TravelSearchTool } from '../../tools/index.js';
 
 export interface HotelNodeDeps {
   tools: TravelSearchTool;
+  llm: LlmFactory;
 }
 
-/** Ratings are on the contract's 0–10 scale. */
-const MIN_PREFERRED_RATING = 7;
 const FALLBACK_WARNING = 'Live hotel prices were unavailable; hotel prices are estimates.';
 
-const byPrice = (a: Hotel, b: Hotel) => a.pricePerNight - b.pricePerNight;
-
-/** Well-rated hotels cheapest first, then the rest cheapest first; `[0]` is the pick. */
-export function rankHotels(hotels: Hotel[]): Hotel[] {
-  const preferred = hotels.filter((hotel) => hotel.rating >= MIN_PREFERRED_RATING).sort(byPrice);
-  return preferred.length > 0 ? preferred : [...hotels].sort(byPrice);
-}
-
 export const hotelNode =
-  ({ tools }: HotelNodeDeps): TravelNode =>
+  ({ tools, llm }: HotelNodeDeps): TravelNode =>
   async (state, config) => {
     const previous = state.hotels[0];
     const cheaper = state.searchMode === 'cheaper' && previous !== undefined;
@@ -38,9 +31,24 @@ export const hotelNode =
       config?.signal,
     );
 
-    const candidates = rankHotels(cheaper ? found.filter((hotel) => hotel.pricePerNight < previous.pricePerNight) : found);
+    const nights = nightsFor(state.durationDays);
+    // Cheaper mode stays strict: only cheaper options are candidates, the score just orders them.
+    const eligible = cheaper ? found.filter((hotel) => hotel.pricePerNight < previous.pricePerNight) : found;
+    const center = eligible.length > 0 ? await tools.getCenter(state.destination, config?.signal) : null;
+    const ranked = rankHotels(eligible, { budget: state.budget, nights, center });
 
     const logs = [];
+    const outcome = await applyPick({
+      llm,
+      kind: 'hotel',
+      ranked: ranked.map(({ item }) => item),
+      preferences: softPreferences(state.preferences, state.overrides.interests),
+      isAllowed: (hotel) => !cheaper || hotel.pricePerNight < previous.pricePerNight,
+      signal: config?.signal,
+    });
+    const candidates = outcome.options;
+    if (outcome.failure) logs.push(log(state, 'HotelAgent', `Kept the top-scored hotel: ${outcome.failure}.`, 'warn'));
+    if (outcome.model && outcome.model !== llm.primaryModel) logs.push(llmFallbackLog(state, 'HotelAgent', outcome.model));
     let hotels = candidates;
     if (candidates.length === 0 && previous) {
       hotels = state.hotels;
@@ -48,6 +56,8 @@ export const hotelNode =
     } else if (candidates[0]) {
       const pick = candidates[0];
       logs.push(log(state, 'HotelAgent', `Selected ${pick.name}${pick.area ? ` in ${pick.area}` : ''} at ${formatUsd(pick.pricePerNight)}/night.`));
+      const scored = ranked.find(({ item }) => item.name === pick.name && item.pricePerNight === pick.pricePerNight);
+      if (scored) logs.push(log(state, 'HotelAgent', `Score ${describeBreakdown(scored.breakdown)}`, 'info'));
     }
 
     const estimated = tools.name !== 'mock' && found.some((hotel) => hotel.source === 'mock');
@@ -55,10 +65,11 @@ export const hotelNode =
 
     const pick = hotels[0];
     const messages = [];
+    const why = pick?.picked?.length ? ` Picked for you: ${reasonsText(pick.picked)}.` : '';
     if (pick) {
-      if (state.retryCount === 0) messages.push(say(state, 'HotelAgent', hotelProposal(pick, nightsFor(state.durationDays), state.budget)));
+      if (state.retryCount === 0) messages.push(say(state, 'HotelAgent', hotelProposal(pick, nightsFor(state.durationDays), state.budget) + why));
       else if (candidates.length > 0) {
-        messages.push(say(state, 'HotelAgent', hotelConfirmed(pick, previous, nightsFor(state.durationDays)), { decision: 'hotel' }));
+        messages.push(say(state, 'HotelAgent', hotelConfirmed(pick, previous, nightsFor(state.durationDays)) + why, { decision: 'hotel' }));
       }
     }
 
