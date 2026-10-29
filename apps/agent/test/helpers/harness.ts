@@ -30,10 +30,17 @@ export function testApp({
   env = {},
   readiness,
   fetch,
-}: { trip?: Partial<ParsedTrip>; env?: Record<string, string>; readiness?: () => Promise<string[]>; fetch?: typeof globalThis.fetch } = {}) {
+  trips = createMemoryTripStore(),
+}: {
+  trip?: Partial<ParsedTrip>;
+  env?: Record<string, string>;
+  readiness?: () => Promise<string[]>;
+  fetch?: typeof globalThis.fetch;
+  /** Share a store between apps (e.g. a guest trip planned before sign-in was configured). */
+  trips?: ReturnType<typeof createMemoryTripStore>;
+} = {}) {
   const config = testConfig(env);
   const { graph, llm } = testGraph(trip, config);
-  const trips = createMemoryTripStore();
   const registry = new RunRegistry({ graph, config, checkpointer: 'memory', logger: silentLogger, trips });
   const app = createApp({ config, logger: silentLogger, graph, registry, trips, ...(readiness ? { readiness } : {}), ...(fetch ? { fetch } : {}) });
   return { app, registry, trips, llm, config };

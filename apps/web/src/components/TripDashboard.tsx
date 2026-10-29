@@ -18,6 +18,7 @@ import { FinishedOverview, LiveOverview } from '@/components/TripOverview';
 import { Notice, notify } from '@/components/Notice';
 import { Button } from '@/components/ui/button';
 import { useAgentStream } from '@/hooks/useAgentStream';
+import { useSession } from '@/hooks/useSession';
 import { useTripContext } from '@/hooks/useTripContext';
 import { useTripHistory } from '@/hooks/useTripHistory';
 import { MAIN_ID, NEW_TRIP_EVENT } from '@/lib/dom';
@@ -76,10 +77,17 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
       ? chosenDay
       : defaultDay(itinerary, new Date().toISOString().slice(0, 10));
 
+  // Every run costs money, so a guest is asked to sign in first (the agent refuses guests too); the typed trip stays in the form.
+  const session = useSession();
+  const needsSignIn = env.agentUrl !== null && env.googleClientId !== null && !session;
+  const askToSignIn = () =>
+    notify('error', 'Sign in to plan a trip', { id: 'sign-in-to-plan', description: 'Use “Sign in with Google” at the top right, then press the button again. Your trip is kept.' });
   const start = (request: TripRequest) => {
+    if (needsSignIn) return askToSignIn();
     setActiveDay(null);
     stream.start(request);
   };
+  const resume = () => (needsSignIn ? askToSignIn() : stream.resume());
   const replanRequest = lastRequest ?? (result ? requestFromResult(result, new Date().toISOString().slice(0, 10)) : null);
   const startOver = () => (replanRequest ? start(replanRequest) : stream.reset());
 
@@ -161,7 +169,7 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
       result={result}
       reconnect={stream.reconnect}
       lastProgress={progress}
-      onResume={stream.resume}
+      onResume={resume}
       onStartOver={startOver}
       onRaiseBudget={(budget) => replanRequest && start({ ...replanRequest, budget })}
       onTryDays={(durationDays) => replanRequest && start({ ...replanRequest, durationDays })}
@@ -213,7 +221,7 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
                       placement="inline"
                       title="This trip didn't finish"
                       actions={
-                        <Button variant="outline" className="h-9 bg-card pointer-coarse:h-11" onClick={stream.resume}>
+                        <Button variant="outline" className="h-9 bg-card pointer-coarse:h-11" onClick={resume}>
                           <RotateCcwIcon aria-hidden="true" /> Resume
                         </Button>
                       }

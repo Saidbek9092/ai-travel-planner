@@ -11,8 +11,9 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import type { CompiledTravelGraph } from '../agent/graph.js';
 import type { RunRegistry } from '../agent/runRegistry.js';
+import type { Config } from '../config.js';
 import { buildResultPayload } from '../agent/runTrip.js';
-import { userOf } from '../middlewares/auth.js';
+import { requireSignIn, userOf } from '../middlewares/auth.js';
 import type { RateLimiters } from '../middlewares/rateLimiter.js';
 import type { TripStore } from '../storage/tripStore.js';
 import { AppError, conflict, notFound, validationError } from '../utils/errors.js';
@@ -22,6 +23,7 @@ const ThreadIdSchema = z.uuid();
 const STOPPED_ERROR = 'Trip planning stopped before it finished, resume to continue';
 
 export interface TripsRouterDeps {
+  config: Pick<Config, 'GOOGLE_CLIENT_ID' | 'SESSION_SECRET'>;
   graph: CompiledTravelGraph;
   registry: RunRegistry;
   runLimiter: RateLimiters['runLimiter'];
@@ -35,7 +37,7 @@ function ownerIdOf(req: Request): string | null {
 }
 
 /** Trip routes. A run belongs to the registry; each request only subscribes to it. */
-export function createTripsRouter({ graph, registry, runLimiter, trips }: TripsRouterDeps): Router {
+export function createTripsRouter({ config, graph, registry, runLimiter, trips }: TripsRouterDeps): Router {
   const router = Router();
 
   function parseThreadId(raw: unknown): string {
@@ -50,7 +52,7 @@ export function createTripsRouter({ graph, registry, runLimiter, trips }: TripsR
     if (owner?.userId != null && owner.userId !== userOf(res)?.id) throw notFound('Trip not found');
   }
 
-  router.post('/trips', ...runLimiter, (req, res) => {
+  router.post('/trips', requireSignIn(config), ...runLimiter, (req, res) => {
     const parsed = TripRequestSchema.safeParse(req.body);
     if (!parsed.success) throw validationError(parsed.error);
 
@@ -111,7 +113,7 @@ export function createTripsRouter({ graph, registry, runLimiter, trips }: TripsR
     res.json(await loadRecord(req.params.threadId));
   });
 
-  router.post('/trips/:threadId/resume', ...runLimiter, async (req, res) => {
+  router.post('/trips/:threadId/resume', requireSignIn(config), ...runLimiter, async (req, res) => {
     await assertAccess(parseThreadId(req.params.threadId), res);
     const { threadId, snapshot, finished } = await loadThread(req.params.threadId);
     if (registry.get(threadId)?.done === false) throw conflict('This trip is still running');

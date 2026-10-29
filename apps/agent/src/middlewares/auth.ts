@@ -24,3 +24,15 @@ export function identify(config: Pick<Config, 'SESSION_SECRET'>): RequestHandler
 
 /** The signed-in user of this request, or `null` for a guest. */
 export const userOf = (res: Response): AuthUser | null => (res.locals['user'] as AuthUser | undefined) ?? null;
+
+/**
+ * Runs cost money, so with sign-in configured (`GOOGLE_CLIENT_ID` + `SESSION_SECRET`) only a signed-in account may start one.
+ * Without it (local development, tests) guests stay allowed, as there is no way to sign in.
+ */
+export function requireSignIn(config: Pick<Config, 'GOOGLE_CLIENT_ID' | 'SESSION_SECRET'>): RequestHandler {
+  const enabled = config.GOOGLE_CLIENT_ID !== undefined && config.SESSION_SECRET !== undefined;
+  return (_req, res, next) => {
+    if (!enabled || userOf(res) !== null) return next();
+    next(new AppError('UNAUTHORIZED', 'Sign in with Google to plan a trip.', 401));
+  };
+}
