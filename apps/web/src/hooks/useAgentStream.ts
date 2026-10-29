@@ -3,6 +3,7 @@
 import {
   SseEventSchema,
   type DecisionTopic,
+  type ErrorCode,
   type DraftPayload,
   type LogPayload,
   type MessagePayload,
@@ -13,6 +14,7 @@ import {
 } from '@ai-travel/contracts';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { env } from '@/lib/env';
+import { ownerHeaders } from '@/lib/owner';
 import { readSseEvents } from '@/lib/sse';
 
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'reconnecting' | 'completed' | 'failed' | 'aborted';
@@ -75,18 +77,23 @@ export const initialStreamState: AgentStreamState = {
   passStart: 0,
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+/** Agent codes come from the contracts; `NETWORK` and `CONNECTION_LOST` are the browser's own. */
+type ClientErrorCode = ErrorCode | 'NETWORK' | 'CONNECTION_LOST';
+
+const ERROR_MESSAGES: Record<ClientErrorCode, string> = {
   VALIDATION_ERROR: 'Please check your request and try again.',
   RATE_LIMITED: "You've reached the request limit for now.",
   NOT_FOUND: 'We could not find that trip. It may have expired.',
+  CONFLICT: 'This trip is still being planned. Give it a moment.',
   INTERNAL: 'Something went wrong on our side. Please try again.',
   NETWORK: 'Could not reach the planning agent. Check your connection and try again.',
   CONNECTION_LOST: 'Connection lost',
 };
 
 export function errorMessage(code: string, serverMessage?: string): string {
-  if (code === 'VALIDATION_ERROR' && serverMessage) return serverMessage;
-  return ERROR_MESSAGES[code] ?? 'Something went wrong on our side. Please try again.';
+  // The daily cap words its own reason ("today's limit"); show it instead of the generic line.
+  if ((code === 'VALIDATION_ERROR' || code === 'RATE_LIMITED') && serverMessage) return serverMessage;
+  return ERROR_MESSAGES[code as ClientErrorCode] ?? ERROR_MESSAGES.INTERNAL;
 }
 
 export function agentStreamReducer(state: AgentStreamState, action: AgentStreamAction): AgentStreamState {
@@ -176,6 +183,8 @@ export function agentStreamReducer(state: AgentStreamState, action: AgentStreamA
 export interface InitialRun {
   threadId?: string | null;
   result?: ResultPayload | null;
+  /** Stored chat of a reopened trip. */
+  messages?: MessagePayload[];
 }
 
 function initState(initial?: InitialRun): AgentStreamState {
@@ -184,6 +193,8 @@ function initState(initial?: InitialRun): AgentStreamState {
     ...initialStreamState,
     threadId: initial.threadId ?? initial.result?.threadId ?? null,
     result: initial.result ?? null,
+    messages: initial.messages ?? [],
+    decisions: Object.fromEntries((initial.messages ?? []).flatMap((m) => (m.decision ? [[m.decision, m]] : []))),
     status: initial.result ? initial.result.status : 'idle',
     error: initial.result?.error ?? null,
   };
@@ -311,7 +322,7 @@ export function useAgentStream(initial?: InitialRun) {
       try {
         response = await fetch(`${env.agentUrl}${path}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...ownerHeaders() },
           body: body ? JSON.stringify(body) : undefined,
           signal: controller.signal,
         });

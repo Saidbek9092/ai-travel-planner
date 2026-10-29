@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   DraftPayloadSchema,
+  ErrorBodySchema,
+  ErrorCodeSchema,
+  parseStoredResult,
+  RESULT_SCHEMA_VERSION,
+  TripListResponseSchema,
+  TripRecordSchema,
   SseEventSchema,
   TripContextQuerySchema,
   TripContextSchema,
@@ -41,6 +47,7 @@ const hotel: Hotel = {
 };
 
 const result: ResultPayload = {
+  schemaVersion: RESULT_SCHEMA_VERSION,
   threadId: '7f1c2a4e-3b5d-4c6e-8f90-1a2b3c4d5e6f',
   status: 'completed',
   origin: 'Tashkent',
@@ -211,6 +218,8 @@ describe('SseEventSchema', () => {
     ['unknown transfer mode', { type: 'RESULT', payload: { ...result, transfers: [{ ...result.transfers[0], mode: 'teleport' }] } }],
     ['3 re-plans', { type: 'RESULT', payload: { ...result, replans: 3 } }],
     ['non-USD currency', { type: 'RESULT', payload: { ...result, currency: 'EUR' } }],
+    ['missing schemaVersion on the wire', { type: 'RESULT', payload: { ...result, schemaVersion: undefined } }],
+    ['unknown schemaVersion', { type: 'RESULT', payload: { ...result, schemaVersion: 99 } }],
   ])('rejects %s', (_name, packet) => {
     expect(SseEventSchema.safeParse(packet).success).toBe(false);
   });
@@ -293,5 +302,70 @@ describe('TripContextQuerySchema', () => {
 
   it('rejects a one-letter destination', () => {
     expect(TripContextQuerySchema.safeParse({ destination: 'P' }).success).toBe(false);
+  });
+});
+
+describe('stored results (schemaVersion migration)', () => {
+  const { schemaVersion: _version, ...v0 } = result;
+
+  it('upgrades a result stored before versioning (v0) to the current version', () => {
+    expect(parseStoredResult(v0)).toEqual(result);
+  });
+
+  it('keeps a current result as it is', () => {
+    expect(parseStoredResult(result)).toEqual(result);
+  });
+
+  it.each([
+    ['null', null],
+    ['an array', [result]],
+    ['a broken result', { ...v0, threadId: 'abc' }],
+    ['a result from a newer agent', { ...result, schemaVersion: RESULT_SCHEMA_VERSION + 1 }],
+  ])('returns null for %s', (_name, value) => {
+    expect(parseStoredResult(value)).toBeNull();
+  });
+
+  it('upgrades the result inside a trip record', () => {
+    const record = { result: v0, messages: [], createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:01:00Z' };
+    expect(TripRecordSchema.parse(record).result.schemaVersion).toBe(RESULT_SCHEMA_VERSION);
+  });
+});
+
+describe('TripListResponseSchema', () => {
+  const summary = {
+    threadId: result.threadId,
+    status: 'completed',
+    origin: 'Tashkent',
+    destination: 'Paris',
+    durationDays: 5,
+    startDate: '2026-11-12',
+    totalCost: 940,
+    budget: 1000,
+    createdAt: '2026-10-29T10:00:00Z',
+    updatedAt: '2026-10-29T10:01:00Z',
+  };
+
+  it('accepts a list of summaries', () => {
+    expect(TripListResponseSchema.safeParse({ trips: [summary] }).success).toBe(true);
+  });
+
+  it('rejects an in-progress status', () => {
+    expect(TripListResponseSchema.safeParse({ trips: [{ ...summary, status: 'planning' }] }).success).toBe(false);
+  });
+});
+
+describe('ErrorBodySchema', () => {
+  it('accepts every error code', () => {
+    for (const code of ErrorCodeSchema.options) {
+      expect(ErrorBodySchema.safeParse({ error: { code, message: 'x' } }).success).toBe(true);
+    }
+  });
+
+  it('accepts retryAfterSeconds on a rate limit', () => {
+    expect(ErrorBodySchema.safeParse({ error: { code: 'RATE_LIMITED', message: 'x', retryAfterSeconds: 42 } }).success).toBe(true);
+  });
+
+  it('rejects an unknown code', () => {
+    expect(ErrorBodySchema.safeParse({ error: { code: 'TEAPOT', message: 'x' } }).success).toBe(false);
   });
 });

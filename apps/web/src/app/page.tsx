@@ -1,13 +1,13 @@
 import { Suspense } from 'react';
 import { TripDashboard } from '@/components/TripDashboard';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fetchTripResult } from '@/lib/api';
+import { fetchStoredTrip } from '@/lib/api';
 
 async function DeepLinkedDashboard({ searchParams }: Pick<PageProps<'/'>, 'searchParams'>) {
   const { trip } = await searchParams;
   const threadId = typeof trip === 'string' && trip !== '' ? trip : null;
-  const initialResult = threadId ? await fetchTripResult(threadId) : null;
-  return <TripDashboard initialThreadId={threadId} initialResult={initialResult} />;
+  const stored = threadId ? await fetchStoredTrip(threadId) : null;
+  return <TripDashboard initialThreadId={threadId} initialResult={stored?.result ?? null} initialMessages={stored?.messages ?? []} />;
 }
 
 export default function Page({ searchParams }: PageProps<'/'>) {

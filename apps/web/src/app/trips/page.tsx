@@ -9,7 +9,7 @@ export default function TripsPage() {
       <div>
         <p className="label-mono text-muted-foreground">My trips</p>
         <h1 className="mt-1 text-[28px] leading-9 font-semibold tracking-tight">Trips you planned</h1>
-        <p className="mt-1 text-[15px] text-ink-2">Saved in this browser only. Open one to see its flights, hotel and days again.</p>
+        <p className="mt-1 text-[15px] text-ink-2">Open one to see its flights, hotel, days and the agents&apos; chat again.</p>
       </div>
       <TripHistoryList />
     </main>

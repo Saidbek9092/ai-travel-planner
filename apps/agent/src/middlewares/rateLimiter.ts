@@ -6,9 +6,11 @@ import { AppError } from '../utils/errors.js';
 export interface RateLimiters {
   /** Every `/api` request: 100 / minute / IP. */
   generalLimiter: RequestHandler;
-  /** Routes that start a graph run (new trip, resume). */
-  runLimiter: RequestHandler;
+  /** Routes that start a graph run (new trip, resume): the short window, then the daily cap. */
+  runLimiter: RequestHandler[];
 }
+
+const DAY_MS = 86_400_000;
 
 interface Options {
   /** Overrides the general limit (tests). */
@@ -16,7 +18,7 @@ interface Options {
 }
 
 export function createRateLimiters(
-  config: Pick<Config, 'RATE_LIMIT_WINDOW_MS' | 'RATE_LIMIT_MAX_RUNS'>,
+  config: Pick<Config, 'RATE_LIMIT_WINDOW_MS' | 'RATE_LIMIT_MAX_RUNS' | 'RATE_LIMIT_DAILY_MAX_RUNS'>,
   { generalMax = 100 }: Options = {},
 ): RateLimiters {
   const limiter = (windowMs: number, limit: number, message: string) =>
@@ -35,10 +37,9 @@ export function createRateLimiters(
 
   return {
     generalLimiter: limiter(60_000, generalMax, 'Too many requests, please slow down'),
-    runLimiter: limiter(
-      config.RATE_LIMIT_WINDOW_MS,
-      config.RATE_LIMIT_MAX_RUNS,
-      'Too many trips planned from this address, please try again later',
-    ),
+    runLimiter: [
+      limiter(config.RATE_LIMIT_WINDOW_MS, config.RATE_LIMIT_MAX_RUNS, 'Too many trips planned from this address, please try again later'),
+      limiter(DAY_MS, config.RATE_LIMIT_DAILY_MAX_RUNS, "You've reached today's limit of trips from this address, please try again tomorrow"),
+    ],
   };
 }

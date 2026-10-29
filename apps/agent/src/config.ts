@@ -32,6 +32,8 @@ const EnvSchema = z
     RUN_REPLAY_MAX_EVENTS: positiveInt.default(500),
     RATE_LIMIT_WINDOW_MS: positiveInt.default(900_000),
     RATE_LIMIT_MAX_RUNS: positiveInt.default(10),
+    /** Runs one IP may start per 24 h, on top of the window above: caps what one address can spend on the LLM in a day. */
+    RATE_LIMIT_DAILY_MAX_RUNS: positiveInt.default(30),
 
     LANGSMITH_TRACING: z.stringbool().default(false),
     LANGSMITH_API_KEY: secret.optional(),

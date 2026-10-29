@@ -1,6 +1,6 @@
 'use client';
 
-import type { ResultPayload, TripRequest } from '@ai-travel/contracts';
+import type { MessagePayload, ResultPayload, TripRequest } from '@ai-travel/contracts';
 import { RotateCcwIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -29,10 +29,12 @@ import { PassesTable, budgetVerdict } from '@/components/BudgetMeter';
 interface TripDashboardProps {
   initialThreadId: string | null;
   initialResult: ResultPayload | null;
+  /** The stored chat of a reopened trip. */
+  initialMessages?: MessagePayload[];
 }
 
-export function TripDashboard({ initialThreadId, initialResult }: TripDashboardProps) {
-  const stream = useAgentStream({ threadId: initialThreadId, result: initialResult });
+export function TripDashboard({ initialThreadId, initialResult, initialMessages = [] }: TripDashboardProps) {
+  const stream = useAgentStream({ threadId: initialThreadId, result: initialResult, messages: initialMessages });
   // `null` = not chosen yet: Day 1, or today's day if the trip is under way. The choice lives in the URL (`?day=2`, `?day=all`).
   const [chosenDay, setChosenDay] = useState<DaySelection | null>(null);
   const setActiveDay = useCallback((day: DaySelection | null) => {

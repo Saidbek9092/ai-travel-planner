@@ -3,12 +3,13 @@
 # ai-travel-web (frontend)
 
 Next.js 16 App Router + Tailwind v4 + shadcn/ui (`base-nova`) + Framer Motion + Mapbox GL; TypeScript strict.
-Read on demand, only the § the task names: `SPEC.md` (this app), `PLAN.md` (tickets),
-`../../ARCHITECTURE.md` (system design, SSE protocol, contracts — source of truth).
+Read on demand, only the § the task names: `SPEC.md` (this app), `PLAN.md` (open work only),
+`../../ARCHITECTURE.md` (system design, SSE protocol, contracts — source of truth). Finished tickets are history in
+`../../docs/archive/`; don't update them.
 
 ## Commands
-- From this folder: `pnpm dev` (port `${CONDUCTOR_PORT:-3000}`) · `pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm mock-agent` (fake agent on `CONDUCTOR_PORT + 1`)
-- Before calling a task done: `pnpm lint && pnpm typecheck`
+- From this folder: `pnpm dev` (port `${CONDUCTOR_PORT:-3000}`) · `pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm mock-agent` (fake agent on `CONDUCTOR_PORT + 1`) · `pnpm e2e` (Playwright; starts its own mock agent and app on ports 3100/3101)
+- Before calling a task done: `pnpm lint && pnpm typecheck`, and `pnpm e2e` when a user flow changes
 
 ## Conventions
 - Server components by default; `"use client"` only for the streaming dashboard and interactive pieces.
@@ -18,6 +19,10 @@ Read on demand, only the § the task names: `SPEC.md` (this app), `PLAN.md` (tic
 - Color is never the only signal (e.g. "Confirmed" = badge + check icon + accent border).
 - shadcn/ui primitives before custom ones; icons from `lucide-react`.
 - `NEXT_PUBLIC_AGENT_URL` unset = UI-only mode; `NEXT_PUBLIC_MAPBOX_TOKEN` unset = map disabled.
+- **Every new external API needs a timeout, a fallback and a `source` field** (the UI shows "Estimate" / hides the chip
+  instead of failing). See `ARCHITECTURE.md` §8.
+- Error codes come from `@ai-travel/contracts` (`ErrorCode`); `ERROR_MESSAGES` must have a message for each.
+- Works at 375 px: no sideways scroll, 44 px touch targets (the e2e `mobile` project checks every screen).
 - If code deviates from `SPEC.md`, update the spec in the same PR. Match surrounding code; no drive-by refactors.
 
 ## Design check
@@ -25,13 +30,11 @@ Visual design: `../../design-agents-planning.png` (live run) and `../../design-t
 (finished trip). "Check the design" (or any UI task): open BOTH, then use the `design-check` skill.
 The design wins over the spec; report mismatches.
 
-## No tests in this app
-This app has no tests, test runner or test configuration (unit, component and e2e were removed to save time).
-- Do NOT write, add or restore tests, test dependencies (vitest, Testing Library, jsdom, Playwright, axe) or test configs.
-- Skip "Tests:" lines in tickets and the test sections of `SPEC.md` / `PLAN.md`; they are out of scope.
-- Verify by running the app (`pnpm dev` + `pnpm mock-agent`) and by `pnpm lint && pnpm typecheck && pnpm build`.
-- `test/mock-agent/` and `test/fixtures/` are dev tooling for `pnpm mock-agent`, not tests; keep them.
-- Remove this section only when the user brings tests back.
+## Tests
+- Playwright end-to-end tests in `e2e/` against the mock agent (`SPEC.md` §10); a new user flow gets a spec there.
+- `test/mock-agent/` and `test/fixtures/` serve both `pnpm mock-agent` and the e2e tests; when the agent gains an
+  endpoint, the mock agent gets it too.
+- Also verify by running the app (`pnpm dev` + `pnpm mock-agent`) and `pnpm build`.
 
 ## Workflow
 Implementing a PLAN ticket → `implement-ticket` skill.

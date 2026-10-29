@@ -1,8 +1,9 @@
 # AI Travel Planner — Technical Architecture
 
-> Source of truth for the whole system. Component-level specifications and implementation plans live in
-> [`apps/agent/PLAN.md`](./apps/agent/PLAN.md) (backend) and
-> [`apps/web/SPEC.md`](./apps/web/SPEC.md) (frontend).
+> Source of truth for the whole system. Component-level specifications live in
+> [`apps/agent/SPEC.md`](./apps/agent/SPEC.md) (backend) and [`apps/web/SPEC.md`](./apps/web/SPEC.md) (frontend);
+> open work in each app's `PLAN.md`; finished tickets in [`docs/archive/`](./docs/archive/) (history, not kept current).
+> Each fact lives in one place: when two documents disagree, this one wins for the system, the app spec for its app.
 > Derived from *Enterprise Multi-Agent AI Travel Planner — Architecture Blueprint* (2026-10-25).
 
 ---
@@ -47,7 +48,7 @@ separate lookup endpoint as soon as the Supervisor has parsed the destination.
 | Frontend | Next.js 16 (App Router, Turbopack) | RSC shell + client streaming dashboard |
 | UI | Tailwind CSS v4 + shadcn/ui (`base-nova`, Base UI primitives) + Framer Motion | Components and animation |
 | Maps | Mapbox GL (`react-map-gl`) | Interactive itinerary map |
-| Testing | Vitest (+ React Testing Library, Playwright for e2e) | Unit, component, end-to-end |
+| Testing | Vitest (contracts, agent), Playwright (web end-to-end against the mock agent) | §14 |
 | Deployment | Render (agent) + Vercel (web) | Independent deploys from one repo |
 
 ---
@@ -152,7 +153,7 @@ collide with state keys, and the state already has `budget`, `flights`, `hotels`
 On a re-plan the planner runs again. A different hotel moves the start and end of every day, and the cheaper
 pass picks cheaper airport transfers (train instead of taxi), so the design shows the Planner re-routing the days
 ("Re-routing day 3 around the new hotel"). To keep the cost down it reuses the places of the earlier pass and
-only re-orders or swaps the stops that depend on the hotel (§8.4 of `apps/agent/PLAN.md`).
+only re-orders or swaps the stops that depend on the hotel (§8.4 of `apps/agent/SPEC.md`).
 
 ### 4.2 Node responsibilities
 
@@ -250,6 +251,14 @@ interface TravelAgentState {
 - The run is owned by the `RunRegistry`, not by the HTTP request: a closed connection does not abort it
   (§6.5). Only `cancel`, the run timeout or a server shutdown do.
 
+**Finished trips** are stored separately from checkpoints, in a `trips` table in the same database
+(`storage/tripStore.ts`; in memory without `DATABASE_URL`). When a run ends, completed or failed, the agent saves the
+`ResultPayload` and the whole chat (`messages` from the final state, so a resumed run keeps the earlier ones), keyed by
+`threadId` and by the browser's anonymous owner id. There are no accounts: the web app keeps a random UUID in a
+first-party cookie and sends it as `X-Owner-Id` (§7, §9). "My trips" lists that owner's trips, and a reopened trip
+shows its result and chat on any device that has the same id ("Copy link for another device" on `/trips`). The
+checkpointer still owns resuming; the store only keeps outcomes.
+
 ### 4.6 Chat messages & confirmed decisions
 
 `logs` stay technical (they feed the terminal view). `messages` is a second, parallel stream written for
@@ -260,7 +269,7 @@ the user: short, friendly sentences from the agents that the chat panel shows as
   unit-testable. English only for now.
 - A message is either an ordinary update (`decision: null`) or a **confirmed decision**
   (`decision: <topic>`). A message can also carry a `callout`, a highlighted tag under the text
-  ("Over budget by $125 · re-plan 1 of 2", "Weather prep · Day 3 moved indoors").
+  ("Finding cheaper options, try 1 of 2", "Weather prep · Day 3 moved indoors").
 - **Who confirms.** In the first pass flight, hotel and transfers are *proposed* in ordinary messages. The
   agents confirm their own pick in a re-plan (`cheaper`) pass, because that pass exists to find the cheapest
   option ("Flight confirmed · TAS → IST → CDG · $420 · saves $80"). Anything still unconfirmed when the run
@@ -273,7 +282,7 @@ the user: short, friendly sentences from the agents that the chat panel shows as
 | `flightAgent` | First pass: "I found 4 flights — the best option is Uzbekistan Airways at $500." Mock data: adds "Live prices weren't available, so these are estimates." | Re-plan pass: "Turkish Airlines via Istanbul is $420. The layover is 1 h 50 m — enough to change gates." (`flight`, saves $80) |
 | `hotelAgent` | First pass: "Hotel Lumière looks like a good fit: $95 a night, rated 8.6." | Re-plan pass: "Found a great stay near République for $66 a night! Rated 8.2, saving us $145." (`hotel`) |
 | `itineraryPlanner` | First pass: transfer proposal ("Landing at 13:55 with bags, a taxi is the simplest way in…"); "Saturday looks wet, so Day 3 is now an indoor day" (callout `Weather prep`) | Re-plan pass: "Taxi in, train out." (`transfers`); once per run: "Your 5-day plan is ready: Eiffel Tower, Louvre and more." (`itinerary`) |
-| `budgetAuditor` — re-plan | "That comes to $1,125 against $1,000. We need to find about $125." with callout `Over budget by $125 · re-plan 1 of 2` | — |
+| `budgetAuditor` — re-plan | "That comes to $1,125 against $1,000. We need to find about $125 before we lock anything in." with callout `Finding cheaper options, try 1 of 2` | — |
 | `budgetAuditor` — condition 1 or 3 | Condition 3 only: "This is the cheapest combination I could find." | Any of `flight`, `hotel`, `transfers` not yet confirmed, then the final cost (`budget`): "All in, that's $975 of $1,000 with $25 to spare. Approved!" / "Best I could do is $1,084, $84 over budget." |
 
 The supervisor's decision (`trip`) is the first of at most six confirmed decisions per run: `trip`, `flight`,
@@ -289,418 +298,30 @@ out of scope for this version.
 
 ## 5. Shared contracts (`packages/contracts`)
 
-Package name `@ai-travel/contracts`, consumed by both apps with `"workspace:*"`. It is the only
-place where cross-service types are defined. **Never redeclare these types in an app.**
+Package name `@ai-travel/contracts`, consumed by both apps with `"workspace:*"`. It is the only place where
+cross-service types are defined. **Never redeclare these types in an app.** The source files are the reference for
+fields and their meaning (each field has a doc comment); this section only says what lives where and the rules.
 
-The listings below are the actual source (Zod 4 API: `z.iso.datetime()`, `z.iso.date()`, `z.uuid()`, `z.url()`),
-copied from the package. They follow the design in `.context/design` (Foundations, Components, Web-Live, Web-Trip),
-which is the source of truth for the data the UI shows: rich flight legs, hotel details, airport transfers,
-per-day weather, the `DRAFT` packet and the budget passes. Tests live in `packages/contracts/test/schemas.test.ts`.
+| File | Holds |
+| --- | --- |
+| `src/trip.ts` | Domain and request: `TripRequest`, `Flight` / `FlightLeg` (airport-local times, `durationMinutes`), `Hotel`, `Transfer`, `Place`, `ItineraryDay` + `DayWeather`, `DataSource`, `AgentName`, `DecisionTopic`, `PickReason` |
+| `src/sse-events.ts` | Stream protocol (§6): `LOG` / `MESSAGE` / `PROGRESS` / `DRAFT` / `RESULT` payloads and `SseEventSchema`, `BudgetPass`, `Suggestions`; `RESULT_SCHEMA_VERSION` and the stored-result migration (`upgradeResultPayload`, `StoredResultSchema`, `parseStoredResult`) |
+| `src/trip-context.ts` | `GET /api/trip-context` (§7.1) and `GET /api/places` (place dropdown) |
+| `src/stored-trips.ts` | "My trips" (§4.5): `OWNER_ID_HEADER`, `TripSummary`, `TripListResponse`, `TripRecord` |
+| `src/errors.ts` | `ErrorCode` and `ErrorBody`, the JSON error shape of every route (§7) |
 
-### 5.1 `src/trip.ts` — domain + request
+Rules:
 
-```typescript
-import { z } from 'zod';
-
-/** Where an option came from. `mock` means live prices were unavailable. */
-export const DataSourceSchema = z.enum(['serpapi', 'mock']);
-
-/** Weather bucket the UI maps to an icon. Shared by the top bar and the per-day forecast. */
-export const WeatherIconSchema = z.enum(['clear', 'partly-cloudy', 'cloudy', 'fog', 'rain', 'snow', 'storm']);
-
-export const AirportSchema = z.object({
-  /** IATA code, e.g. "TAS". */
-  code: z.string().min(3).max(4),
-  /** e.g. "Tashkent International". */
-  name: z.string().min(1),
-});
-
-/** An intermediate stop of a flight leg. */
-export const FlightStopSchema = z.object({
-  airport: AirportSchema,
-  layoverMinutes: z.number().int().nonnegative(),
-});
-
-/** One direction of a round trip. */
-export const FlightLegSchema = z.object({
-  from: AirportSchema,
-  to: AirportSchema,
-  /** ISO 8601 date-time; airline-local offsets are allowed. */
-  departure: z.iso.datetime({ offset: true }),
-  arrival: z.iso.datetime({ offset: true }),
-  /** Arrival terminal, when the provider reports it. */
-  terminal: z.string().min(1).nullable(),
-  /** Empty array = direct. */
-  stops: z.array(FlightStopSchema),
-});
-
-export const FlightSchema = z.object({
-  airline: z.string().min(1),
-  /** USD, round trip, one traveller. */
-  price: z.number().nonnegative(),
-  outbound: FlightLegSchema,
-  /** `null` when the provider returned the outbound leg only. */
-  return: FlightLegSchema.nullable(),
-  /** "View fare" link, when the provider gives one. */
-  bookingUrl: z.url().nullable(),
-  source: DataSourceSchema,
-});
-
-export const PlaceSchema = z.object({
-  name: z.string().min(1),
-  lat: z.number().min(-90).max(90),
-  lng: z.number().min(-180).max(180),
-  /** Short hint shown next to the stop, e.g. "Morning". */
-  note: z.string().min(1).nullable(),
-  photoUrl: z.url().nullish(),
-  photoCredit: z.object({ name: z.string().min(1), url: z.url() }).nullish(),
-});
-
-export const HotelSchema = z.object({
-  name: z.string().min(1),
-  /** Neighbourhood, e.g. "11th arrondissement". */
-  area: z.string().min(1).nullable(),
-  /** USD. */
-  pricePerNight: z.number().nonnegative(),
-  /** 0–10 (Google Hotels' 0–5 is doubled by the tool). */
-  rating: z.number().min(0).max(10),
-  photoUrl: z.url().nullable(),
-  /** HH:mm, 24 h. */
-  checkInTime: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
-  checkOutTime: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
-  /** Nearest public transport, e.g. "République · lines 3, 5, 8, 9, 11". */
-  transit: z.string().min(1).nullable(),
-  /** For the hotel marker on the map. */
-  location: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).nullable(),
-  bookingUrl: z.url().nullable(),
-  source: DataSourceSchema,
-});
-
-export const TransferModeSchema = z.enum(['taxi', 'train', 'metro', 'bus', 'shuttle', 'walk']);
-
-/** Airport ↔ hotel leg chosen by the Planner. */
-export const TransferSchema = z.object({
-  /** Itinerary day the transfer happens on (arrival day, departure day). */
-  day: z.number().int().min(1),
-  mode: TransferModeSchema,
-  /** e.g. "CDG Terminal 1 → hotel". */
-  description: z.string().min(1),
-  /** USD, whole leg. */
-  priceUsd: z.number().nonnegative(),
-  durationMinutes: z.number().int().positive().nullable(),
-  /** e.g. "Fixed fare €56" or "Leave the hotel by 16:00". */
-  note: z.string().min(1).nullable(),
-});
-
-/** Forecast for one itinerary day. */
-export const DayWeatherSchema = z.object({
-  highC: z.number(),
-  lowC: z.number(),
-  /** Short label for display, e.g. "Partly cloudy". */
-  condition: z.string().min(1),
-  icon: WeatherIconSchema,
-});
-
-export const ItineraryDaySchema = z.object({
-  day: z.number().int().min(1),
-  /** YYYY-MM-DD; `null` when the trip has no start date. */
-  date: z.iso.date().nullable(),
-  title: z.string().min(1),
-  /** `null` when the date is beyond the forecast range or the lookup failed. */
-  weather: DayWeatherSchema.nullable(),
-  places: z.array(PlaceSchema),
-});
-
-export const TripStatusSchema = z.enum([
-  'parsing',
-  'searching',
-  'planning',
-  'auditing',
-  'completed',
-  'failed',
-]);
-
-export const AgentNameSchema = z.enum([
-  'System',
-  'Supervisor',
-  'FlightAgent',
-  'HotelAgent',
-  'Planner',
-  'BudgetAuditor',
-]);
-
-/** What a confirmed decision is about. */
-export const DecisionTopicSchema = z.enum(['trip', 'flight', 'hotel', 'transfers', 'itinerary', 'budget']);
-
-/** POST /api/trips body. Explicit fields override what the Supervisor parses from `prompt`. */
-export const TripRequestSchema = z.object({
-  prompt: z.string().trim().min(3).max(1000),
-  origin: z.string().trim().min(2).max(100).optional(),
-  budget: z.number().positive().max(1_000_000).optional(),
-  durationDays: z.number().int().min(1).max(30).optional(),
-  /** YYYY-MM-DD */
-  startDate: z.iso.date().optional(),
-});
-
-export type DecisionTopic = z.infer<typeof DecisionTopicSchema>;
-export type DataSource = z.infer<typeof DataSourceSchema>;
-export type WeatherIcon = z.infer<typeof WeatherIconSchema>;
-export type Airport = z.infer<typeof AirportSchema>;
-export type FlightStop = z.infer<typeof FlightStopSchema>;
-export type FlightLeg = z.infer<typeof FlightLegSchema>;
-export type Flight = z.infer<typeof FlightSchema>;
-export type Hotel = z.infer<typeof HotelSchema>;
-export type TransferMode = z.infer<typeof TransferModeSchema>;
-export type Transfer = z.infer<typeof TransferSchema>;
-export type Place = z.infer<typeof PlaceSchema>;
-export type DayWeather = z.infer<typeof DayWeatherSchema>;
-export type ItineraryDay = z.infer<typeof ItineraryDaySchema>;
-export type TripStatus = z.infer<typeof TripStatusSchema>;
-export type AgentName = z.infer<typeof AgentNameSchema>;
-export type TripRequest = z.infer<typeof TripRequestSchema>;
-```
-
-### 5.2 `src/sse-events.ts` — stream protocol
-
-```typescript
-import { z } from 'zod';
-import {
-  AgentNameSchema,
-  DecisionTopicSchema,
-  FlightSchema,
-  HotelSchema,
-  ItineraryDaySchema,
-  TransferSchema,
-  TripStatusSchema,
-} from './trip.js';
-
-export const LogLevelSchema = z.enum(['info', 'warn', 'error']);
-
-/** What a log line means to the UI: plain output, a checkpoint row, or a fallback that fired. */
-export const LogKindSchema = z.enum(['log', 'checkpoint', 'llm-fallback', 'search-fallback']);
-
-/** Technical entry for the terminal view. */
-export const LogPayloadSchema = z.object({
-  /** 1-based index of the node execution in the run. */
-  step: z.number().int().min(1),
-  agent: AgentNameSchema,
-  message: z.string().min(1),
-  timestamp: z.iso.datetime(),
-  level: LogLevelSchema.default('info'),
-  kind: LogKindSchema.default('log'),
-});
-
-/** Highlighted tag under a chat message, e.g. "Over budget by $125 · re-plan 1 of 2". */
-export const CalloutSchema = z.object({
-  tone: z.enum(['info', 'warn']),
-  label: z.string().min(1),
-});
-
-/** Friendly sentence for the chat panel; see ARCHITECTURE.md §4.6. */
-export const MessagePayloadSchema = z.object({
-  /** Same `step` as the node's logs. */
-  step: z.number().int().min(1),
-  agent: AgentNameSchema,
-  /** Plain-language text, already formatted for display. */
-  text: z.string().min(1),
-  timestamp: z.iso.datetime(),
-  /** `null` = ordinary update; a topic = confirmed decision. A topic may be confirmed again after a re-plan. */
-  decision: DecisionTopicSchema.nullable().default(null),
-  callout: CalloutSchema.nullable().default(null),
-});
-
-/** Facts for the "Run details" panel. */
-export const RunInfoSchema = z.object({
-  model: z.string().min(1),
-  checkpointer: z.enum(['memory', 'postgres']),
-  /** Step of the last saved checkpoint; `null` before the first node finishes. */
-  lastCheckpointStep: z.number().int().min(1).nullable(),
-});
-
-export const ProgressPayloadSchema = z.object({
-  progressPercent: z.number().int().min(0).max(100),
-  currentStatus: TripStatusSchema,
-  /** Sub-step label, e.g. "Day 4 of 5". */
-  detail: z.string().min(1).nullable().default(null),
-  /** Search round: 1 = first pass, 2–3 = re-plans. */
-  pass: z.number().int().min(1).max(3).default(1),
-  run: RunInfoSchema.nullable().default(null),
-});
-
-/** One search round, kept so the UI can show "what changed on re-plan". */
-export const BudgetPassSchema = z.object({
-  pass: z.number().int().min(1).max(3),
-  /** USD. */
-  flight: z.number().nonnegative(),
-  hotel: z.number().nonnegative(),
-  transfers: z.number().nonnegative(),
-  daily: z.number().nonnegative(),
-  totalCost: z.number().nonnegative(),
-  /** e.g. "$500 direct" / "$420 via IST". */
-  flightLabel: z.string().min(1),
-  /** e.g. "5 × $95". */
-  hotelLabel: z.string().min(1),
-});
-
-/** Ready-made ways out when the trip is still over budget after the last re-plan. */
-export const SuggestionsSchema = z.object({
-  raiseBudgetTo: z.number().positive(),
-  tryDays: z.number().int().min(1),
-});
-
-export const ResultPayloadSchema = z.object({
-  threadId: z.uuid(),
-  status: z.enum(['completed', 'failed']),
-  origin: z.string().nullable(),
-  /** Empty string if the Supervisor failed before parsing a destination. */
-  destination: z.string(),
-  durationDays: z.number().int().min(0),
-  startDate: z.iso.date().nullable(),
-  totalCost: z.number().nonnegative(),
-  budget: z.number().nonnegative(),
-  currency: z.literal('USD'),
-  /** Sorted; index 0 is the selected option. */
-  flights: z.array(FlightSchema),
-  /** Sorted; index 0 is the selected option. */
-  hotels: z.array(HotelSchema),
-  /** The selected airport ↔ hotel transfers. */
-  transfers: z.array(TransferSchema),
-  itinerary: z.array(ItineraryDaySchema),
-  /** USD per day. */
-  dailyExpensesEstimate: z.number().nonnegative(),
-  /** Number of budget re-plans that ran (0–2). */
-  replans: z.number().int().min(0).max(2),
-  /** One entry per search round, oldest first. */
-  passes: z.array(BudgetPassSchema),
-  /** Set only when the trip is over budget after the last re-plan. */
-  suggestions: SuggestionsSchema.nullable(),
-  warnings: z.array(z.string()),
-  /** Set when status is 'failed'. */
-  error: z.string().nullable(),
-});
-
-/** The trip so far, sent while agents work. Every field is optional: it fills in as agents decide. */
-export const DraftPayloadSchema = ResultPayloadSchema.pick({
-  origin: true,
-  destination: true,
-  durationDays: true,
-  startDate: true,
-  budget: true,
-  totalCost: true,
-  flights: true,
-  hotels: true,
-  transfers: true,
-  itinerary: true,
-  dailyExpensesEstimate: true,
-}).partial();
-
-export const LogEventSchema = z.object({ type: z.literal('LOG'), payload: LogPayloadSchema });
-export const MessageEventSchema = z.object({ type: z.literal('MESSAGE'), payload: MessagePayloadSchema });
-export const ProgressEventSchema = z.object({ type: z.literal('PROGRESS'), payload: ProgressPayloadSchema });
-export const DraftEventSchema = z.object({ type: z.literal('DRAFT'), payload: DraftPayloadSchema });
-export const ResultEventSchema = z.object({ type: z.literal('RESULT'), payload: ResultPayloadSchema });
-
-export const SseEventSchema = z.discriminatedUnion('type', [
-  LogEventSchema,
-  MessageEventSchema,
-  ProgressEventSchema,
-  DraftEventSchema,
-  ResultEventSchema,
-]);
-
-export type LogLevel = z.infer<typeof LogLevelSchema>;
-export type LogKind = z.infer<typeof LogKindSchema>;
-export type LogPayload = z.infer<typeof LogPayloadSchema>;
-export type Callout = z.infer<typeof CalloutSchema>;
-export type MessagePayload = z.infer<typeof MessagePayloadSchema>;
-export type RunInfo = z.infer<typeof RunInfoSchema>;
-export type ProgressPayload = z.infer<typeof ProgressPayloadSchema>;
-export type BudgetPass = z.infer<typeof BudgetPassSchema>;
-export type Suggestions = z.infer<typeof SuggestionsSchema>;
-export type DraftPayload = z.infer<typeof DraftPayloadSchema>;
-export type ResultPayload = z.infer<typeof ResultPayloadSchema>;
-export type LogEvent = z.infer<typeof LogEventSchema>;
-export type MessageEvent = z.infer<typeof MessageEventSchema>;
-export type ProgressEvent = z.infer<typeof ProgressEventSchema>;
-export type DraftEvent = z.infer<typeof DraftEventSchema>;
-export type ResultEvent = z.infer<typeof ResultEventSchema>;
-export type SseEvent = z.infer<typeof SseEventSchema>;
-/** Shape accepted by `SseEventSchema.parse` (e.g. `level` may be omitted). */
-export type SseEventInput = z.input<typeof SseEventSchema>;
-```
-
-### 5.3 `src/trip-context.ts` — top-bar lookup
-
-Response of `GET /api/trip-context` (§7.1). Weather, currency/rate and time zone are independently
-nullable: one provider failing must not blank the others.
-
-```typescript
-import { z } from 'zod';
-import { WeatherIconSchema } from './trip.js';
-
-/** Query string of GET /api/trip-context. */
-export const TripContextQuerySchema = z.object({
-  /** City or place name; the agent geocodes it. */
-  destination: z.string().trim().min(2).max(100),
-  /** Departure city; only used to work out the time difference. */
-  origin: z.string().trim().min(2).max(100).optional(),
-});
-
-export const WeatherSchema = z.object({
-  temperatureC: z.number(),
-  /** Short label for display, e.g. "Partly cloudy". */
-  condition: z.string().min(1),
-  /** Coarse bucket the UI maps to an icon. */
-  icon: WeatherIconSchema,
-  todayLowC: z.number(),
-  todayHighC: z.number(),
-  /** One-line outlook for the next days, e.g. "rain Saturday"; `null` when nothing notable. */
-  outlook: z.string().min(1).nullable(),
-});
-
-export const CurrencySchema = z.object({
-  /** ISO 4217 code of the destination's currency. */
-  code: z.string().length(3),
-  /** e.g. "€"; `null` when unknown. */
-  symbol: z.string().min(1).nullable(),
-});
-
-export const ExchangeRateSchema = z.object({
-  base: z.literal('USD'),
-  /** ISO 4217 code of the destination's currency. */
-  quote: z.string().length(3),
-  /** 1 USD = `rate` × `quote`. */
-  rate: z.number().positive(),
-  /** When the provider last updated the rate. */
-  asOf: z.iso.datetime(),
-});
-
-export const TripContextSchema = z.object({
-  /** Resolved place, e.g. "Paris, France". */
-  location: z.string().min(1),
-  /** `null` when the weather lookup failed. */
-  weather: WeatherSchema.nullable(),
-  /** `null` when the destination's currency is unknown or already USD. */
-  currency: CurrencySchema.nullable(),
-  /** `null` when the lookup failed, the currency is unknown, or the destination already uses USD. */
-  exchangeRate: ExchangeRateSchema.nullable(),
-  /** IANA zone of the destination, e.g. "Europe/Paris"; the browser formats the local time. */
-  timeZone: z.string().min(1).nullable(),
-  /** IANA zone of `origin`, when it was given and found. */
-  originTimeZone: z.string().min(1).nullable(),
-  /** `mock` only when the agent runs with `TOOLS_MODE=mock` (tests, e2e). */
-  source: z.enum(['live', 'mock']),
-});
-
-export type TripContextQuery = z.infer<typeof TripContextQuerySchema>;
-export type Weather = z.infer<typeof WeatherSchema>;
-export type Currency = z.infer<typeof CurrencySchema>;
-export type ExchangeRate = z.infer<typeof ExchangeRateSchema>;
-export type TripContext = z.infer<typeof TripContextSchema>;
-```
-
-`src/index.ts` re-exports all three files. The package builds to `dist/` with `tsc` (ESM + `.d.ts`)
-and exposes it through `"exports"`; its `dev` script is `tsc --watch`.
+- **Zod 4 API** (`z.iso.datetime()`, `z.iso.date()`, `z.uuid()`, `z.url()`). New optional fields use `.nullish()` so
+  older payloads still parse.
+- **Result versioning.** `ResultPayload.schemaVersion` (currently `1`). Results outlive the code that wrote them (the
+  `trips` table, shared links), so a change that would break an old result bumps `RESULT_SCHEMA_VERSION` and adds a step
+  to `upgradeResultPayload`. That function is the single migration point: the agent reads `trips` rows and the web app
+  loads a trip by id through `StoredResultSchema`. Live `RESULT` packets always carry the current version.
+- **Error codes** exist only in `ErrorCodeSchema`. The agent's `AppError`, the web app's `ERROR_MESSAGES` (typed
+  `Record<ErrorCode | …>`, so a new code fails the web type check until it has a message) and the mock agent all use it.
+- Tests: `packages/contracts/test/schemas.test.ts`. `src/index.ts` re-exports every file; the package builds to `dist/`
+  with `tsc` (ESM + `.d.ts`), and its `dev` script is `tsc --watch`.
 
 ---
 
@@ -784,10 +405,8 @@ active and for 10 minutes after it ends.
 - If the agent process restarts the buffer is gone; the run is recovered from its checkpoint with `resume`.
 - The registry is per process. **Run exactly one agent instance**: the agent logs a single-instance warning at startup, and a second instance would not find the other's runs or replay buffers. Scaling out needs a shared store.
 
-Beyond the buffer, `MESSAGE`, `LOG` and `DRAFT` packets are live-only: `GET /api/trips/:threadId` returns a
-`ResultPayload`, so a trip reopened later shows its results but not the chat history. Every confirmed decision
-is still visible in the result itself (selected flight, hotel and transfers, itinerary, total vs budget,
-passes).
+Beyond the buffer, `LOG` and `DRAFT` packets are live-only. The chat (`MESSAGE`) is stored with the finished trip
+(§4.5), so `GET /api/trips/:threadId/record` returns the result and the conversation for a reopened trip.
 
 ---
 
@@ -797,17 +416,19 @@ passes).
 | --- | --- | --- |
 | `GET /health` | — | `200 {"status":"ok"}` (liveness; Render health check) |
 | `GET /readyz` | — | `200 {"status":"ready"}`, or `503 {"status":"unavailable","problems":[…]}` when Postgres is unreachable or a required key is missing |
-| `POST /api/trips` | `TripRequest` | `200 text/event-stream` + `X-Thread-Id` header |
+| `POST /api/trips` | `TripRequest`; header `X-Owner-Id` (optional) | `200 text/event-stream` + `X-Thread-Id` header |
 | `GET /api/trips/:threadId/stream` | header `Last-Event-ID` (optional) | `200 text/event-stream`: replays missed packets, then follows the live run; `404` if the run is not in the registry |
 | `POST /api/trips/:threadId/cancel` | — | `204`; aborts the run, which ends with `RESULT failed` ("Run stopped") and stays resumable; `404` if unknown |
 | `POST /api/trips/:threadId/resume` | — | `200 text/event-stream`, continues from last checkpoint |
-| `GET /api/trips/:threadId` | — | `200 ResultPayload` built from the latest checkpoint, `404` if unknown |
+| `GET /api/trips/:threadId` | — | `200 ResultPayload` from the trip store, else built from the latest checkpoint; `404` if unknown |
+| `GET /api/trips/:threadId/record` | — | `200 TripRecord` (result + chat + timestamps), same sources; `404` if unknown |
+| `GET /api/trips` | header `X-Owner-Id` (UUID) | `200 TripListResponse`: the owner's finished trips, newest first (max 50); `400` without a valid id |
 | `GET /api/trip-context?destination=…&origin=…` | query: `TripContextQuery` | `200 TripContext`, `400` bad query, `404` destination not found |
 
-Errors **before** the stream opens are JSON: `{ "error": { "code": "VALIDATION_ERROR", "message": "…" } }`
-with `400 / 404 / 429 / 500`. A `429` also carries `retryAfterSeconds` in the error object (and the standard
+Errors **before** the stream opens are JSON `ErrorBody` (`src/errors.ts`): `{ "error": { "code": "VALIDATION_ERROR", "message": "…" } }`
+with `400 / 404 / 409 / 429 / 500`. A `429` also carries `retryAfterSeconds` in the error object (and the standard
 `Retry-After` header, exposed through CORS) so the form can show a countdown ("Plan trip in 0:42"). Errors **after** the stream opens are a `RESULT` packet with
-`status: "failed"`. Full details in `apps/agent/PLAN.md`.
+`status: "failed"`. Full details in `apps/agent/SPEC.md` §5.
 
 ### 7.1 Trip context lookup (top bar)
 
@@ -856,7 +477,12 @@ Planner (`tools/weather.ts` `getForecast`, Open-Meteo reaches ~16 days ahead; la
 | Live search falls back to the Mock engine | A `warn` LOG with `kind: "search-fallback"` plus a `warnings` entry; cards show an "Estimate" badge |
 | Forecast unavailable or beyond 16 days | The Planner plans without weather; `itinerary[].weather` is `null` and no weather callout is sent |
 | Run takes too long | Global run timeout (120 s) via `AbortSignal.timeout`, ends with `RESULT failed` |
-| Abuse / spam | `express-rate-limit` per IP (429 with `retryAfterSeconds`), JSON body limit 10 kb, prompt length cap 1,000 chars |
+| Abuse / spam / LLM bill | `express-rate-limit` per IP on runs: 10 per 15 min **and** 30 per 24 h (`RATE_LIMIT_DAILY_MAX_RUNS`), both `429` with `retryAfterSeconds`; JSON body limit 10 kb, prompt length cap 1,000 chars. A signed token from the web app was considered and left out: the browser would have to hold its secret, so it would not stop a script |
+| Trip store unreachable | Saving a finished trip is best effort: the error is logged and the run still ends normally; queries give up after 5 s |
+
+**Rule for every new external API** (also in both `CLAUDE.md` files): it gets a **timeout**, a **fallback** (mock data,
+a `null` field, or a hidden chip, but never a failed run) and a **`source`** field on the data it produces, so the UI can
+say where a value came from ("Estimate", "Live").
 
 ---
 
@@ -874,6 +500,10 @@ Planner (`tools/weather.ts` `getForecast`, Open-Meteo reaches ~16 days ahead; la
   make the agent fetch arbitrary URLs. The providers need no API keys.
 - **Env validation on boot** (`config.ts`): the agent refuses to start with a malformed configuration.
 - `trust proxy` set to `1` on Render so rate limiting sees the real client IP.
+- **Owner id** (`X-Owner-Id`): a random UUID, not tied to a person. It works like a bearer token for "My trips": anyone
+  with it sees that list, which is why the web app only reveals it through "Copy link for another device". Trip ids
+  were already capabilities (anyone with a trip link sees that trip). It lives in a first-party cookie on the web
+  domain because the agent is on another site, where a cookie would be third-party and blocked.
 
 ---
 
@@ -891,11 +521,12 @@ Planner (`tools/weather.ts` `getForecast`, Open-Meteo reaches ~16 days ahead; la
 ```text
 ai-travel-planner/
 ├── apps/
-│   ├── agent/                  # ai-travel-agent → Render   (spec: apps/agent/PLAN.md)
-│   └── web/                    # ai-travel-web   → Vercel   (spec: apps/web/SPEC.md)
+│   ├── agent/                  # ai-travel-agent → Render   (spec: SPEC.md, open work: PLAN.md)
+│   └── web/                    # ai-travel-web   → Vercel   (spec: SPEC.md, open work: PLAN.md)
+├── docs/archive/               # finished tickets, history only
 ├── packages/
 │   └── contracts/              # @ai-travel/contracts (Zod schemas + types)
-│       └── src/{index.ts, trip.ts, sse-events.ts, trip-context.ts}
+│       └── src/{index.ts, trip.ts, sse-events.ts, trip-context.ts, stored-trips.ts, errors.ts}
 ├── ARCHITECTURE.md             # this file
 ├── package.json                # root scripts → turbo
 ├── pnpm-workspace.yaml         # apps/*, packages/* + catalog
@@ -903,7 +534,7 @@ ai-travel-planner/
 └── tsconfig.base.json          # shared strict TS config
 ```
 
-Per-app trees are in `apps/agent/PLAN.md` §2 and `apps/web/SPEC.md` §2.
+Per-app trees are in `apps/agent/SPEC.md` §2 and `apps/web/SPEC.md` §2.
 
 ---
 
@@ -918,108 +549,25 @@ Per-app trees are in `apps/agent/PLAN.md` §2 and `apps/web/SPEC.md` §2.
 
 ### 12.2 Configuration
 
-`pnpm-workspace.yaml`
+The files themselves are the reference; this is what each one decides.
 
-```yaml
-packages:
-  - "apps/*"
-  - "packages/*"
+| File | Decides |
+| --- | --- |
+| `pnpm-workspace.yaml` | Workspace globs (`apps/*`, `packages/*`), the **catalog** of shared versions (`zod`, `typescript`, `vitest`, `@types/node`; packages reference them as `"catalog:"`), and native postinstall scripts that are skipped |
+| `turbo.json` | Task graph: `build`, `test` and `typecheck` depend on `^build` (contracts first); build outputs; `NEXT_PUBLIC_*` in the build cache key; `CONDUCTOR_PORT` / `PORT` passed to `dev`, `TEST_DATABASE_URL` passed to `test` |
+| Root `package.json` | `packageManager` (pnpm version for Corepack), Node `>=24`, and `dev` / `build` / `test` / `typecheck` / `lint` scripts that call Turborepo |
+| `tsconfig.base.json` | Shared strict compiler options (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, …) |
 
-# Shared versions: reference them in a package.json as "<name>": "catalog:"
-catalog:
-  "@types/node": ^24.0.0
-  typescript: ^5.9.3
-  vitest: ^4.1.12
-  zod: ^4.6.7
-
-# Native postinstall scripts we don't need (same choice as the create-next-app template).
-ignoredBuiltDependencies:
-  - esbuild # binary ships via @esbuild/<platform>; postinstall only verifies it
-  - sharp
-  - unrs-resolver
-```
-
-Packages reference catalog versions with `"zod": "catalog:"`. Zod 4 is pinned for every package and
-checked with `@langchain/core` 1.3 (the structured-output spike must be re-run against `@langchain/anthropic`;
-see `apps/agent/PLAN.md` Part 1, open question 2).
-Tooling that only one app uses (ESLint presets, `tsx`, Next.js) is declared in that app's `package.json`,
-not in the catalog.
-
-`turbo.json`
-
-```json
-{
-  "$schema": "https://turbo.build/schema.json",
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["NEXT_PUBLIC_AGENT_URL", "NEXT_PUBLIC_MAPBOX_TOKEN"]
-    },
-    "dev": {
-      "dependsOn": ["^build"],
-      "cache": false,
-      "persistent": true,
-      "passThroughEnv": ["CONDUCTOR_PORT", "PORT"]
-    },
-    "test": { "dependsOn": ["^build"] },
-    "typecheck": { "dependsOn": ["^build"] },
-    "lint": {}
-  }
-}
-```
+Zod 4 is pinned for every package and works with `@langchain/core` 1.3 and `@langchain/anthropic` (see
+`apps/agent/SPEC.md` §15, decision 2). Tooling that only one app uses (ESLint presets, `tsx`, Next.js, Playwright) is
+declared in that app's `package.json`, not in the catalog.
 
 Turborepo 2 runs tasks in strict env mode: environment variables that are not declared are hidden
 from tasks. `env` makes build-time public variables part of the cache key; `passThroughEnv` lets
 `CONDUCTOR_PORT` reach the dev servers. Do **not** set a custom `cacheDir` — it disables the cache
 sharing between Conductor worktrees.
 
-Root `package.json`
-
-```json
-{
-  "name": "ai-travel-planner",
-  "private": true,
-  "packageManager": "pnpm@10.34.9",
-  "engines": {
-    "node": ">=24"
-  },
-  "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint"
-  },
-  "devDependencies": {
-    "turbo": "^2.11.10"
-  }
-}
-```
-
-
-`tsconfig.base.json` — shared compiler options:
-
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "exactOptionalPropertyTypes": true,
-    "isolatedModules": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "declaration": true,
-    "sourceMap": true
-  }
-}
-```
-
-Each package extends it and sets its own `module`/`moduleResolution`: `NodeNext` for `agent` and
+Each package extends `tsconfig.base.json` and sets its own `module`/`moduleResolution`: `NodeNext` for `agent` and
 `contracts`, `Bundler` for `web`. The web app turns `exactOptionalPropertyTypes` off because the
 generated shadcn/ui components don't compile with it; everything else stays on.
 
@@ -1030,7 +578,8 @@ generated shadcn/ui components don't compile with it; everything else stays on.
 | `pnpm install` | Install everything, link workspace packages |
 | `pnpm dev` | Build `contracts`, then run `contracts` (watch), agent and web together |
 | `pnpm build` | `contracts` → (`agent` ∥ `web`), cached |
-| `pnpm test` / `pnpm lint` / `pnpm typecheck` | Across all packages, cached |
+| `pnpm test` / `pnpm lint` / `pnpm typecheck` | Across all packages, cached (`test` = Vitest in contracts and agent) |
+| `pnpm --filter ai-travel-web e2e` | Playwright end-to-end tests; starts the mock agent and the web app itself |
 | `pnpm dev --filter=ai-travel-agent...` | Agent + its dependencies only |
 
 ### 12.4 Ports
@@ -1065,8 +614,8 @@ backend. Both apps depend on them, so they change in a controlled way:
 | Root config (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.conductor/`, `.gitignore`) | Shared | Small, focused PRs that touch nothing else; merged quickly |
 | `packages/contracts` | Shared (the API contract) | Contracts first, then **both** apps updated in the same PR |
 | `ARCHITECTURE.md` | Shared | Any PR, limited to the section the change affects |
-| `apps/agent/**` | Backend | Backend tickets (`apps/agent/PLAN.md` Part 1) |
-| `apps/web/**` | Frontend | Frontend tickets (`apps/web/SPEC.md` §12) |
+| `apps/agent/**` | Backend | Backend work (`apps/agent/PLAN.md`) |
+| `apps/web/**` | Frontend | Frontend work (`apps/web/PLAN.md`) |
 
 Rules:
 
@@ -1087,32 +636,39 @@ Rules:
 | Build command | `turbo run build` | `pnpm install --frozen-lockfile && pnpm turbo run build --filter=ai-travel-agent` |
 | Start command | managed by Vercel | `pnpm --filter ai-travel-agent start` |
 | Rebuild only when | Ignored Build Step: `npx turbo-ignore` | Build filters: `apps/agent/**`, `packages/contracts/**`, `pnpm-lock.yaml` |
-| Env vars | `NEXT_PUBLIC_MAPBOX_TOKEN`; `NEXT_PUBLIC_AGENT_URL` once the agent is deployed (unset = UI-only mode) | see `apps/agent/PLAN.md` §4 |
-| Health check | — | `GET /health` |
+| Env vars | `NEXT_PUBLIC_MAPBOX_TOKEN`, `NEXT_PUBLIC_AGENT_URL` (unset = UI-only mode) | see `apps/agent/SPEC.md` §4 |
+| Health check | — | `GET /health` (liveness); `GET /readyz` also checks Postgres and keys. Exactly **one** instance (§6.5) |
 
 The agent builds from the repo root on purpose: Render auto-deploys only on changes inside the
 service's root directory, so with `apps/agent` as root a change to `packages/contracts` would not
 redeploy it. Make sure Render uses the pnpm version from `packageManager` (Corepack).
 
-Production database: a managed PostgreSQL instance (Render Postgres) for `PostgresSaver`.
+Production database: a managed PostgreSQL instance (Render Postgres) for `PostgresSaver` and the `trips` table; both
+create their tables on boot.
 
-**Until the agent is deployed** the web app ships in *UI-only mode*: Vercel builds have no
-`NEXT_PUBLIC_AGENT_URL`, the dashboard shows a "planning agent not connected" banner and submitting
-is disabled (see `apps/web/SPEC.md` §4.1). Setting the variable later switches it on — no code change.
+A web build without `NEXT_PUBLIC_AGENT_URL` runs in *UI-only mode*: the dashboard shows a "planning agent not
+connected" notice and submitting is disabled (see `apps/web/SPEC.md` §4.1). Setting the variable switches it on, no
+code change.
 
 ---
 
 ## 14. Testing strategy
 
-| Level | Scope | Tooling |
-| --- | --- | --- |
-| Contracts | Schema accepts blueprint and design examples (flight legs, transfers, `DRAFT`, passes, trip context), rejects malformed packets | Vitest |
-| Agent unit | Budget router (all 3 conditions), cost formula, each node with fake LLM + mock tools, SerpAPI → mock fallback; message builders (text, `decision` topic per node and per auditor condition); trip-context route (weather-only / rate-only failure, USD destination, unknown city, cache hit) with a stubbed `fetch` | Vitest |
-| Agent integration | Full graph run with `MemorySaver` + `TOOLS_MODE=mock`; resume after an injected failure; SSE output parses with `SseEventSchema`; every completed run emits exactly the confirmed decisions in §4.6; a reconnect with `Last-Event-ID` replays the missed packets once | Vitest + supertest |
-| Web unit | SSE parser with chunks split at arbitrary byte boundaries (incl. `MESSAGE`), hook reducer, components (chat shows "Confirmed" only for decisions; top bar hides `null` chips) | Vitest + React Testing Library |
-| E2E | Submit form → chat + logs stream → trip overview fills in → result cards + map render; destination bar shows weather, rate and local time; dropped stream reconnects | Playwright against agent in mock mode |
+No test may call Anthropic, SerpAPI, Tavily or a real provider: the agent tests use a fake `LlmFactory`
+(`apps/agent/test/helpers/fakeLlm.ts`), `TOOLS_MODE=mock` and `MemorySaver`; the web e2e test uses the mock agent.
 
-CI runs `pnpm lint typecheck test build`; Turborepo only re-runs affected packages.
+| Level | What it proves | Where | Tooling |
+| --- | --- | --- | --- |
+| Contracts | Schemas accept design examples and reject malformed packets; old stored results upgrade through `schemaVersion`; error body | `packages/contracts/test/` | Vitest |
+| Agent unit | Budget Auditor: the cost formula and all three conditions, suggestions, which topics it confirms | `apps/agent/test/budget.node.test.ts` | Vitest |
+| Agent integration | Full graph on mock tools: one `RESULT` last, monotonic progress, all six decisions confirmed, per-day `DRAFT`/progress, rain day moved indoors, the over-budget loop runs twice and ends with suggestions, a failed parse confirms nothing | `apps/agent/test/runTrip.test.ts` | Vitest |
+| Agent HTTP | Reconnect with `Last-Event-ID` replays exactly the missed packets; "My trips" list and record by owner id; daily run cap `429` | `apps/agent/test/reconnect.test.ts`, `trips.test.ts` | Vitest + supertest |
+| Agent Postgres | The `trips` table: save, read back, keep first owner, upgrade a v0 row. Runs only with `TEST_DATABASE_URL` (CI starts a Postgres service) | `apps/agent/test/tripStore.postgres.test.ts` | Vitest |
+| Web end to end | Submit a trip → result → reload (chat restored) → "My trips"; the "another device" link; no sideways scroll at 375 px on every screen | `apps/web/e2e/trip.spec.ts` (desktop and `mobile` projects) | Playwright against `test/mock-agent` |
+| Live eval (manual) | About ten prompts against a real agent with real keys: typos, € and UZS, missing fields, past dates, injection text, a budget that cannot be met, direct flights | `apps/agent/scripts/eval.ts` (`pnpm --filter ai-travel-agent eval`) | Costs tokens; never in CI |
+
+CI (`.github/workflows/ci.yml`) runs `pnpm turbo run lint typecheck test build` with a Postgres service, then the
+Playwright job. Still missing: see each app's `PLAN.md`.
 
 ---
 
@@ -1143,9 +699,20 @@ them to work; review them before implementation.
 | `DRAFT` packet | The design's Trip Overview "fills in as agents decide", and the destination bar appears during the run, so the browser needs the trip before the `RESULT` |
 | `PROGRESS.detail`, `pass`, `run`; `LOG.kind` | "Day 4 of 5", "pass 2", the run-details panel, checkpoint rows in the log, fallback banners |
 | `passes`, `replans`, `suggestions` in `RESULT` | The "what changed on re-plan" table, "re-planned once", and the "Raise to $1,100 / Try 4 days / Keep these" actions |
-| `callout` on `MESSAGE` | Tags such as "Over budget by $125 · re-plan 1 of 2" and "Weather prep · Day 3 moved indoors" |
+| `callout` on `MESSAGE` | Tags such as "Finding cheaper options, try 1 of 2" and "Weather prep · Day 3 moved indoors" |
 | `RunRegistry`, `GET …/stream`, `POST …/cancel`, `retryAfterSeconds` | Reconnect-and-catch-up, "Stop run", and the rate-limit countdown from the design's resilience states |
 | Trip context: currency, time zone, outlook, optional `origin` | The destination bar shows currency, local time and the difference to the traveller's home time |
 | `AgentName` `Planner` (was `ItineraryPlanner`) | The design's log lines and agent colours use `Planner`; the display name stays "Itinerary Planner" |
 | Hotel cost uses `durationDays − 1` nights (min. 1) | The last day is the departure day; flight return date and hotel check-out are `startDate + nights` |
 | Single traveller, USD only | Not specified in the blueprint; easy to extend later via `TripRequest` |
+| `trips` table, anonymous owner id (`X-Owner-Id`), `GET /api/trips`, `…/record` | "My trips" and the chat of a reopened trip on any device, without accounts (§4.5) |
+| `ResultPayload.schemaVersion`, `upgradeResultPayload` | Stored results outlive the code that wrote them (§5) |
+| Daily run cap per IP | The public LLM endpoint needs a ceiling on what one address can spend in a day (§8) |
+
+---
+
+## 16. Product decisions
+
+| Decision | Reason |
+| --- | --- |
+| **The traveller does not swap individual agent picks** (decided 2026-10-29, TP-36 G26). The planner stays fully automatic; the traveller steers it with the prompt, the "From / How long / Budget / When" fields and the over-budget actions (raise the budget, try one day less, keep these), each of which starts a new run | A "swap this hotel / flight" action would need a second Budget Auditor pass and usually a Planner re-route of the first and last day, so each swap costs about one re-plan in LLM tokens and SerpAPI calls, and it brings back the human-in-the-loop step §4.6 left out. The ranking already explains its pick ("Picked for you" reasons, other options shown on the cards with their booking links). Revisit if users ask for it: the cheap version is "swap among the five options already found" (no new search), followed by an audit-only pass |

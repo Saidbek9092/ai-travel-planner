@@ -3,6 +3,7 @@ import { createLlmFactory } from './agent/llm.js';
 import { RunRegistry } from './agent/runRegistry.js';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import { createTripStore } from './storage/tripStore.js';
 import { createTravelTool } from './tools/index.js';
 import { createLogger } from './utils/logger.js';
 
@@ -19,7 +20,8 @@ const graph = buildGraph({
   llm: createLlmFactory(config),
   ...(config.TAVILY_API_KEY && { tavilyApiKey: config.TAVILY_API_KEY }),
 });
-const registry = new RunRegistry({ graph, config, checkpointer: checkpointer.kind, logger });
+const trips = await createTripStore(config, logger);
+const registry = new RunRegistry({ graph, config, checkpointer: checkpointer.kind, logger, trips });
 
 /** Problems that stop this instance serving trips: an unreachable database or a missing key. Empty = ready. */
 async function readiness(): Promise<string[]> {
@@ -36,7 +38,7 @@ async function readiness(): Promise<string[]> {
   return problems;
 }
 
-const app = createApp({ config, logger, graph, registry, readiness });
+const app = createApp({ config, logger, graph, registry, trips, readiness });
 
 const server = app.listen(config.PORT, (error) => {
   if (error) {
@@ -63,8 +65,7 @@ function shutdown(signal: NodeJS.Signals) {
   setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS).unref();
 
   server.close(() => {
-    checkpointer
-      .close()
+    Promise.all([checkpointer.close(), trips.close()])
       .catch((error: unknown) => logger.error('closing checkpointer failed', { error: String(error) }))
       .finally(() => process.exit(0));
   });
