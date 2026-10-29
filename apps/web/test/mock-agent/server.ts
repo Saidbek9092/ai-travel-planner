@@ -42,7 +42,7 @@ const STOPPED_ERROR = 'Trip planning stopped before it finished, resume to conti
 function cors(res: ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', `Content-Type, Accept, Last-Event-ID, Authorization, ${OWNER_ID_HEADER}`);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Expose-Headers', 'X-Thread-Id, Retry-After');
 }
 
@@ -291,6 +291,13 @@ createServer(async (req, res) => {
   }
 
   const lookup = /^\/api\/trips\/([^/]+)$/.exec(url.pathname);
+  if (req.method === 'DELETE' && lookup) {
+    const run = runs.get(lookup[1]!);
+    if (!run || hiddenFrom(run, req)) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
+    runs.delete(lookup[1]!);
+    res.writeHead(204).end();
+    return;
+  }
   if (req.method === 'GET' && lookup) {
     const threadId = lookup[1]!;
     const run = runs.get(threadId);

@@ -138,6 +138,19 @@ export function createTripsRouter({ graph, registry, runLimiter, trips }: TripsR
     run.subscribe(streamer, Number.isNaN(lastEventId) ? 0 : lastEventId);
   });
 
+  /** "Delete trip": removes the stored trip. An account's trip only by that account; a guest's only by the browser that planned it. */
+  router.delete('/trips/:threadId', async (req, res) => {
+    const threadId = parseThreadId(req.params.threadId);
+    const owner = await trips.ownership(threadId);
+    if (!owner) throw notFound('Trip not found');
+    const user = userOf(res);
+    const allowed = owner.userId !== null ? owner.userId === user?.id : owner.ownerId !== null && owner.ownerId === ownerIdOf(req);
+    if (!allowed) throw notFound('Trip not found');
+    if (registry.get(threadId)?.done === false) throw conflict('This trip is still running');
+    await trips.remove(threadId);
+    res.status(204).end();
+  });
+
   /** "Stop run". Idempotent: a finished run answers 204 too. */
   router.post('/trips/:threadId/cancel', async (req, res) => {
     await assertAccess(parseThreadId(req.params.threadId), res);

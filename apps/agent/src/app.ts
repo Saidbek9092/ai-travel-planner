@@ -54,7 +54,7 @@ export function createApp({
   app.use(
     cors({
       origin: config.WEB_ORIGIN,
-      methods: ['GET', 'POST'],
+      methods: ['GET', 'POST', 'DELETE'],
       allowedHeaders: ['Content-Type', 'Accept', 'Last-Event-ID', 'Authorization', OWNER_ID_HEADER],
       exposedHeaders: ['X-Thread-Id', 'Retry-After'],
     }),
