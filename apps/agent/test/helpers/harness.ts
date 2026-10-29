@@ -25,12 +25,16 @@ export function testGraph(trip: Partial<ParsedTrip> = {}, config = testConfig())
 }
 
 /** The whole Express app wired like `server.ts`, but in memory. */
-export function testApp({ trip = {}, env = {} }: { trip?: Partial<ParsedTrip>; env?: Record<string, string> } = {}) {
+export function testApp({
+  trip = {},
+  env = {},
+  readiness,
+}: { trip?: Partial<ParsedTrip>; env?: Record<string, string>; readiness?: () => Promise<string[]> } = {}) {
   const config = testConfig(env);
   const { graph, llm } = testGraph(trip, config);
   const trips = createMemoryTripStore();
   const registry = new RunRegistry({ graph, config, checkpointer: 'memory', logger: silentLogger, trips });
-  const app = createApp({ config, logger: silentLogger, graph, registry, trips });
+  const app = createApp({ config, logger: silentLogger, graph, registry, trips, ...(readiness ? { readiness } : {}) });
   return { app, registry, trips, llm, config };
 }
 
