@@ -1,4 +1,5 @@
 import {
+  RESULT_SCHEMA_VERSION,
   SseEventSchema,
   type AgentName,
   type DraftPayload,
@@ -217,6 +218,7 @@ export function resultPayload(threadId: string, options: ResultOptions = {}): Re
     };
   });
   return {
+    schemaVersion: RESULT_SCHEMA_VERSION,
     threadId,
     status,
     origin: 'Tashkent',

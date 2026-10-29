@@ -1,6 +1,5 @@
+import type { ErrorCode } from '@ai-travel/contracts';
 import { z } from 'zod';
-
-export type ErrorCode = 'VALIDATION_ERROR' | 'NOT_FOUND' | 'CONFLICT' | 'RATE_LIMITED' | 'INTERNAL';
 
 /** Error with a public `code` and HTTP status. Its `message` is safe to send to the client. */
 export class AppError extends Error {
@@ -25,8 +24,3 @@ export const validationError = (error: z.ZodError) =>
   new AppError('VALIDATION_ERROR', z.prettifyError(error), 400);
 
 export const internalError = () => new AppError('INTERNAL', 'Something went wrong', 500);
-
-/** Shape of every JSON error response. */
-export interface ErrorBody {
-  error: { code: ErrorCode; message: string; retryAfterSeconds?: number };
-}

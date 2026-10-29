@@ -1,4 +1,13 @@
-import type { ItineraryDay, ProgressPayload, ResultPayload, RunInfo, SseEventInput, TripRequest, TripStatus } from '@ai-travel/contracts';
+import {
+  RESULT_SCHEMA_VERSION,
+  type ItineraryDay,
+  type ProgressPayload,
+  type ResultPayload,
+  type RunInfo,
+  type SseEventInput,
+  type TripRequest,
+  type TripStatus,
+} from '@ai-travel/contracts';
 import type { CompiledTravelGraph } from './graph.js';
 import { initialState, log, MAX_BUDGET_RETRIES, toDraft, type ChatMessage, type LogEntry, type TravelAgentState } from './state.js';
 import { abortMessage } from './runAbort.js';
@@ -60,6 +69,7 @@ export function buildResultPayload(
 ): ResultPayload {
   const failed = failure !== undefined || values.status === 'failed';
   return {
+    schemaVersion: RESULT_SCHEMA_VERSION,
     threadId,
     status: failed ? 'failed' : 'completed',
     origin: values.origin ?? null,
@@ -96,6 +106,8 @@ export interface RunTripArgs {
   /** Timeout / cancel / shutdown. A closed client connection must NOT abort the run. */
   signal?: AbortSignal;
   logger?: Logger;
+  /** Called once with the final result and the whole chat (from the checkpoint, so a resume includes earlier messages). Errors are logged, never fatal. */
+  onResult?: (result: ResultPayload, messages: ChatMessage[]) => Promise<void>;
 }
 
 /**
@@ -108,7 +120,7 @@ export function runTrip(args: RunTripArgs): Promise<void> {
 }
 
 async function execute(
-  { graph, emit, threadId, run, request, resume = false, signal, logger }: RunTripArgs,
+  { graph, emit, threadId, run, request, resume = false, signal, logger, onResult }: RunTripArgs,
   metrics: RunMetrics,
 ): Promise<void> {
   const config = { configurable: { thread_id: threadId }, recursionLimit: 20, ...(signal && { signal }) };
@@ -188,7 +200,9 @@ async function execute(
 
     const values: Partial<TravelAgentState> = (await graph.getState(config)).values;
     emitProgress({ progressPercent: 100, currentStatus: values.status === 'failed' ? 'failed' : 'completed' });
-    emit({ type: 'RESULT', payload: buildResultPayload(threadId, values) });
+    const result = buildResultPayload(threadId, values);
+    emit({ type: 'RESULT', payload: result });
+    await store(result, values);
     summarize(values.status === 'failed' ? 'failed' : 'completed');
   } catch (error) {
     // An abort is an expected outcome, not an error worth a stack trace.
@@ -202,6 +216,14 @@ async function execute(
     }
     await emitFailure();
     summarize(signal?.aborted ? 'aborted' : 'failed');
+  }
+
+  async function store(result: ResultPayload, values: Partial<TravelAgentState>) {
+    try {
+      await onResult?.(result, values.messages ?? []);
+    } catch (error) {
+      logger?.error('saving trip failed', { threadId, error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   function summarize(outcome: 'completed' | 'failed' | 'aborted') {
@@ -233,7 +255,9 @@ async function execute(
         .catch(() => ({}));
       emitLog(log({ logs: values.logs ?? [] }, 'System', message, 'error'));
       emitProgress({ progressPercent: 100, currentStatus: 'failed' });
-      emit({ type: 'RESULT', payload: buildResultPayload(threadId, values, message) });
+      const result = buildResultPayload(threadId, values, message);
+      emit({ type: 'RESULT', payload: result });
+      await store(result, values);
     } catch (emitError) {
       // The stream itself is broken (e.g. an invalid packet); the route closes it.
       logger?.error('could not report failure', {

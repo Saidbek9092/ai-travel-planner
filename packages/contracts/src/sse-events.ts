@@ -25,7 +25,7 @@ export const LogPayloadSchema = z.object({
   kind: LogKindSchema.default('log'),
 });
 
-/** Highlighted tag under a chat message, e.g. "Over budget by $125 · re-plan 1 of 2". */
+/** Highlighted tag under a chat message, e.g. "Finding cheaper options, try 1 of 2". */
 export const CalloutSchema = z.object({
   tone: z.enum(['info', 'warn']),
   label: z.string().min(1),
@@ -83,7 +83,14 @@ export const SuggestionsSchema = z.object({
   tryDays: z.number().int().min(1),
 });
 
+/**
+ * Version of the `ResultPayload` shape. Trips are stored (agent `trips` table, links people keep), so bump this when a
+ * change would break an old one, and add the step that upgrades it to `upgradeResultPayload` below.
+ */
+export const RESULT_SCHEMA_VERSION = 1;
+
 export const ResultPayloadSchema = z.object({
+  schemaVersion: z.literal(RESULT_SCHEMA_VERSION),
   threadId: z.uuid(),
   status: z.enum(['completed', 'failed']),
   origin: z.string().nullable(),
@@ -113,6 +120,28 @@ export const ResultPayloadSchema = z.object({
   /** Set when status is 'failed'. */
   error: z.string().nullable(),
 });
+
+/**
+ * Brings a stored result of any older version up to the current shape. The single migration point for stored trips:
+ * the agent runs it when it reads the `trips` table and the web app when it loads a trip by id.
+ */
+export function upgradeResultPayload(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  let value = raw as Record<string, unknown>;
+  const version = typeof value['schemaVersion'] === 'number' ? value['schemaVersion'] : 0;
+  // v0 → v1 (2026-10-29): same fields, the version was not recorded yet.
+  if (version < 1) value = { ...value, schemaVersion: 1 };
+  return value;
+}
+
+/** A `ResultPayload` read back from storage: upgraded first, then validated against the current schema. */
+export const StoredResultSchema = z.preprocess(upgradeResultPayload, ResultPayloadSchema);
+
+/** `null` when the stored value cannot be upgraded to a valid result. */
+export function parseStoredResult(raw: unknown): ResultPayload | null {
+  const parsed = StoredResultSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
 
 /** The trip so far, sent while agents work. Every field is optional: it fills in as agents decide. */
 export const DraftPayloadSchema = ResultPayloadSchema.pick({

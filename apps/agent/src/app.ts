@@ -9,6 +9,7 @@ import { createRateLimiters, type RateLimiters } from './middlewares/rateLimiter
 import { createPlacesRouter } from './routes/places.js';
 import { createTripContextRouter } from './routes/tripContext.js';
 import { createTripsRouter } from './routes/trips.js';
+import type { TripStore } from './storage/tripStore.js';
 import { notFound } from './utils/errors.js';
 import type { Logger } from './utils/logger.js';
 
@@ -17,6 +18,7 @@ export interface AppDeps {
   logger: Logger;
   graph: CompiledTravelGraph;
   registry: RunRegistry;
+  trips: TripStore;
   /** Dependency checks behind `/readyz`; each rejects (or returns a reason) when not ready. Defaults to ready. */
   readiness?: () => Promise<string[]>;
   /** Injected by tests to use low limits; built from `config` otherwise. */
@@ -32,6 +34,7 @@ export function createApp({
   logger,
   graph,
   registry,
+  trips,
   readiness = async () => [],
   rateLimiters = createRateLimiters(config),
 }: AppDeps): Express {
@@ -75,7 +78,7 @@ export function createApp({
   });
 
   app.use('/api', rateLimiters.generalLimiter);
-  app.use('/api', createTripsRouter({ graph, registry, runLimiter: rateLimiters.runLimiter }));
+  app.use('/api', createTripsRouter({ graph, registry, runLimiter: rateLimiters.runLimiter, trips }));
   app.use('/api', createTripContextRouter({ config }));
   app.use('/api', createPlacesRouter({ config }));
 

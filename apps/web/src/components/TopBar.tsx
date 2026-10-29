@@ -26,10 +26,10 @@ function Chip({ icon, label, title, heading, children }: { icon?: ReactNode; lab
       role="group"
       aria-label={label}
       title={title}
-      className="flex min-w-0 items-center gap-4 py-4 sm:px-8 sm:first:pl-0 lg:border-l lg:border-white/15 lg:first:border-l-0"
+      className="flex min-w-0 items-center gap-4 py-2.5 max-sm:first:col-span-2 sm:px-8 sm:py-4 sm:first:pl-0 lg:border-l lg:border-white/15 lg:first:border-l-0"
     >
       {icon && (
-        <span aria-hidden="true" className="shrink-0 text-white">
+        <span aria-hidden="true" className="shrink-0 text-white max-sm:hidden">
           {icon}
         </span>
       )}
@@ -42,9 +42,9 @@ function Chip({ icon, label, title, heading, children }: { icon?: ReactNode; lab
 }
 
 const Big = ({ children }: { children: ReactNode }) => (
-  <p className="mt-1 truncate text-[22px] leading-7 font-semibold tracking-tight text-white sm:text-[26px] sm:leading-8">{children}</p>
+  <p className="mt-1 truncate text-[18px] leading-6 font-semibold tracking-tight text-white sm:text-[26px] sm:leading-8">{children}</p>
 );
-const Small = ({ children }: { children: ReactNode }) => <span className="ml-1.5 text-base font-normal tracking-normal">{children}</span>;
+const Small = ({ children }: { children: ReactNode }) => <span className="ml-1.5 text-sm font-normal tracking-normal sm:text-base">{children}</span>;
 const Sub = ({ children, mono }: { children: ReactNode; mono?: boolean }) => (
   <p className={cn('mt-0.5 truncate text-[13px] leading-[18px] text-white/75', mono && 'font-mono')}>{children}</p>
 );
@@ -63,9 +63,9 @@ export function TopBar({ status, data, startDate, durationDays, origin }: TopBar
   if (status === 'loading') {
     return (
       <div className="bg-foreground" aria-busy="true" aria-label="Loading destination info">
-        <div className="mx-auto grid w-full max-w-[1360px] gap-4 px-4 py-5 sm:grid-cols-2 sm:px-8 lg:grid-cols-4 lg:px-8">
+        <div className="mx-auto grid w-full max-w-[1360px] grid-cols-2 gap-4 px-4 py-5 sm:px-8 lg:grid-cols-4 lg:px-8">
           {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-14 rounded-lg bg-white/10" />
+            <Skeleton key={i} className="h-14 rounded-lg bg-white/10 max-sm:first:col-span-2" />
           ))}
         </div>
       </div>
@@ -146,7 +146,8 @@ export function TopBar({ status, data, startDate, durationDays, origin }: TopBar
   }
   return (
     <section aria-label="Destination" className="bg-foreground">
-      <div className="mx-auto grid w-full max-w-[1360px] px-4 py-[5px] sm:grid-cols-2 sm:px-8 lg:grid-cols-4 lg:px-8">{chips}</div>
+      {/* Phones: a compact 2-column grid (place across the top) so the run is on screen without scrolling past the band. */}
+      <div className="mx-auto grid w-full max-w-[1360px] grid-cols-2 gap-x-4 px-4 py-[5px] sm:grid-cols-2 sm:gap-x-0 sm:px-8 lg:grid-cols-4 lg:px-8">{chips}</div>
     </section>
   );
 }

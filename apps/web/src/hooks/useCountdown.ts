@@ -9,5 +9,8 @@ export function useCountdown(until: number | null): number {
 
 /** `42` → `0:42` */
 export function formatCountdown(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  // The daily run cap can mean hours: "21:04:09" rather than "1264:09".
+  if (seconds >= 3600) return `${Math.floor(seconds / 3600)}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}`;
+  return `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`;
 }

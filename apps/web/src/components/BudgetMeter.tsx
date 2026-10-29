@@ -99,7 +99,7 @@ export function BudgetMeter({ totalCost, budget, parts, final, variant = 'card' 
   if (variant === 'compact') {
     return (
       <section aria-label={`Budget: ${label}`} className="rounded-xl border bg-card px-5 py-3">
-        <div className="flex items-center gap-x-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:flex-nowrap">
           <span
             className={cn('flex size-10 shrink-0 items-center justify-center rounded-full text-white', verdict.over ? 'bg-destructive' : 'bg-success')}
             aria-hidden="true"
@@ -115,7 +115,8 @@ export function BudgetMeter({ totalCost, budget, parts, final, variant = 'card' 
               {verdict.over ? `Over budget by ${formatUsd(totalCost - budget)}` : `Budget approved · ${verdict.text}`}
             </p>
           </div>
-          <Bar totalCost={totalCost} budget={budget} parts={parts} className="ml-auto w-36 shrink-0" />
+          {/* Phones: the bar takes its own full-width row instead of squeezing the figures. */}
+          <Bar totalCost={totalCost} budget={budget} parts={parts} className="w-full shrink-0 sm:ml-auto sm:w-36" />
         </div>
       </section>
     );

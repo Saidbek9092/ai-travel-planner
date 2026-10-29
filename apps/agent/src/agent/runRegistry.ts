@@ -1,6 +1,7 @@
 import { SseEventSchema, type SseEvent, type SseEventInput, type TripRequest } from '@ai-travel/contracts';
 import type { Config } from '../config.js';
 import { AppError } from '../utils/errors.js';
+import type { TripStore } from '../storage/tripStore.js';
 import type { Logger } from '../utils/logger.js';
 import type { SseStreamer } from '../utils/sseStreamer.js';
 import type { CompiledTravelGraph } from './graph.js';
@@ -17,6 +18,8 @@ export interface RunRegistryDeps {
   config: Pick<Config, 'RUN_TIMEOUT_MS' | 'RUN_REPLAY_TTL_MS' | 'RUN_REPLAY_MAX_EVENTS' | 'ANTHROPIC_MODEL'>;
   checkpointer: 'memory' | 'postgres';
   logger: Logger;
+  /** Where finished trips are saved for "My trips" and reopening. */
+  trips: TripStore;
 }
 
 /**
@@ -102,12 +105,23 @@ export class RunRegistry {
   }
 
   /** Starts `runTrip` detached from any connection. One live run per thread. */
-  start({ threadId, request, resume = false }: { threadId: string; request?: TripRequest; resume?: boolean }): Run {
+  start({
+    threadId,
+    request,
+    resume = false,
+    ownerId = null,
+  }: {
+    threadId: string;
+    request?: TripRequest;
+    resume?: boolean;
+    /** Anonymous browser id the finished trip is listed under. */
+    ownerId?: string | null;
+  }): Run {
     if (this.runs.get(threadId)?.done === false) {
       throw new AppError('CONFLICT', 'This trip is still running', 409);
     }
 
-    const { graph, config, checkpointer, logger } = this.deps;
+    const { graph, config, checkpointer, logger, trips } = this.deps;
     const run = new Run(config.RUN_REPLAY_MAX_EVENTS);
     this.runs.set(threadId, run);
 
@@ -122,6 +136,7 @@ export class RunRegistry {
       resume,
       signal,
       logger,
+      onResult: (result, messages) => trips.save({ ownerId, result, messages }),
     }).finally(() => {
       run.finish();
       setTimeout(() => {

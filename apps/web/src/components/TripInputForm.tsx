@@ -292,7 +292,9 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
         </div>
         {waitSeconds > 0 && (
           <Notice tone="info" placement="inline" title={`You can plan another trip in ${formatCountdown(waitSeconds)}`}>
-            Lots of trips are being planned right now. Your prompt is kept.
+            {waitSeconds > 3600
+              ? "That's today's limit of trips from this connection. Your prompt is kept."
+              : 'Lots of trips are being planned right now. Your prompt is kept.'}
           </Notice>
         )}
         {footer}

@@ -1,6 +1,7 @@
+import type { ErrorBody } from '@ai-travel/contracts';
 import type { ErrorRequestHandler } from 'express';
 import { z } from 'zod';
-import { AppError, internalError, validationError, type ErrorBody } from '../utils/errors.js';
+import { AppError, internalError, validationError } from '../utils/errors.js';
 import type { Logger } from '../utils/logger.js';
 
 /** Errors raised by Express' body parser carry `type`, `status` and `expose`. */

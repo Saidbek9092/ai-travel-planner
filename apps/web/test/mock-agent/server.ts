@@ -1,4 +1,14 @@
 /** Dev/CI-only scripted agent speaking the SSE contract. Never imported from `src/`. */
+import {
+  MessagePayloadSchema,
+  OWNER_ID_HEADER,
+  OwnerIdSchema,
+  type ErrorCode,
+  type MessagePayload,
+  type ResultPayload,
+  type TripListResponse,
+  type TripRecord,
+} from '@ai-travel/contracts';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { newThreadId, resultPacket, resultPayload, scenarios, type Step } from '../fixtures/packets.ts';
 
@@ -19,12 +29,15 @@ interface Run {
   result: unknown;
   /** Reattach attempts to refuse with 503 first (`#drop`), so the "Reconnecting" state is visible. */
   refuse: number;
+  /** `X-Owner-Id` of the request that started it ("My trips"). */
+  ownerId: string | null;
+  createdAt: string;
 }
 const runs = new Map<string, Run>();
 
 function cors(res: ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Last-Event-ID');
+  res.setHeader('Access-Control-Allow-Headers', `Content-Type, Accept, Last-Event-ID, ${OWNER_ID_HEADER}`);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Expose-Headers', 'X-Thread-Id, Retry-After');
 }
@@ -32,6 +45,29 @@ function cors(res: ServerResponse) {
 function json(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
   res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
   res.end(JSON.stringify(body));
+}
+
+/** JSON error in the agent's `ErrorBody` shape; codes are the contract's. */
+function fail(res: ServerResponse, status: number, code: ErrorCode, message: string, extra: { retryAfterSeconds?: number } = {}, headers: Record<string, string> = {}) {
+  json(res, status, { error: { code, message, ...extra } }, headers);
+}
+
+function ownerOf(req: IncomingMessage): string | null {
+  const parsed = OwnerIdSchema.safeParse(req.headers[OWNER_ID_HEADER.toLowerCase()]);
+  return parsed.success ? parsed.data : null;
+}
+
+/** The chat of a run, from its MESSAGE packets (what the agent stores with the trip). */
+function messagesOf(run: Run): MessagePayload[] {
+  return run.events.flatMap(({ data }) => {
+    try {
+      const packet = JSON.parse(data) as { type?: string; payload?: unknown };
+      const parsed = packet.type === 'MESSAGE' ? MessagePayloadSchema.safeParse(packet.payload) : null;
+      return parsed?.success ? [parsed.data] : [];
+    } catch {
+      return [];
+    }
+  });
 }
 
 function pickScenario(prompt: string): string {
@@ -100,8 +136,19 @@ function attach(res: ServerResponse, threadId: string, run: Run, lastId: number)
   });
 }
 
-function startRun(res: ServerResponse, threadId: string, steps: Step[]) {
-  const run: Run = { events: [], subscribers: new Set(), done: false, lost: false, cancelled: false, result: null, refuse: steps.some((step) => 'drop' in step) ? 2 : 0 };
+function startRun(res: ServerResponse, threadId: string, steps: Step[], ownerId: string | null) {
+  const previous = runs.get(threadId);
+  const run: Run = {
+    events: [],
+    subscribers: new Set(),
+    done: false,
+    lost: false,
+    cancelled: false,
+    result: null,
+    refuse: steps.some((step) => 'drop' in step) ? 2 : 0,
+    ownerId: previous?.ownerId ?? ownerId,
+    createdAt: previous?.createdAt ?? new Date().toISOString(),
+  };
   runs.set(threadId, run);
   attach(res, threadId, run, 0);
   void produce(run, steps);
@@ -126,19 +173,36 @@ createServer(async (req, res) => {
     const body = await readBody(req);
     const prompt = typeof body.prompt === 'string' ? body.prompt : '';
     if (prompt.trim().length < 3 || prompt.includes('#validationError')) {
-      return json(res, 400, { error: { code: 'VALIDATION_ERROR', message: 'Describe your trip in a few words.' } });
+      return fail(res, 400, 'VALIDATION_ERROR', 'Describe your trip in a few words.');
     }
     if (/#rate[lL]imit(ed)?/.test(prompt)) {
-      return json(res, 429, { error: { code: 'RATE_LIMITED', message: 'Too many requests', retryAfterSeconds: 42 } }, { 'Retry-After': '42' });
+      return fail(res, 429, 'RATE_LIMITED', 'Too many requests', { retryAfterSeconds: 42 }, { 'Retry-After': '42' });
+    }
+    if (prompt.includes('#dailyLimit')) {
+      return fail(res, 429, 'RATE_LIMITED', "You've reached today's limit of trips from this address, please try again tomorrow", { retryAfterSeconds: 75_600 }, { 'Retry-After': '75600' });
     }
     const threadId = newThreadId();
-    return startRun(res, threadId, scenarios[pickScenario(prompt)]!(threadId));
+    return startRun(res, threadId, scenarios[pickScenario(prompt)]!(threadId), ownerOf(req));
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/trips') {
+    const ownerId = ownerOf(req);
+    if (!ownerId) return fail(res, 400, 'VALIDATION_ERROR', `${OWNER_ID_HEADER} header must be a UUID`);
+    const trips: TripListResponse['trips'] = [...runs.values()]
+      .filter((run) => run.ownerId === ownerId && run.result !== null)
+      .map((run) => {
+        const result = run.result as ResultPayload;
+        const { threadId, status, origin, destination, durationDays, startDate, totalCost, budget } = result;
+        return { threadId, status, origin, destination, durationDays, startDate, totalCost, budget, createdAt: run.createdAt, updatedAt: run.createdAt };
+      })
+      .reverse();
+    return json(res, 200, { trips } satisfies TripListResponse);
   }
 
   if (req.method === 'GET' && url.pathname === '/api/trip-context') {
     const destination = url.searchParams.get('destination') ?? '';
     if (destination.trim().length < 2 || destination.includes('#unknowncity')) {
-      return json(res, 404, { error: { code: 'NOT_FOUND', message: 'Unknown place' } });
+      return fail(res, 404, 'NOT_FOUND', 'Unknown place');
     }
     const origin = url.searchParams.get('origin');
     return json(res, 200, {
@@ -172,10 +236,10 @@ createServer(async (req, res) => {
   if (req.method === 'GET' && reattach) {
     const threadId = reattach[1]!;
     const run = runs.get(threadId);
-    if (!run || run.lost) return json(res, 404, { error: { code: 'NOT_FOUND', message: 'Run not found' } });
+    if (!run || run.lost) return fail(res, 404, 'NOT_FOUND', 'Run not found');
     if (run.refuse > 0) {
       run.refuse -= 1;
-      return json(res, 503, { error: { code: 'INTERNAL', message: 'Agent restarting' } });
+      return fail(res, 503, 'INTERNAL', 'Agent restarting');
     }
     return attach(res, threadId, run, Number(req.headers['last-event-id'] ?? 0) || 0);
   }
@@ -183,7 +247,7 @@ createServer(async (req, res) => {
   const cancel = /^\/api\/trips\/([^/]+)\/cancel$/.exec(url.pathname);
   if (req.method === 'POST' && cancel) {
     const run = runs.get(cancel[1]!);
-    if (!run) return json(res, 404, { error: { code: 'NOT_FOUND', message: 'Run not found' } });
+    if (!run) return fail(res, 404, 'NOT_FOUND', 'Run not found');
     console.log(`cancel ${cancel[1]}`);
     if (!run.done) {
       run.cancelled = true;
@@ -197,7 +261,14 @@ createServer(async (req, res) => {
   const resume = /^\/api\/trips\/([^/]+)\/resume$/.exec(url.pathname);
   if (req.method === 'POST' && resume) {
     const threadId = resume[1]!;
-    return startRun(res, threadId, scenarios.happy!(threadId));
+    return startRun(res, threadId, scenarios.happy!(threadId), ownerOf(req));
+  }
+
+  const record = /^\/api\/trips\/([^/]+)\/record$/.exec(url.pathname);
+  if (req.method === 'GET' && record) {
+    const run = runs.get(record[1]!);
+    if (!run?.result) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
+    return json(res, 200, { result: run.result as ResultPayload, messages: messagesOf(run), createdAt: run.createdAt, updatedAt: run.createdAt } satisfies TripRecord);
   }
 
   const lookup = /^\/api\/trips\/([^/]+)$/.exec(url.pathname);
@@ -205,12 +276,12 @@ createServer(async (req, res) => {
     const threadId = lookup[1]!;
     const run = runs.get(threadId);
     if (run) {
-      return run.result ? json(res, 200, run.result) : json(res, 404, { error: { code: 'NOT_FOUND', message: 'Trip not finished' } });
+      return run.result ? json(res, 200, run.result) : fail(res, 404, 'NOT_FOUND', 'Trip not finished');
     }
-    if (!/^[0-9a-f-]{36}$/i.test(threadId)) return json(res, 404, { error: { code: 'NOT_FOUND', message: 'Trip not found' } });
+    if (!/^[0-9a-f-]{36}$/i.test(threadId)) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
     // Unknown but well-formed id (e.g. after a mock restart): pretend it finished, so deep links keep working.
     return json(res, 200, resultPayload(threadId));
   }
 
-  json(res, 404, { error: { code: 'NOT_FOUND', message: 'Not found' } });
+  fail(res, 404, 'NOT_FOUND', 'Not found');
 }).listen(port, () => console.log(`mock agent on http://localhost:${port} (scenarios: ${Object.keys(scenarios).join(', ')})`));
