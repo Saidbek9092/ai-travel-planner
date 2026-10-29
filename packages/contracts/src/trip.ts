@@ -35,9 +35,15 @@ export const FlightStopSchema = z.object({
 export const FlightLegSchema = z.object({
   from: AirportSchema,
   to: AirportSchema,
-  /** ISO 8601 date-time; airline-local offsets are allowed. */
-  departure: z.iso.datetime({ offset: true }),
-  arrival: z.iso.datetime({ offset: true }),
+  /**
+   * ISO 8601 date-time as the airport shows it. An offset is optional: SerpAPI reports airport-local times
+   * without one, and they are kept that way rather than mislabelled as UTC. Never subtract two of them to
+   * get a duration across time zones; use `durationMinutes`.
+   */
+  departure: z.iso.datetime({ offset: true, local: true }),
+  arrival: z.iso.datetime({ offset: true, local: true }),
+  /** Gate-to-gate travel time including layovers, when the provider reports it. */
+  durationMinutes: z.number().int().positive().nullish(),
   /** Arrival terminal, when the provider reports it. */
   terminal: z.string().min(1).nullable(),
   /** Empty array = direct. */
@@ -79,7 +85,7 @@ export const HotelSchema = z.object({
   name: z.string().min(1),
   /** Neighbourhood, e.g. "11th arrondissement". */
   area: z.string().min(1).nullable(),
-  /** USD. */
+  /** USD. V1 is USD-only on purpose: providers are asked for USD and the web app shows the destination rate beside it. */
   pricePerNight: z.number().nonnegative(),
   /** 0–10 (Google Hotels' 0–5 is doubled by the tool). */
   rating: z.number().min(0).max(10),

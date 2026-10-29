@@ -1,9 +1,12 @@
 import { FlightSchema, HotelSchema, type Flight, type FlightLeg, type Hotel } from '@ai-travel/contracts';
 import { z } from 'zod';
 import { airportFor, iataFor } from './airports.js';
-import { ToolUnavailableError, type FlightQuery, type HotelQuery, type SearchTool } from './types.js';
+import { assertProviderUp, markProviderDown, markProviderUp, ProviderDownError } from '../utils/circuitBreaker.js';
+import { recordMetric } from '../utils/runMetrics.js';
+import { ToolUnavailableError, UnknownAirportError, type FlightQuery, type HotelQuery, type SearchTool } from './types.js';
 
 const ENDPOINT = 'https://serpapi.com/search.json';
+const PROVIDER = 'serpapi.com';
 const REQUEST_TIMEOUT_MS = 10_000;
 const BACKOFF_MS = [500, 1500];
 
@@ -16,6 +19,8 @@ const FlightOptionSchema = z.looseObject({
   flights: z.array(FlightSegmentSchema).min(1),
   layovers: z.array(z.looseObject({ duration: z.number(), name: z.string(), id: z.string().optional() })).optional(),
   price: z.number(),
+  /** Whole itinerary, layovers included. */
+  total_duration: z.number().optional(),
 });
 const FlightsResponseSchema = z.looseObject({
   best_flights: z.array(z.unknown()).optional(),
@@ -44,8 +49,8 @@ const PropertySchema = z.looseObject({
 });
 const HotelsResponseSchema = z.looseObject({ properties: z.array(z.unknown()).optional() });
 
-/** "2026-11-12 06:30" → "2026-11-12T06:30:00Z" (Google Flights reports airport-local times without an offset). */
-const toIso = (value: string) => `${value.trim().replace(' ', 'T')}:00Z`;
+/** "2026-11-12 06:30" → "2026-11-12T06:30:00": Google Flights reports airport-local times, so no offset is added. */
+const toIso = (value: string) => `${value.trim().replace(' ', 'T')}:00`;
 
 /** "3:00 PM" → "15:00". */
 function to24h(value: string | undefined): string | null {
@@ -72,14 +77,25 @@ export interface SerpApiOptions {
 export function createSerpApiTool({ apiKey, fetch: fetchImpl = fetch }: SerpApiOptions): SearchTool {
   /** GET with a per-request timeout, retrying network errors, 429 and 5xx; other 4xx fail at once. */
   async function request(params: Record<string, string>, runSignal?: AbortSignal): Promise<unknown> {
+    try {
+      assertProviderUp(PROVIDER);
+    } catch (error) {
+      if (error instanceof ProviderDownError) throw new ToolUnavailableError(error.message);
+      throw error;
+    }
     const url = `${ENDPOINT}?${new URLSearchParams({ ...params, api_key: apiKey })}`;
     let lastError: unknown;
+    recordMetric((metrics) => (metrics.searchCalls += 1));
 
     for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
       const signal = AbortSignal.any([...(runSignal ? [runSignal] : []), AbortSignal.timeout(REQUEST_TIMEOUT_MS)]);
       try {
         const response = await fetchImpl(url, { signal });
-        if (response.ok) return await response.json();
+        if (response.ok) {
+          const body: unknown = await response.json();
+          markProviderUp(PROVIDER);
+          return body;
+        }
         if (response.status !== 429 && response.status < 500) {
           throw new ToolUnavailableError(`SerpAPI rejected the request (${response.status})`);
         }
@@ -93,6 +109,7 @@ export function createSerpApiTool({ apiKey, fetch: fetchImpl = fetch }: SerpApiO
       if (wait === undefined) break;
       await delay(wait + Math.random() * 250, runSignal ?? new AbortController().signal);
     }
+    markProviderDown(PROVIDER);
     throw new ToolUnavailableError(
       `SerpAPI unavailable: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
     );
@@ -102,6 +119,10 @@ export function createSerpApiTool({ apiKey, fetch: fetchImpl = fetch }: SerpApiO
     name: 'serpapi',
 
     async searchFlights(query: FlightQuery, signal?: AbortSignal): Promise<Flight[]> {
+      // A name we cannot turn into an airport would only be rejected by SerpAPI; say which place failed instead.
+      for (const place of [query.origin, query.destination]) {
+        if (iataFor(place) === undefined) throw new UnknownAirportError(place);
+      }
       const body = FlightsResponseSchema.safeParse(
         await request(
           {
@@ -169,6 +190,7 @@ function mapFlight(option: z.infer<typeof FlightOptionSchema>, bookingUrl: strin
     to: { code: last.arrival_airport.id, name: last.arrival_airport.name },
     departure: toIso(first.departure_airport.time),
     arrival: toIso(last.arrival_airport.time),
+    durationMinutes: option.total_duration ? Math.round(option.total_duration) : null,
     terminal: null,
     stops: (option.layovers ?? []).map((layover) => ({
       airport: { code: layover.id ?? airportFor(layover.name).code, name: layover.name },

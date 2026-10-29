@@ -60,13 +60,17 @@ const legs = (flight: Flight): FlightLeg[] => (flight.return ? [flight.outbound,
 const longestLayover = (flight: Flight) =>
   Math.max(0, ...legs(flight).flatMap((leg) => leg.stops.map((stop) => stop.layoverMinutes)));
 
+/** Travel hours of one leg. Local airport times cannot be subtracted across time zones, so prefer the reported duration. */
+const legHours = (leg: FlightLeg) =>
+  leg.durationMinutes ? leg.durationMinutes / 60 : (Date.parse(leg.arrival) - Date.parse(leg.departure)) / 3_600_000;
+
 export interface FlightContext {
   /** Whole-trip budget in USD. */
   budget: number;
 }
 
 export function flightScore(flight: Flight, { budget }: FlightContext): Scored<Flight> {
-  const hours = legs(flight).reduce((sum, leg) => sum + (Date.parse(leg.arrival) - Date.parse(leg.departure)) / 3_600_000, 0);
+  const hours = legs(flight).reduce((sum, leg) => sum + legHours(leg), 0);
   const stops = legs(flight).reduce((sum, leg) => sum + leg.stops.length, 0);
   const layoverHours = Math.max(0, longestLayover(flight) - LONG_LAYOVER_MINUTES) / 60;
   const redEyes = legs(flight).reduce((sum, leg) => sum + Number(isRedEye(leg.departure)) + Number(isRedEye(leg.arrival)), 0);

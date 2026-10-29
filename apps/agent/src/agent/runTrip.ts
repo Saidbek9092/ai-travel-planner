@@ -3,6 +3,7 @@ import type { CompiledTravelGraph } from './graph.js';
 import { initialState, log, MAX_BUDGET_RETRIES, toDraft, type ChatMessage, type LogEntry, type TravelAgentState } from './state.js';
 import { abortMessage } from './runAbort.js';
 import type { Logger } from '../utils/logger.js';
+import { createRunMetrics, withRunMetrics, type RunMetrics } from '../utils/runMetrics.js';
 
 const GENERIC_ERROR = 'Something went wrong while planning your trip. Please try again.';
 const INTERRUPTED_ERROR = 'Trip planning was interrupted before it finished.';
@@ -101,7 +102,15 @@ export interface RunTripArgs {
  * Runs the graph and turns its stream into packets: node logs → `LOG`, node + status → `PROGRESS`,
  * then exactly one `RESULT`. Never throws; failures end the stream with `RESULT failed`.
  */
-export async function runTrip({ graph, emit, threadId, run, request, resume = false, signal, logger }: RunTripArgs): Promise<void> {
+export function runTrip(args: RunTripArgs): Promise<void> {
+  const metrics = createRunMetrics();
+  return withRunMetrics(metrics, () => execute(args, metrics));
+}
+
+async function execute(
+  { graph, emit, threadId, run, request, resume = false, signal, logger }: RunTripArgs,
+  metrics: RunMetrics,
+): Promise<void> {
   const config = { configurable: { thread_id: threadId }, recursionLimit: 20, ...(signal && { signal }) };
   const emitLog = (entry: LogEntry) => emit({ type: 'LOG', payload: entry });
   const emitProgress = (payload: Pick<ProgressPayload, 'progressPercent' | 'currentStatus'> & Partial<ProgressPayload>) =>
@@ -204,6 +213,13 @@ export async function runTrip({ graph, emit, threadId, run, request, resume = fa
       llmFallbackUsed,
       toolFallbackUsed,
       totalMs: Date.now() - startedAt,
+      llmCalls: metrics.llmCalls,
+      inputTokens: metrics.inputTokens,
+      outputTokens: metrics.outputTokens,
+      models: metrics.models,
+      llmFallbacks: metrics.llmFallbacks,
+      searchCalls: metrics.searchCalls,
+      searchCacheHits: metrics.searchCacheHits,
     });
   }
 

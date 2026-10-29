@@ -42,22 +42,26 @@ export type CompiledTravelGraph = ReturnType<typeof buildGraph>;
 export interface Checkpointer {
   saver: BaseCheckpointSaver;
   kind: 'memory' | 'postgres';
+  /** Rejects when the store cannot be reached; resolves at once for memory. */
+  ping(): Promise<void>;
   /** Releases the Postgres pool; a no-op for memory. */
   close(): Promise<void>;
 }
 
-/** `PostgresSaver` when `DATABASE_URL` is set (tables created on boot), `MemorySaver` otherwise. */
+/** `PostgresSaver` when `DATABASE_URL` is set (tables created on boot), `MemorySaver` otherwise (never in production). */
 export async function createCheckpointer(
   config: Pick<Config, 'DATABASE_URL' | 'NODE_ENV'>,
   logger?: Logger,
 ): Promise<Checkpointer> {
   if (config.DATABASE_URL === undefined) {
-    if (config.NODE_ENV === 'production') {
-      logger?.warn('DATABASE_URL not set: runs are kept in memory and cannot be resumed after a restart');
-    }
-    return { saver: new MemorySaver(), kind: 'memory', close: async () => {} };
+    // `loadConfig` already refuses this in production; guard here too for callers that build a config by hand.
+    if (config.NODE_ENV === 'production') throw new Error('DATABASE_URL is required in production');
+    logger?.info('DATABASE_URL not set: runs are kept in memory and cannot be resumed after a restart');
+    return { saver: new MemorySaver(), kind: 'memory', ping: async () => {}, close: async () => {} };
   }
   const saver = PostgresSaver.fromConnString(config.DATABASE_URL);
   await saver.setup();
-  return { saver, kind: 'postgres', close: () => saver.end() };
+  // Reading a thread that does not exist is a cheap round trip through the pool.
+  const ping = async () => void (await saver.getTuple({ configurable: { thread_id: '__readyz__' } }));
+  return { saver, kind: 'postgres', ping, close: () => saver.end() };
 }

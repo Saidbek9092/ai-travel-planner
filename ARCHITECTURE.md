@@ -240,7 +240,7 @@ interface TravelAgentState {
 | Environment | Checkpointer | Selected when |
 | --- | --- | --- |
 | Local / test | `MemorySaver` (in-process, lost on restart) | `DATABASE_URL` not set |
-| Production | `PostgresSaver` (`@langchain/langgraph-checkpoint-postgres`) | `DATABASE_URL` set; run `setup()` once on boot |
+| Production | `PostgresSaver` (`@langchain/langgraph-checkpoint-postgres`) | `DATABASE_URL` set (required: the agent refuses to start in production without it); run `setup()` once on boot |
 
 - One run = one `thread_id` (`threadId` UUID). A checkpoint is written after every node.
 - Resume after an error: `graph.stream(null, { configurable: { thread_id } })` continues from the last
@@ -782,7 +782,7 @@ active and for 10 minutes after it ends.
 - The web app retries up to 5 times with backoff (1 s, 2 s, 4 s, 8 s, 15 s) and shows "Reconnecting · attempt N"
   with a "Reconnect now" button. When the stream is back, the log catches up from the buffer.
 - If the agent process restarts the buffer is gone; the run is recovered from its checkpoint with `resume`.
-- The registry is per process. A single Render instance is assumed; scaling out needs a shared store.
+- The registry is per process. **Run exactly one agent instance**: the agent logs a single-instance warning at startup, and a second instance would not find the other's runs or replay buffers. Scaling out needs a shared store.
 
 Beyond the buffer, `MESSAGE`, `LOG` and `DRAFT` packets are live-only: `GET /api/trips/:threadId` returns a
 `ResultPayload`, so a trip reopened later shows its results but not the chat history. Every confirmed decision
@@ -795,7 +795,8 @@ passes).
 
 | Method & path | Body | Response |
 | --- | --- | --- |
-| `GET /health` | — | `200 {"status":"ok"}` (Render health check) |
+| `GET /health` | — | `200 {"status":"ok"}` (liveness; Render health check) |
+| `GET /readyz` | — | `200 {"status":"ready"}`, or `503 {"status":"unavailable","problems":[…]}` when Postgres is unreachable or a required key is missing |
 | `POST /api/trips` | `TripRequest` | `200 text/event-stream` + `X-Thread-Id` header |
 | `GET /api/trips/:threadId/stream` | header `Last-Event-ID` (optional) | `200 text/event-stream`: replays missed packets, then follows the live run; `404` if the run is not in the registry |
 | `POST /api/trips/:threadId/cancel` | — | `204`; aborts the run, which ends with `RESULT failed` ("Run stopped") and stays resumable; `404` if unknown |

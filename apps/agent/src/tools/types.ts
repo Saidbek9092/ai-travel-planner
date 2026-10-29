@@ -49,3 +49,10 @@ export interface TravelSearchTool extends SearchTool {
 export class ToolUnavailableError extends Error {
   override readonly name = 'ToolUnavailableError';
 }
+
+/** No airport is known for this place, so live flight search cannot run; callers fall back to estimates. */
+export class UnknownAirportError extends ToolUnavailableError {
+  constructor(readonly place: string) {
+    super(`No airport found for "${place}"`);
+  }
+}
