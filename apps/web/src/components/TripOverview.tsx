@@ -3,7 +3,7 @@
 import type { DecisionTopic, Flight, Hotel, ItineraryDay, MessagePayload, ProgressPayload, ResultPayload, Transfer } from '@ai-travel/contracts';
 import dynamic from 'next/dynamic';
 import { BedDoubleIcon, CalendarDaysIcon, CarIcon, MapIcon, MapPinOffIcon, PlaneIcon, type LucideIcon } from 'lucide-react';
-import { useState, type ReactNode, type RefObject } from 'react';
+import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { BudgetMeter } from '@/components/BudgetMeter';
 import { SelectedFlightCard, SelectedHotelCard, TransfersCard } from '@/components/FlightHotelCards';
 import { DayList, DayPanel, DayStrip, useArrowKeys, type DaySelection } from '@/components/ItineraryTimeline';
@@ -52,7 +52,7 @@ function DayExplorer({ itinerary, totalDays, hotel, transfers, dailySpend, selec
       {hasPlaces && (
         <div className="flex items-center justify-between gap-2 border-b px-4 pb-3">
           <span className="text-[13px] text-ink-2">{day ? `Day ${day.day} · ${day.places.length} ${day.places.length === 1 ? 'stop' : 'stops'}` : 'All days'}</span>
-          <Button variant="outline" size="sm" aria-expanded={showMap} aria-controls="day-map" onClick={() => setShowMap((v) => !v)}>
+          <Button variant="outline" className="h-9 bg-card pointer-coarse:h-11" aria-expanded={showMap} aria-controls="day-map" onClick={() => setShowMap((v) => !v)}>
             {showMap ? <MapPinOffIcon aria-hidden="true" /> : <MapIcon aria-hidden="true" />}
             {showMap ? 'Hide map' : 'Show map'}
           </Button>
@@ -95,13 +95,24 @@ interface SectionTab {
   content: ReactNode;
 }
 
+/** Height of the sticky site header (`h-16`), which the section tabs stick under. */
+const HEADER_PX = 64;
+
 /** Flight, Hotel, Transfers and Days as tabs: one section at a time. Arrow keys move between tabs. */
 function SectionTabs({ tabs, initial }: { tabs: SectionTab[]; initial: SectionId }) {
   const [active, setActive] = useState<SectionId>(initial);
+  const rootRef = useRef<HTMLDivElement>(null);
   const keys = useArrowKeys(tabs.length);
   const current = tabs.find((t) => t.id === active) ?? tabs[0]!;
+  const select = (id: SectionId) => {
+    setActive(id);
+    // Scrolled past the tabs (they are stuck under the header): show the new section from its top, not from the
+    // middle of the page where the old, longer section left off.
+    const top = rootRef.current?.getBoundingClientRect().top ?? 0;
+    if (top < HEADER_PX) window.scrollBy({ top: top - HEADER_PX });
+  };
   return (
-    <div className="flex min-w-0 flex-col gap-5">
+    <div ref={rootRef} className="@container flex min-w-0 flex-col gap-5">
       <div role="tablist" aria-label="Trip sections" className="sticky top-16 z-30 -mx-1 flex gap-1 border-b bg-background/95 px-1 backdrop-blur">
         {tabs.map((tab, i) => {
           const selected = tab.id === current.id;
@@ -115,7 +126,7 @@ function SectionTabs({ tabs, initial }: { tabs: SectionTab[]; initial: SectionId
               aria-selected={selected}
               aria-controls="section-panel"
               tabIndex={selected ? 0 : -1}
-              onClick={() => setActive(tab.id)}
+              onClick={() => select(tab.id)}
               onKeyDown={(e) => keys.onKeyDown(e, i)}
               className={cn(
                 '-mb-px flex min-w-0 flex-1 items-center justify-center gap-2 border-b-2 px-2 py-3 text-[15px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
@@ -124,7 +135,8 @@ function SectionTabs({ tabs, initial }: { tabs: SectionTab[]; initial: SectionId
             >
               <tab.icon className="size-4 shrink-0" aria-hidden="true" />
               {tab.label}
-              <span className="hidden truncate rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-ink-2 xl:inline">{tab.hint ?? '…'}</span>
+              {/* Only where there is room for it: a clipped price ("$4…") would read as a different price. */}
+              {tab.hint && <span className="hidden rounded-full bg-muted px-2 py-0.5 text-xs font-normal whitespace-nowrap text-ink-2 @2xl:inline">{tab.hint}</span>}
             </button>
           );
         })}

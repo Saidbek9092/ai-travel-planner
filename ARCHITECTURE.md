@@ -402,6 +402,9 @@ active and for 10 minutes after it ends.
   `GET /api/trips/:threadId` (finished) or `POST …/resume` (stopped).
 - The web app retries up to 5 times with backoff (1 s, 2 s, 4 s, 8 s, 15 s) and shows "Reconnecting · attempt N"
   with a "Reconnect now" button. When the stream is back, the log catches up from the buffer.
+- The web app also uses this stream to **follow a run it did not start** (TP-38): a trip opened from a link or
+  "My trips" before it finished is followed live if the registry still has it; "Resume" on a run that is still going
+  (`409`) follows it instead of failing; and a page the user left mid-run and came back to catches up from its last id.
 - If the agent process restarts the buffer is gone; the run is recovered from its checkpoint with `resume`.
 - The registry is per process. **Run exactly one agent instance**: the agent logs a single-instance warning at startup, and a second instance would not find the other's runs or replay buffers. Scaling out needs a shared store.
 - **Health checks.** Point the Render health check at `GET /health` (liveness), not `/readyz`. With one instance and in-memory runs, a short Postgres outage would make `/readyz` return `503`, Render would restart the instance, and every live run and replay buffer would be lost, although the process itself was fine. Point an external monitor (for example UptimeRobot) at `/readyz` instead: it alerts on `503` but restarts nothing. Revisit this if the agent ever runs several instances with a shared run store.

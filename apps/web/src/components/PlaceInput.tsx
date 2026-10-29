@@ -52,6 +52,7 @@ export function PlaceInput({ id, value, placeholder, onChange, onCommit, onCance
         autoFocus
         role="combobox"
         autoComplete="off"
+        className="h-9 pointer-coarse:h-11"
         aria-expanded={showList}
         aria-controls={listId}
         aria-autocomplete="list"

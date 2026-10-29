@@ -19,10 +19,12 @@ interface RunBannersProps {
   onStartOver: () => void;
   onRaiseBudget: (budget: number) => void;
   onTryDays: (days: number) => void;
+  /** "Keep it" removes the banner (and the focused button with it): move focus somewhere sensible. */
+  onKeep: () => void;
 }
 
-const btn = 'h-9';
-const outlineBtn = 'h-9 bg-card';
+const btn = 'h-9 pointer-coarse:h-11';
+const outlineBtn = 'h-9 bg-card pointer-coarse:h-11';
 const RECONNECT_TOAST = 'stream-reconnecting';
 
 /** Where a stopped run was, in traveller words ("the budget check"). */
@@ -105,7 +107,14 @@ export function RunBanners(props: RunBannersProps) {
                 Try {tryDays} days
               </Button>
             )}
-            <Button variant="ghost" className={btn} onClick={() => setKeep(true)}>
+            <Button
+              variant="ghost"
+              className={btn}
+              onClick={() => {
+                setKeep(true);
+                props.onKeep();
+              }}
+            >
               Keep it
             </Button>
           </>

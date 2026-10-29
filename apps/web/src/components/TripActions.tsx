@@ -3,11 +3,11 @@
 import { RefreshCwIcon, ShareIcon, SquareIcon } from 'lucide-react';
 import { useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { toast } from 'sonner';
+import { notify } from '@/components/Notice';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import type { StreamStatus } from '@/hooks/useAgentStream';
-import { HEADER_ACTIONS_ID } from '@/lib/dom';
+import { HEADER_ACTIONS_ID, keepTabInside } from '@/lib/dom';
 
 const noop = () => () => undefined;
 const findSlot = () => document.getElementById(HEADER_ACTIONS_ID);
@@ -17,9 +17,9 @@ export async function shareTrip(threadId: string) {
   const url = `${window.location.origin}/?trip=${encodeURIComponent(threadId)}`;
   try {
     await navigator.clipboard.writeText(url);
-    toast.success('Link copied', { description: 'Anyone with the link can open this trip.' });
+    notify('success', 'Link copied', { description: 'Anyone with the link can open this trip.' });
   } catch {
-    toast.error("Couldn't copy the link", { description: url });
+    notify('error', "Couldn't copy the link", { description: url });
   }
 }
 
@@ -39,26 +39,26 @@ export function TripActions({ status, threadId, canReplan, onStop, onReplan }: T
   if (!slot) return null;
   const live = status === 'connecting' || status === 'streaming' || status === 'reconnecting';
   const finished = status === 'completed' && threadId !== null;
-  const size = 'h-10 px-3.5 text-[15px]';
+  const size = 'h-10 px-3.5 text-[15px] pointer-coarse:h-11 max-sm:min-w-11';
   return createPortal(
     <>
       {live && (
-        <Button variant="outline" className={`${size} bg-card`} onClick={onStop}>
+        <Button variant="outline" className={`${size} bg-card`} onClick={onStop} title="Stop planning">
           <SquareIcon aria-hidden="true" className="size-3.5" /> <span className="max-sm:sr-only">Stop planning</span>
         </Button>
       )}
       {finished && canReplan && (
-        <Button variant="outline" className={`${size} bg-card`} onClick={() => setConfirming(true)}>
+        <Button variant="outline" className={`${size} bg-card`} onClick={() => setConfirming(true)} title="Re-plan">
           <RefreshCwIcon aria-hidden="true" /> <span className="max-sm:sr-only">Re-plan</span>
         </Button>
       )}
       {finished && (
-        <Button className={size} onClick={() => void shareTrip(threadId)}>
+        <Button className={size} onClick={() => void shareTrip(threadId)} title="Share trip">
           <ShareIcon aria-hidden="true" /> <span className="max-sm:sr-only">Share trip</span>
         </Button>
       )}
       <Dialog open={confirming && finished} onOpenChange={setConfirming}>
-        <DialogContent initialFocus={keepRef}>
+        <DialogContent initialFocus={keepRef} onKeyDown={keepTabInside}>
           <DialogTitle>Plan this trip again?</DialogTitle>
           <DialogDescription>Your current trip will be replaced. Your start details stay the same.</DialogDescription>
           <DialogFooter>

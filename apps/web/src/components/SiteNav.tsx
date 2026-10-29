@@ -23,7 +23,7 @@ export function SiteNav() {
             aria-current={active ? 'page' : undefined}
             onClick={() => href === '/' && window.dispatchEvent(new Event(NEW_TRIP_EVENT))}
             className={cn(
-              'inline-flex h-10 items-center rounded-lg px-3 text-[15px] whitespace-nowrap text-ink-2 outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 max-sm:px-2 max-sm:text-sm',
+              'inline-flex h-10 items-center rounded-lg px-3 text-[15px] whitespace-nowrap text-ink-2 outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 max-sm:px-2 max-sm:text-sm pointer-coarse:h-11',
               active && 'bg-muted font-medium text-foreground',
             )}
           >

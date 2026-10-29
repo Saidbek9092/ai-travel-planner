@@ -2,7 +2,7 @@
 
 import type { ItineraryDay, Place, Transfer } from '@ai-travel/contracts';
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, ImageIcon } from 'lucide-react';
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ExternalLink } from '@/components/ExternalLink';
 import { Button } from '@/components/ui/button';
 import { TRANSFER_MODES, WEATHER_ICONS, dayColor, formatTemperature } from '@/lib/labels';
@@ -117,12 +117,31 @@ interface DayStripProps {
 export function DayStrip({ itinerary, totalDays, selected, onSelect }: DayStripProps) {
   const days = Array.from({ length: Math.max(totalDays, itinerary.length) }, (_, i) => i + 1);
   const keys = useArrowKeys(days.length + 1);
+  // Fade an edge that has more days beyond it, so a cut-off tab reads as "scroll for more".
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ before: false, after: false });
+  const measure = useCallback(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    setMore({ before: el.scrollLeft > 4, after: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
+  }, []);
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measure, days.length]);
+  const fade = `linear-gradient(to right, ${more.before ? 'transparent 0, black 40px' : 'black 0'}, ${more.after ? 'black calc(100% - 40px), transparent 100%' : 'black 100%'})`;
   return (
     <div
+      ref={stripRef}
       role="tablist"
       aria-label="Days"
+      onScroll={measure}
       // `relative`: the tabs' `sr-only` (absolute) labels must be clipped by this scroller, not widen the page.
       className="relative flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 py-3"
+      style={more.before || more.after ? { maskImage: fade } : undefined}
     >
       {[
         { key: 'all' as const, day: null as ItineraryDay | null, n: 0 },
@@ -146,7 +165,7 @@ export function DayStrip({ itinerary, totalDays, selected, onSelect }: DayStripP
             onKeyDown={(e) => keys.onKeyDown(e, i)}
             onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })}
             className={cn(
-              'flex h-10 shrink-0 snap-start items-center gap-2 rounded-full border px-4 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+              'flex h-10 shrink-0 snap-start items-center gap-2 rounded-full border px-4 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 pointer-coarse:h-11',
               !active && 'border-border bg-card hover:border-muted-foreground/40',
               !planned && 'cursor-default text-muted-foreground hover:border-border',
             )}
@@ -258,10 +277,10 @@ export function DayPanel({
           {day.date && ` · ${formatDay(day.date)}`}
         </p>
         <span className="ml-auto flex gap-2">
-          <Button variant="outline" size="icon" className="size-10 bg-card" disabled={!onPrev} onClick={onPrev ?? undefined} aria-label="Previous day">
+          <Button variant="outline" size="icon" className="size-10 bg-card pointer-coarse:size-11" disabled={!onPrev} onClick={onPrev ?? undefined} aria-label="Previous day">
             <ChevronLeftIcon aria-hidden="true" />
           </Button>
-          <Button variant="outline" size="icon" className="size-10 bg-card" disabled={!onNext} onClick={onNext ?? undefined} aria-label="Next day">
+          <Button variant="outline" size="icon" className="size-10 bg-card pointer-coarse:size-11" disabled={!onNext} onClick={onNext ?? undefined} aria-label="Next day">
             <ChevronRightIcon aria-hidden="true" />
           </Button>
         </span>

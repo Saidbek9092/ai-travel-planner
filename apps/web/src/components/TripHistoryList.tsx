@@ -4,8 +4,9 @@ import type { TripSummary } from '@ai-travel/contracts';
 import Link from 'next/link';
 import { ChevronRightIcon, LaptopIcon, PlaneIcon, Trash2Icon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { notify } from '@/components/Notice';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useTripHistory, type TripHistoryEntry } from '@/hooks/useTripHistory';
 import { fetchMyTrips } from '@/lib/api';
 import { env } from '@/lib/env';
@@ -39,24 +40,29 @@ function useAvailability(threadIds: string[]) {
 
 /**
  * Adopts the owner id from an "Open on another device" link (`/trips?owner=…`), then loads this owner's trips from
- * the agent. `null` until loaded, or when the agent cannot be asked (the list then falls back to this browser's).
+ * the agent. `trips` is `null` while loading, or when the agent cannot be asked (the list then falls back to this browser's).
  */
 function useServerTrips() {
   const [trips, setTrips] = useState<TripSummary[] | null>(null);
+  const [loading, setLoading] = useState(env.agentUrl !== null);
   useEffect(() => {
     const url = new URL(window.location.href);
     const shared = url.searchParams.get('owner');
     if (shared !== null) {
-      if (adoptOwnerId(shared)) toast.success('Trips linked', { description: 'This browser now shows the same trips as the device you came from.' });
-      else toast.error('That link is not valid');
+      if (adoptOwnerId(shared)) notify('success', 'Trips linked', { description: 'This browser now shows the same trips as the device you came from.' });
+      else notify('error', 'That link is not valid');
       url.searchParams.delete('owner');
       window.history.replaceState(null, '', url);
     }
     const controller = new AbortController();
-    void fetchMyTrips(controller.signal).then((list) => !controller.signal.aborted && setTrips(list));
+    void fetchMyTrips(controller.signal).then((list) => {
+      if (controller.signal.aborted) return;
+      setTrips(list);
+      setLoading(false);
+    });
     return () => controller.abort();
   }, []);
-  return trips;
+  return { trips, loading };
 }
 
 interface Row extends TripHistoryEntry {
@@ -80,13 +86,21 @@ function mergeTrips(server: TripSummary[] | null, local: TripHistoryEntry[]): Ro
 
 export function TripHistoryList() {
   const { trips: local, remove } = useTripHistory();
-  const server = useServerTrips();
+  const { trips: server, loading } = useServerTrips();
   const trips = useMemo(() => mergeTrips(server, local), [server, local]);
   const availability = useAvailability(trips.filter((t) => !t.stored).map((t) => t.threadId));
 
   return (
-    <div className="flex flex-col gap-6">
-      {trips.length === 0 ? (
+    <div className="flex flex-col gap-6" aria-busy={loading}>
+      {trips.length === 0 && loading ? (
+        // Not "No trips yet" before the agent has answered.
+        <div className="flex flex-col gap-3" role="status">
+          <span className="sr-only">Loading your trips…</span>
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-[70px] rounded-xl border bg-card" />
+          ))}
+        </div>
+      ) : trips.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed bg-card/60 p-10 text-center text-ink-2">
           <PlaneIcon className="size-7" aria-hidden="true" />
           <p>No trips yet. Finished trips show up here.</p>
@@ -138,9 +152,9 @@ function OtherDeviceLink() {
     const url = `${window.location.origin}/trips?owner=${encodeURIComponent(ownerId())}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success('Link copied', { description: 'Open it on your other device. Anyone with this link sees these trips.' });
+      notify('success', 'Link copied', { description: 'Open it on your other device. Anyone with this link sees these trips.' });
     } catch {
-      toast.error("Couldn't copy the link", { description: url });
+      notify('error', "Couldn't copy the link", { description: url });
     }
   };
   return (

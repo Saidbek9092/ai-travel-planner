@@ -123,6 +123,20 @@
   html {
     @apply font-sans;
   }
+  /* Tailwind v4 dropped the pointer cursor on buttons; everything clickable shows it, disabled controls don't. */
+  button:not(:disabled, [aria-disabled='true']),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']),
+  [role='option']:not([aria-disabled='true']),
+  summary,
+  select:not(:disabled),
+  input:is([type='checkbox'], [type='radio']):not(:disabled) {
+    cursor: pointer;
+  }
+  /* Keyboard focus and anchor jumps never land under the sticky header (64 px) and the trip's sticky section tabs (48 px). */
+  html {
+    scroll-padding-top: 8rem;
+  }
 }
 
 /* Label Mono 11/16 caps (SPEC.md §8). */

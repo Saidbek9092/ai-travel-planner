@@ -1,15 +1,15 @@
 'use client';
 
 import { TripRequestSchema, type Interest, type TripRequest } from '@ai-travel/contracts';
-import { ArrowRightIcon, CheckIcon, CircleDotIcon, CloudSunIcon, CoinsIcon, ClockIcon, InfoIcon, PlusIcon } from 'lucide-react';
+import { ArrowRightIcon, CheckIcon, CircleAlertIcon, CircleDotIcon, CloudSunIcon, CoinsIcon, ClockIcon, InfoIcon, PlusIcon } from 'lucide-react';
 import Image from 'next/image';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState, type ReactNode } from 'react';
 import { Notice } from '@/components/Notice';
 import { PlaceInput } from '@/components/PlaceInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { formatCountdown, useCountdown } from '@/hooks/useCountdown';
+import { formatCountdown, spokenWait, useCountdown } from '@/hooks/useCountdown';
 import { useHomeCity } from '@/hooks/useHomeCity';
 import { useNow } from '@/hooks/useNow';
 import { useTripContext } from '@/hooks/useTripContext';
@@ -63,7 +63,7 @@ const INTERESTS: { value: Interest; label: string }[] = [
 ];
 
 type FieldKey = 'destination' | 'origin' | 'days' | 'budget' | 'when';
-type FieldState = 'found' | 'default' | 'missing';
+type FieldState = 'found' | 'default' | 'missing' | 'invalid';
 
 interface FieldView {
   key: FieldKey;
@@ -76,6 +76,8 @@ interface FieldView {
   placeholder: string;
   /** Text after "Add" in the missing state. */
   addLabel: string;
+  /** Short reason in the invalid state, e.g. "1 to 30 days". */
+  problem?: string;
   inputMode?: 'text' | 'numeric';
 }
 
@@ -121,6 +123,9 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
   const budget = budgetText ? Number(budgetText) : null;
   const validDays = days !== null && Number.isInteger(days) && days >= 1 && days <= 30 ? days : null;
   const validBudget = budget !== null && Number.isFinite(budget) && budget > 0 ? budget : null;
+  // A value that was given (typed or read from the sentence) but can't be used says why, instead of turning back into "Add".
+  const daysInvalid = daysText !== null && validDays === null;
+  const budgetInvalid = budgetText !== null && validBudget === null;
 
   const fields: FieldView[] = [
     { key: 'destination', label: 'Destination', value: destination, state: destination ? 'found' : 'missing', editValue: destination ?? '', placeholder: 'e.g. Paris', addLabel: 'a place' },
@@ -133,8 +138,28 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
       placeholder: 'Your home city',
       addLabel: 'a city',
     },
-    { key: 'days', label: 'How long', value: validDays ? `${validDays} ${validDays === 1 ? 'day' : 'days'}` : null, state: validDays ? 'found' : 'missing', editValue: daysText ?? '', placeholder: 'Days, 1–30', addLabel: 'days', inputMode: 'numeric' },
-    { key: 'budget', label: 'Budget, all-in', value: validBudget ? formatUsd(validBudget) : null, state: validBudget ? 'found' : 'missing', editValue: budgetText ?? '', placeholder: 'USD, total', addLabel: 'budget', inputMode: 'numeric' },
+    {
+      key: 'days',
+      label: 'How long',
+      value: validDays ? `${validDays} ${validDays === 1 ? 'day' : 'days'}` : daysInvalid ? (Number.isFinite(days) ? `${days} days` : daysText) : null,
+      state: validDays ? 'found' : daysInvalid ? 'invalid' : 'missing',
+      editValue: daysText ?? '',
+      placeholder: 'Days, 1–30',
+      addLabel: 'days',
+      inputMode: 'numeric',
+      problem: '1 to 30 days',
+    },
+    {
+      key: 'budget',
+      label: 'Budget, all-in',
+      value: validBudget ? formatUsd(validBudget) : budgetInvalid ? budgetText : null,
+      state: validBudget ? 'found' : budgetInvalid ? 'invalid' : 'missing',
+      editValue: budgetText ?? '',
+      placeholder: 'USD, total',
+      addLabel: 'budget',
+      inputMode: 'numeric',
+      problem: 'Over $0, in USD',
+    },
     {
       key: 'when',
       label: 'When',
@@ -148,13 +173,21 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
 
   const missing = [
     ...(destination ? [] : ['where']),
-    ...(validDays ? [] : ['how long']),
-    ...(validBudget ? [] : ['your budget']),
+    ...(validDays || daysInvalid ? [] : ['how long']),
+    ...(validBudget || budgetInvalid ? [] : ['your budget']),
   ];
-  const helper =
-    missing.length === 0
-      ? 'Ready. The five agents start as soon as you press Plan.'
-      : `Tell us ${missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)}`} to start.`;
+  const problems = [
+    ...(daysInvalid ? ['A trip can be 1 to 30 days long.'] : []),
+    ...(budgetInvalid ? ['The budget must be a number of US dollars above $0.'] : []),
+  ];
+  const ready = !!destination && validDays !== null && validBudget !== null;
+  const helper = ready
+    ? waitSeconds > 0
+      ? 'Ready. You can press Plan when the timer runs out.'
+      : 'Ready. The five agents start as soon as you press Plan.'
+    : [...problems, missing.length > 0 ? `Tell us ${missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)}`} to start.` : '']
+        .filter(Boolean)
+        .join(' ');
 
   const change = (key: FieldKey, value: string) => {
     setOverrides((current) => {
@@ -176,8 +209,15 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
   const toggleInterest = (interest: Interest) =>
     setInterests((current) => (current.includes(interest) ? current.filter((i) => i !== interest) : [...current, interest]));
 
+  // ⌘/Ctrl+Enter right after typing: read the latest text first (the fields follow it after a pause), then submit.
+  const submitQueued = useRef(false);
   const submit = () => {
-    if (disabled || waitSeconds > 0 || missing.length > 0) return;
+    if (prompt !== settled) {
+      submitQueued.current = true;
+      setSettled(prompt);
+      return;
+    }
+    if (disabled || waitSeconds > 0 || !ready) return;
     const month = overrides.when ? MONTH_NAMES.findIndex((m) => m.toLowerCase().startsWith(overrides.when!.toLowerCase().slice(0, 3))) : parsed.month;
     const request = TripRequestSchema.safeParse({
       prompt: destination && overrides.destination ? `${prompt.trim()} (destination: ${destination})` : prompt.trim() || `${validDays} days in ${destination}, ${formatUsd(validBudget ?? 0)}`,
@@ -190,8 +230,16 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
     });
     if (request.success) onSubmit(request.data);
   };
+  const submitWhenSettled = useEffectEvent(() => {
+    if (!submitQueued.current || settled !== prompt) return;
+    submitQueued.current = false;
+    submit();
+  });
+  useEffect(() => {
+    submitWhenSettled();
+  }, [settled]);
 
-  const canPlan = missing.length === 0 && !disabled && waitSeconds === 0;
+  const canPlan = ready && !disabled && waitSeconds === 0;
 
   return (
     <form
@@ -239,13 +287,16 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
             <h2 id={`${promptId}-understood`} className="font-mono text-[11px] font-medium tracking-[0.14em] text-ink-2 uppercase">
               What the agents understood
             </h2>
-            <span className="text-[13px] text-ink-2">Click any item to change it</span>
+            <span id={`${promptId}-understood-hint`} className="text-[13px] text-ink-2">
+              Click any item to change it
+            </span>
           </div>
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 [@media(min-width:1024px)_and_(max-height:980px)]:grid-cols-5 [@media(min-width:1024px)_and_(max-height:980px)]:gap-2">
             {fields.map((field) => (
               <UnderstoodField
                 key={field.key}
                 field={field}
+                describedBy={`${promptId}-understood-hint`}
                 editing={editing === field.key}
                 disabled={disabled}
                 onEdit={() => setEditing(field.key)}
@@ -273,7 +324,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
                   aria-pressed={on}
                   disabled={disabled}
                   onClick={() => toggleInterest(value)}
-                  className={cn('h-10 rounded-full bg-card px-4 text-[14px]', on && 'border-primary bg-primary-soft text-primary')}
+                  className={cn('h-10 rounded-full bg-card px-4 text-[14px] pointer-coarse:h-11', on && 'border-primary bg-primary-soft text-primary')}
                 >
                   {on && <CheckIcon aria-hidden="true" />} {label}
                 </Button>
@@ -283,15 +334,35 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
         </fieldset>
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-5">
-          <p id={`${promptId}-helper`} className="flex items-center gap-2 text-sm text-ink-2" aria-live="polite">
-            <InfoIcon className="size-4 shrink-0" aria-hidden="true" /> {helper}
+          <p
+            id={`${promptId}-helper`}
+            className={cn('flex items-center gap-2 text-sm', problems.length > 0 ? 'text-destructive' : 'text-ink-2')}
+            aria-live="polite"
+          >
+            {problems.length > 0 ? (
+              <CircleAlertIcon className="size-4 shrink-0" aria-hidden="true" />
+            ) : (
+              <InfoIcon className="size-4 shrink-0" aria-hidden="true" />
+            )}{' '}
+            {helper}
           </p>
           <Button type="submit" disabled={!canPlan} aria-describedby={`${promptId}-helper`} className="h-12 px-6 text-[16px] disabled:bg-border disabled:text-ink-2 disabled:opacity-100">
             {waitSeconds > 0 ? `Plan in ${formatCountdown(waitSeconds)}` : 'Plan my trip'} <ArrowRightIcon aria-hidden="true" />
           </Button>
         </div>
         {waitSeconds > 0 && (
-          <Notice tone="info" placement="inline" title={`You can plan another trip in ${formatCountdown(waitSeconds)}`}>
+          <Notice
+            tone="info"
+            placement="inline"
+            title={
+              <>
+                You can plan another trip in{' '}
+                {/* The clock ticks every second; screen readers get a coarse time that changes at most once a minute. */}
+                <span aria-hidden="true">{formatCountdown(waitSeconds)}</span>
+                <span className="sr-only">{spokenWait(waitSeconds)}</span>
+              </>
+            }
+          >
             {waitSeconds > 3600
               ? "That's today's limit of trips from this connection. Your prompt is kept."
               : 'Lots of trips are being planned right now. Your prompt is kept.'}
@@ -313,7 +384,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
           </div>
           {/* Only this list scrolls, so the photos never make the whole page taller. The padding keeps focus rings from being clipped. */}
           <ul className="-mx-1 flex min-h-0 flex-col gap-3 overflow-y-auto px-1 py-1">
-            {EXAMPLES.map((example) => (
+            {EXAMPLES.map((example, index) => (
               <li key={example.title}>
                 <button
                   type="button"
@@ -322,9 +393,11 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
                   className="group flex w-full flex-col overflow-hidden rounded-xl border bg-card text-left outline-none transition-colors hover:border-primary focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
                 >
                   <span className="relative block h-36 w-full overflow-hidden bg-muted">
+                    {/* Decorative here: the card's text names the place. The first photo is above the fold on desktop. */}
                     <Image
                       src={example.image}
-                      alt={`${example.title}, ${example.country}`}
+                      alt=""
+                      loading={index === 0 ? 'eager' : 'lazy'}
                       fill
                       sizes="(min-width: 1024px) 440px, 100vw"
                       className="object-cover transition-transform duration-300 group-hover:scale-105"
@@ -358,6 +431,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: 
 
 function UnderstoodField({
   field,
+  describedBy,
   editing,
   disabled,
   onEdit,
@@ -365,6 +439,8 @@ function UnderstoodField({
   onChange,
 }: {
   field: FieldView;
+  /** Id of the "Click any item to change it" hint. */
+  describedBy: string;
   editing: boolean;
   disabled: boolean;
   onEdit: () => void;
@@ -410,6 +486,7 @@ function UnderstoodField({
             autoFocus
             value={draft}
             inputMode={field.inputMode}
+            className="h-9 pointer-coarse:h-11"
             placeholder={field.placeholder}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -439,16 +516,20 @@ function UnderstoodField({
           setDraft(field.editValue);
           onEdit();
         }}
-        aria-label={state === 'missing' ? `Add ${field.addLabel}` : `${field.label}: ${field.value}. Edit`}
+        // The visible label and value are the accessible name (WCAG 2.5.3); the hint says it can be changed.
+        aria-describedby={describedBy}
         className={cn(
           'flex h-full min-h-[60px] w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50',
           state === 'found' && 'border-success/40 bg-success-soft',
           state === 'default' && 'bg-card',
           state === 'missing' && 'border-dashed border-muted-foreground/50 bg-transparent hover:bg-card',
+          state === 'invalid' && 'border-destructive/50 bg-destructive-soft',
         )}
       >
         {state === 'found' ? (
           <CheckIcon className="size-5 shrink-0 text-success" aria-hidden="true" />
+        ) : state === 'invalid' ? (
+          <CircleAlertIcon className="size-5 shrink-0 text-destructive" aria-hidden="true" />
         ) : state === 'default' ? (
           <CircleDotIcon className="size-5 shrink-0 text-ink-2" aria-hidden="true" />
         ) : (
@@ -456,9 +537,11 @@ function UnderstoodField({
         )}
         <span className="flex min-w-0 flex-col">
           <span className="text-[12px] text-ink-2">{field.label}</span>
-          <span className={cn('truncate font-semibold', state === 'missing' && 'text-ink-2')}>
+          {/* Wraps instead of cutting off ("Add a pla…") in the narrow phone columns. */}
+          <span className={cn('line-clamp-2 font-semibold [overflow-wrap:anywhere]', state === 'missing' && 'text-ink-2')}>
             {state === 'missing' ? `Add ${field.addLabel}` : field.value}
           </span>
+          {state === 'invalid' && field.problem && <span className="text-[12px] font-medium text-destructive">{field.problem}</span>}
         </span>
       </button>
     </li>

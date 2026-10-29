@@ -49,6 +49,8 @@ export interface AgentStreamState {
 export type AgentStreamAction =
   | { type: 'START'; request: TripRequest | null; now?: number }
   | { type: 'CONNECTED'; threadId: string }
+  /** Follow a run that is already going: its stream replays every packet, so start from an empty run. */
+  | { type: 'ATTACH'; threadId: string }
   | { type: 'PACKET'; event: SseEvent }
   | { type: 'STREAM_ENDED' }
   | { type: 'RECONNECTING'; attempt: number; nextAt: number | null }
@@ -119,6 +121,8 @@ export function agentStreamReducer(state: AgentStreamState, action: AgentStreamA
       };
     case 'CONNECTED':
       return { ...state, status: 'streaming', threadId: action.threadId, reconnect: null };
+    case 'ATTACH':
+      return { ...initialStreamState, status: 'streaming', threadId: action.threadId, lastRequest: state.lastRequest, startedAt: state.startedAt };
     case 'PACKET': {
       const { event } = action;
       switch (event.type) {
@@ -231,14 +235,6 @@ export function useAgentStream(initial?: InitialRun) {
     wakeRef.current = null;
   };
 
-  useEffect(
-    () => () => {
-      controllerRef.current?.abort();
-      clearTimer();
-    },
-    [],
-  );
-
   /** Reads packets until the stream ends; dedupes replayed packets by SSE id. */
   const consume = useCallback(async (body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<ReadOutcome> => {
     let sawResult = false;
@@ -268,21 +264,27 @@ export function useAgentStream(initial?: InitialRun) {
     return sawResult ? 'result' : 'ended';
   }, []);
 
-  /** Waits with backoff and re-attaches to the run with `Last-Event-ID` until it ends or five attempts fail. */
+  /**
+   * Waits with backoff and re-attaches to the run with `Last-Event-ID` until it ends or five attempts fail.
+   * `immediate`: the first attempt goes out at once, without the "Reconnecting" state (the run is known to be alive).
+   */
   const reconnectLoop = useCallback(
-    async (threadId: string, controller: AbortController) => {
+    async (threadId: string, controller: AbortController, immediate = false) => {
       let attempt = 0;
       while (attempt < MAX_RECONNECTS && !controller.signal.aborted) {
+        const wait = !(immediate && attempt === 0);
         attempt += 1;
-        const delay = RECONNECT_DELAYS[attempt - 1] ?? 15_000;
-        dispatch({ type: 'RECONNECTING', attempt, nextAt: Date.now() + delay });
-        await new Promise<void>((resolve) => {
-          wakeRef.current = resolve;
-          timerRef.current = setTimeout(resolve, delay);
-        });
-        clearTimer();
-        if (controller.signal.aborted) return;
-        dispatch({ type: 'RECONNECTING', attempt, nextAt: null });
+        if (wait) {
+          const delay = RECONNECT_DELAYS[attempt - 1] ?? 15_000;
+          dispatch({ type: 'RECONNECTING', attempt, nextAt: Date.now() + delay });
+          await new Promise<void>((resolve) => {
+            wakeRef.current = resolve;
+            timerRef.current = setTimeout(resolve, delay);
+          });
+          clearTimer();
+          if (controller.signal.aborted) return;
+          dispatch({ type: 'RECONNECTING', attempt, nextAt: null });
+        }
         let response: Response;
         try {
           response = await fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}/stream`, {
@@ -308,6 +310,41 @@ export function useAgentStream(initial?: InitialRun) {
     [consume],
   );
 
+  /** Follows a run that may still be going on the agent (one look, no retries); a finished or unknown one changes nothing. */
+  const follow = useCallback(
+    async (threadId: string, controller: AbortController) => {
+      const response = await fetch(`${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}/stream`, {
+        headers: { Accept: 'text/event-stream' },
+        signal: controller.signal,
+      }).catch(() => null);
+      if (!response?.ok || !response.body || controller.signal.aborted) return;
+      dispatch({ type: 'ATTACH', threadId });
+      const outcome = await consume(response.body, controller.signal);
+      if (outcome === 'ended' || outcome === 'network') await reconnectLoop(threadId, controller);
+    },
+    [consume, reconnectLoop],
+  );
+
+  useEffect(() => {
+    if (env.agentUrl === null) return;
+    const { status, threadId, result } = stateRef.current;
+    // Next.js keeps a page the user navigated away from in a hidden <Activity>: hiding runs this cleanup (the stream is
+    // aborted), showing it again runs the setup. A run that was live then has moved on, so catch up from the last packet.
+    const live = status === 'connecting' || status === 'streaming' || status === 'reconnecting';
+    // A trip opened from a link or "My trips" before it finished may still be planning: follow it live if so.
+    const opened = (status === 'idle' || status === 'failed') && result?.status !== 'completed' && lastEventIdRef.current === null;
+    if (threadId && !controllerRef.current && (live || opened)) {
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      void (live ? reconnectLoop(threadId, controller, true) : follow(threadId, controller));
+    }
+    return () => {
+      controllerRef.current?.abort();
+      controllerRef.current = null;
+      clearTimer();
+    };
+  }, [reconnectLoop, follow]);
+
   const run = useCallback(
     async (path: string, body: TripRequest | null, request: TripRequest | null) => {
       if (env.agentUrl === null) return;
@@ -329,6 +366,13 @@ export function useAgentStream(initial?: InitialRun) {
       } catch (error) {
         if (isAbortError(error) || controller.signal.aborted) return;
         dispatch({ type: 'HTTP_ERROR', code: 'NETWORK' });
+        return;
+      }
+      const runningId = stateRef.current.threadId;
+      if (response.status === 409 && body === null && runningId) {
+        // Resume of a trip that is still being planned (opened from a link or "My trips"): follow the live run instead.
+        dispatch({ type: 'ATTACH', threadId: runningId });
+        await reconnectLoop(runningId, controller, true);
         return;
       }
       if (!response.ok || !response.body) {

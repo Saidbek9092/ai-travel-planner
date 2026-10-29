@@ -3,7 +3,6 @@
 import type { MessagePayload, ResultPayload, TripRequest } from '@ai-travel/contracts';
 import { RotateCcwIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { AgentBoard } from '@/components/AgentBoard';
 import { AgentChat, ChatSummary } from '@/components/AgentChat';
 import { AgentTerminalLogs } from '@/components/AgentTerminalLogs';
@@ -16,12 +15,12 @@ import { HowItWorks, StartHero } from '@/components/StartExtras';
 import { TripInputForm } from '@/components/TripInputForm';
 import type { DaySelection } from '@/components/ItineraryTimeline';
 import { FinishedOverview, LiveOverview } from '@/components/TripOverview';
-import { Notice } from '@/components/Notice';
+import { Notice, notify } from '@/components/Notice';
 import { Button } from '@/components/ui/button';
 import { useAgentStream } from '@/hooks/useAgentStream';
 import { useTripContext } from '@/hooks/useTripContext';
 import { useTripHistory } from '@/hooks/useTripHistory';
-import { NEW_TRIP_EVENT } from '@/lib/dom';
+import { MAIN_ID, NEW_TRIP_EVENT } from '@/lib/dom';
 import { env } from '@/lib/env';
 import { agentRows, briefLine, decisionSummaries, defaultDay, phaseStates, requestFromResult, timesWord, tripTitle, type TripView } from '@/lib/trip';
 import { PassesTable, budgetVerdict } from '@/components/BudgetMeter';
@@ -31,9 +30,11 @@ interface TripDashboardProps {
   initialResult: ResultPayload | null;
   /** The stored chat of a reopened trip. */
   initialMessages?: MessagePayload[];
+  /** What the server found for `?trip=`: `null` without one, `unavailable` when the agent didn't answer. */
+  tripLookup?: 'found' | 'not-found' | 'unavailable' | null;
 }
 
-export function TripDashboard({ initialThreadId, initialResult, initialMessages = [] }: TripDashboardProps) {
+export function TripDashboard({ initialThreadId, initialResult, initialMessages = [], tripLookup = null }: TripDashboardProps) {
   const stream = useAgentStream({ threadId: initialThreadId, result: initialResult, messages: initialMessages });
   // `null` = not chosen yet: Day 1, or today's day if the trip is under way. The choice lives in the URL (`?day=2`, `?day=all`).
   const [chosenDay, setChosenDay] = useState<DaySelection | null>(null);
@@ -82,6 +83,12 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
   const replanRequest = lastRequest ?? (result ? requestFromResult(result, new Date().toISOString().slice(0, 10)) : null);
   const startOver = () => (replanRequest ? start(replanRequest) : stream.reset());
 
+  // The tab title names the trip, so history, tabs and screen readers can tell trips apart.
+  const pageTitle = view === 'finished' && result ? tripTitle(result) : view === 'live' ? (live ? 'Planning your trip' : 'Planning stopped') : null;
+  useEffect(() => {
+    document.title = pageTitle ? `${pageTitle} · AI Travel Planner` : 'AI Travel Planner';
+  }, [pageTitle]);
+
   // Switching between the form, the live run and the result starts at the top of the page, not where the last view was scrolled to.
   const previousView = useRef(view);
   useEffect(() => {
@@ -103,8 +110,11 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
   // A started run is remembered as paused until it finishes, so the start page can offer Resume.
   useEffect(() => {
     if (!threadId || finished || !lastRequest) return;
-    if (!history.trips.some((t) => t.threadId === threadId)) {
-      history.add({ threadId, title: tripTitle({ ...draft }), createdAt: Date.now(), status: 'paused' });
+    // Added as "Your trip" when the run starts; named once the Supervisor has read the destination.
+    const title = tripTitle({ ...draft });
+    const known = history.trips.find((t) => t.threadId === threadId);
+    if (!known || known.title !== title) {
+      history.add({ threadId, title, createdAt: known?.createdAt ?? Date.now(), status: 'paused' });
     }
   }, [threadId, finished, lastRequest, history, draft]);
 
@@ -120,7 +130,7 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
     add({ threadId: result.threadId, title: tripTitle(result), createdAt: Date.now(), status: 'done' });
     if (!result.suggestions) {
       const verdict = budgetVerdict(result.totalCost, result.budget);
-      toast.success(`Trip ready · ${verdict.text}`, {
+      notify('success', `Trip ready · ${verdict.text}`, {
         description: result.replans > 0 ? `Re-planned ${timesWord(result.replans)} to fit your budget.` : 'Every decision is confirmed.',
       });
     }
@@ -155,10 +165,22 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
       onStartOver={startOver}
       onRaiseBudget={(budget) => replanRequest && start({ ...replanRequest, budget })}
       onTryDays={(durationDays) => replanRequest && start({ ...replanRequest, durationDays })}
+      onKeep={() => resultHeadingRef.current?.focus()}
     />
   );
 
-  const unfinished = threadId !== null && status === 'idle' && !result;
+  // A trip opened by link that the start page can't show: a stored unfinished one (`failed` result) can be resumed, an id
+  // the agent doesn't know says so, and no answer from the agent offers to load it again. (A failed Resume has no result.)
+  const linkNotice =
+    threadId === null || finished || uiOnly
+      ? null
+      : status === 'failed' && result
+        ? 'unfinished'
+        : status === 'idle' && !result
+          ? tripLookup === 'not-found'
+            ? 'not-found'
+            : 'unavailable'
+          : null;
 
   return (
     <>
@@ -171,7 +193,7 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
         origin={origin}
       />
       {view === 'idle' && <StartHero />}
-      <main className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col gap-5 px-4 pt-6 pb-12 sm:px-8 [@media(min-width:1024px)_and_(max-height:980px)]:pt-2 [@media(min-width:1024px)_and_(max-height:980px)]:pb-3">
+      <main id={MAIN_ID} tabIndex={-1} className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col gap-5 px-4 pt-6 pb-12 outline-none sm:px-8 [@media(min-width:1024px)_and_(max-height:980px)]:pt-2 [@media(min-width:1024px)_and_(max-height:980px)]:pb-3">
         {view === 'idle' && (
           <div className="-mt-20">
             <TripInputForm
@@ -185,13 +207,13 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
                       The planning agent isn&apos;t connected yet.
                     </Notice>
                   )}
-                  {unfinished && (
+                  {linkNotice === 'unfinished' && (
                     <Notice
                       tone="info"
                       placement="inline"
                       title="This trip didn't finish"
                       actions={
-                        <Button size="sm" variant="outline" onClick={stream.resume}>
+                        <Button variant="outline" className="h-9 bg-card pointer-coarse:h-11" onClick={stream.resume}>
                           <RotateCcwIcon aria-hidden="true" /> Resume
                         </Button>
                       }
@@ -199,8 +221,28 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
                       Pick up where the agents left off.
                     </Notice>
                   )}
-                  {error && !threadId && !stream.retryAt && (
-                    <Notice tone="error" placement="inline" title="Couldn't start the trip">
+                  {linkNotice === 'not-found' && (
+                    <Notice tone="warning" placement="inline" title="We couldn't find this trip">
+                      The link may be incomplete, or the trip is no longer saved. Plan a new one below.
+                    </Notice>
+                  )}
+                  {linkNotice === 'unavailable' && (
+                    <Notice
+                      tone="error"
+                      placement="inline"
+                      title="This trip didn't load"
+                      actions={
+                        <Button variant="outline" className="h-9 bg-card pointer-coarse:h-11" onClick={() => window.location.reload()}>
+                          <RotateCcwIcon aria-hidden="true" /> Try again
+                        </Button>
+                      }
+                    >
+                      The planning agent didn&apos;t answer. Check your connection and try again.
+                    </Notice>
+                  )}
+                  {/* A failed start, or a failed Resume of a trip opened from a link (the trip then has a thread id). */}
+                  {error && status === 'failed' && !result && !stream.retryAt && (
+                    <Notice tone="error" placement="inline" title={threadId ? "Couldn't resume this trip" : "Couldn't start the trip"}>
                       {error}
                     </Notice>
                   )}
@@ -215,7 +257,7 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
           <>
             {banners}
             <RunProgress status={status} progress={progress} phases={phases} startedAt={stream.startedAt} brief={briefLine(draft)} />
-            <div className={`grid gap-5 lg:grid-cols-12 lg:items-start ${live ? '' : 'opacity-60'}`}>
+            <div className={`grid gap-5 lg:grid-cols-12 lg:items-start ${live ? '' : 'grayscale'}`}>
               <div className="flex flex-col lg:sticky lg:top-20 lg:col-span-7 lg:h-[calc(100dvh-11rem)] lg:min-h-[480px]">
                 <AgentChat
                   messages={messages}

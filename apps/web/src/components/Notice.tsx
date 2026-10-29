@@ -20,7 +20,7 @@ interface NoticeProps {
   /** inline: next to the thing it is about · banner: trip-level outcome · toast: temporary system event. */
   placement?: NoticePlacement;
   /** What happened, in plain words. Never an error code or a model name. */
-  title: string;
+  title: ReactNode;
   /** What it means for the traveller. */
   children?: ReactNode;
   /** One clear next step. */
@@ -32,14 +32,15 @@ interface NoticeProps {
 /**
  * The one notice component: info, success, warning, error × inline, banner, toast.
  * Copy: say what happened, what it means for you, and one action. Icon + text, never colour alone.
- * Only `error` is announced assertively (`role="alert"`); everything else is a polite status.
+ * Only `error` is announced assertively (`role="alert"`); everything else is a polite status. A toast has no role of its
+ * own: Sonner's live region already announces it.
  */
 export function Notice({ tone = 'info', placement = 'banner', title, children, actions, onDismiss, className }: NoticeProps) {
   const { box, icon, Icon } = TONES[tone];
   const compact = placement !== 'banner';
   return (
     <div
-      role={tone === 'error' ? 'alert' : 'status'}
+      role={placement === 'toast' ? undefined : tone === 'error' ? 'alert' : 'status'}
       className={cn(
         'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border',
         compact ? 'px-3 py-2.5' : 'gap-x-4 gap-y-3 px-4 py-3',
@@ -55,7 +56,15 @@ export function Notice({ tone = 'info', placement = 'banner', title, children, a
       </div>
       {actions && <div className="flex flex-wrap gap-2 max-sm:w-full">{actions}</div>}
       {onDismiss && (
-        <button type="button" aria-label="Dismiss" onClick={onDismiss} className="shrink-0 rounded-md p-1 text-ink-2 hover:bg-black/5">
+        <button
+          type="button"
+          aria-label="Dismiss"
+          onClick={onDismiss}
+          // In a toast: like the toast itself (`dismissible: false` in `notify`), so Sonner doesn't pull focus back here
+          // when Tab moves on.
+          data-dismissible={placement === 'toast' ? 'false' : undefined}
+          className="flex size-8 shrink-0 items-center justify-center rounded-md text-ink-2 outline-none hover:bg-black/5 focus-visible:ring-3 focus-visible:ring-ring/50 pointer-coarse:size-11"
+        >
           <XIcon className="size-4" aria-hidden="true" />
         </button>
       )}
@@ -63,7 +72,12 @@ export function Notice({ tone = 'info', placement = 'banner', title, children, a
   );
 }
 
-/** Show a toast-placement notice. A fixed `id` keeps repeats from stacking and updates it in place. */
+/**
+ * Show a toast-placement notice; every toast in the app goes through here. A fixed `id` keeps repeats from stacking and
+ * updates it in place. `dismissible: false` (and `data-dismissible="false"` on the Dismiss button): Sonner otherwise
+ * sends keyboard focus back to where it came from whenever Tab leaves a toast, so Tab loops between the last link of the
+ * page and the toast. Sonner skips that for targets marked not dismissible. The Dismiss button closes it instead of a swipe.
+ */
 export function notify(tone: NoticeTone, title: string, options: { description?: string; id?: string; duration?: number } = {}) {
   return toast.custom(
     (id) => (
@@ -71,7 +85,7 @@ export function notify(tone: NoticeTone, title: string, options: { description?:
         {options.description}
       </Notice>
     ),
-    { id: options.id, duration: options.duration },
+    { id: options.id, duration: options.duration, dismissible: false },
   );
 }
 
