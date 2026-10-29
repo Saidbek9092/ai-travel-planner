@@ -18,7 +18,8 @@ interface RunProgressProps {
   brief: string | null;
 }
 
-function PhaseDot({ state }: { state: PhaseState }) {
+/** `live`: the current step is being worked on (pulses); otherwise it is where the run stopped. */
+function PhaseDot({ state, live }: { state: PhaseState; live: boolean }) {
   if (state === 'done') {
     return (
       <span className="flex size-6 items-center justify-center rounded-full bg-success text-white">
@@ -33,7 +34,7 @@ function PhaseDot({ state }: { state: PhaseState }) {
         state === 'current' ? 'border-live' : 'border-border',
       )}
     >
-      {state === 'current' && <span className="size-2.5 rounded-full bg-live motion-safe:animate-pulse" />}
+      {state === 'current' && <span className={cn('size-2.5 rounded-full bg-live', live && 'motion-safe:animate-pulse')} />}
     </span>
   );
 }
@@ -46,14 +47,16 @@ export function RunProgress({ status, progress, phases, startedAt, brief }: RunP
   const eta = live ? etaSeconds(percent, startedAt, now) : null;
   const label = progress ? STATUS_LABELS[progress.currentStatus] : 'Connecting to the agents';
 
+  // A stopped run is greyed out, not faded, so its text keeps its contrast.
   return (
     <section
       aria-label="Planning progress"
-      className={cn('rounded-xl border bg-card p-5 sm:px-6', status !== 'completed' && !live && 'opacity-70')}
+      className={cn('rounded-xl border bg-card p-5 sm:px-6', status !== 'completed' && !live && 'grayscale')}
     >
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:gap-10">
         <div className="shrink-0">
-          <h2 className="text-xl leading-7 font-semibold">{live ? 'Planning your trip' : status === 'completed' ? 'Trip planned' : 'Planning stopped'}</h2>
+          {/* The live run's page heading (the start page and the finished trip have their own h1). */}
+          <h1 className="text-xl leading-7 font-semibold">{live ? 'Planning your trip' : status === 'completed' ? 'Trip planned' : 'Planning stopped'}</h1>
           {brief && <p className="text-[13px] leading-[18px] text-muted-foreground lg:hidden">{brief}</p>}
           <p className="flex items-baseline gap-2">
             <span className="text-[32px] leading-10 font-semibold tracking-tight">{percent}%</span>
@@ -76,7 +79,7 @@ export function RunProgress({ status, progress, phases, startedAt, brief }: RunP
           {phases.map((phase, i) => (
             <Fragment key={phase.topic}>
               <li className="flex w-24 shrink-0 flex-col items-start gap-2" aria-current={phase.state === 'current' ? 'step' : undefined}>
-                <PhaseDot state={phase.state} />
+                <PhaseDot state={phase.state} live={live} />
                 <span
                   className={cn(
                     'text-[13px] leading-[18px] font-medium',
@@ -85,7 +88,10 @@ export function RunProgress({ status, progress, phases, startedAt, brief }: RunP
                   )}
                 >
                   {phase.label}
-                  <span className="sr-only"> · {phase.state === 'done' ? 'done' : phase.state === 'current' ? 'in progress' : 'not started'}</span>
+                  <span className="sr-only">
+                    {' · '}
+                    {phase.state === 'done' ? 'done' : phase.state === 'current' ? (live ? 'in progress' : 'stopped here') : 'not started'}
+                  </span>
                 </span>
                 {phase.state === 'current' && phase.topic === 'itinerary' && progress?.currentStatus === 'planning' && progress.detail && live && (
                   <span className="-mt-1.5 text-xs text-muted-foreground">{progress.detail}</span>

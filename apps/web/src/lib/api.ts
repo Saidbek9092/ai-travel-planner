@@ -17,9 +17,10 @@ export interface StoredTrip {
 
 /**
  * A trip by id for a deep link: the stored record (result + chat), else the plain result from an older agent.
- * Both go through the contracts' stored-result migration. `null` on any failure, so a bad link opens an empty dashboard.
+ * Both go through the contracts' stored-result migration. An unfinished trip comes back as a `failed` result.
+ * `'not-found'`: the agent has no such trip (both lookups `404`). `null`: no answer (UI-only, offline, error, bad body).
  */
-export async function fetchStoredTrip(threadId: string): Promise<StoredTrip | null> {
+export async function fetchStoredTrip(threadId: string): Promise<StoredTrip | 'not-found' | null> {
   if (env.agentUrl === null) return null;
   const base = `${env.agentUrl}/api/trips/${encodeURIComponent(threadId)}`;
   try {
@@ -30,6 +31,7 @@ export async function fetchStoredTrip(threadId: string): Promise<StoredTrip | nu
     }
     if (record.status !== 404) return null;
     const plain = await fetch(base, { cache: 'no-store' });
+    if (plain.status === 404) return 'not-found';
     if (!plain.ok) return null;
     const result = parseStoredResult(await plain.json());
     return result ? { result, messages: [] } : null;

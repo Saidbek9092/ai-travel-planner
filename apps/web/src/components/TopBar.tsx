@@ -46,7 +46,8 @@ const Big = ({ children }: { children: ReactNode }) => (
 );
 const Small = ({ children }: { children: ReactNode }) => <span className="ml-1.5 text-sm font-normal tracking-normal sm:text-base">{children}</span>;
 const Sub = ({ children, mono }: { children: ReactNode; mono?: boolean }) => (
-  <p className={cn('mt-0.5 truncate text-[13px] leading-[18px] text-white/75', mono && 'font-mono')}>{children}</p>
+  // Phones wrap the second line rather than cut it ("rain Saturd…"); wider screens keep one line.
+  <p className={cn('mt-0.5 text-[13px] leading-[18px] text-white/75 sm:truncate', mono && 'font-mono')}>{children}</p>
 );
 
 function dateRange(startDate: string, durationDays: number): string {

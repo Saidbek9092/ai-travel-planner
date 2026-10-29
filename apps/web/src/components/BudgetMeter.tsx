@@ -144,11 +144,11 @@ export function BudgetMeter({ totalCost, budget, parts, final, variant = 'card' 
         )}
       </div>
       <Bar totalCost={totalCost} budget={budget} parts={parts} className="mt-3 h-[9px]" />
-      <dl className="mt-3 grid grid-cols-2 gap-x-8 text-[15px] leading-6">
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 text-sm leading-6 sm:gap-x-8 sm:text-[15px]">
         {SEGMENTS.map(({ key, label: name, className }) => (
           <div key={key} className="flex items-center gap-2">
             <span className={cn('size-2.5 shrink-0 rounded-sm', className)} aria-hidden="true" />
-            <dt className="flex-1 text-ink-2">{name}</dt>
+            <dt className="flex-1 whitespace-nowrap text-ink-2">{name}</dt>
             <dd className="font-mono">{formatUsd(parts[key])}</dd>
           </div>
         ))}

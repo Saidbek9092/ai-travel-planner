@@ -69,6 +69,7 @@ apps/web/
 │   │   ├── AgentAvatar.tsx         # + round agent badge with a status dot
 │   │   ├── Tags.tsx                # + Confirmed / pending / agent-status / estimate chips
 │   │   ├── SiteNav.tsx             # + header nav (Plan a trip · My trips)
+│   │   ├── SkipLink.tsx            # + "Skip to main content", the first Tab stop (focuses the visible <main>)
 │   │   ├── TripHistoryList.tsx     # + "My trips": server list merged with the local one, "Copy link for another device"
 │   │   └── ui/                     # shadcn/ui generated components (do not hand-edit)
 │   ├── hooks/
@@ -85,7 +86,7 @@ apps/web/
 │       ├── links.ts                # + "Maps" and fare/room link helpers
 │       ├── time.ts                 # + local time and time-zone difference via Intl
 │       ├── trip.ts                 # + derived view data: budget parts, agent rows, phase states, ETA, decision summaries
-│       ├── dom.ts                  # + header-slot id and the "new trip" event name
+│       ├── dom.ts                  # + header-slot and main ids, the "new trip" event name, `keepTabInside` for the modal
 │       ├── api.ts                  # + fetchStoredTrip (deep link: result + chat), fetchMyTrips
 │       ├── owner.ts                # + anonymous owner id (cookie) and the X-Owner-Id header
 │       ├── parseTrip.ts            # + start-page preview parser of the prompt (not the stored-trip migration)
@@ -261,6 +262,13 @@ Behaviour:
 7. State lives in a `useReducer`; the reducer is exported so it can be unit-tested on its own.
 8. The run starts only from a user action (`start`/`resume`), never from an effect, so React Strict Mode's
    double effects cannot start two runs. The `AbortController` is kept in a ref and aborted on unmount; reconnect timers are cleared too.
+9. **Following a run it did not start** (TP-38; read-only `GET …/stream`, so effects may do it):
+   - Next.js keeps a page the user navigated away from in a hidden `<Activity>`. Hiding runs the hook's cleanup (the
+     stream is aborted); showing it again re-attaches at once with `Last-Event-ID`, so a run left for "My trips" and
+     returned to with Back catches up instead of freezing at its old percent.
+   - A trip opened from a link or "My trips" that has not finished (no result, or a `failed` one) looks once for a live
+     run on the agent; if there is one, the `ATTACH` action starts from an empty run and the replay fills it in.
+   - `resume()` answered with `409` (still running) follows the live run the same way instead of failing.
 
 ### 5.3 Reload / deep link
 
@@ -276,7 +284,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
 
 `fetchStoredTrip` (`lib/api.ts`) reads the stored record (result + chat); against an older agent without `/record`
 it falls back to `GET /api/trips/:id`. Both go through the contracts' `StoredResultSchema`, the single migration point
-for old results (ARCHITECTURE.md §5). A completed trip reopens with its results and its chat (summary first, "Open full
+for old results (ARCHITECTURE.md §5). It returns `'not-found'` when both answer `404` (the agent knows no such trip; an
+unfinished one comes back as a `failed` result) and `null` when there is no usable answer. `TripDashboard` gets that as
+`tripLookup` and the start page says which it was (TP-38): "This trip didn't finish" + Resume (a stored unfinished trip),
+"We couldn't find this trip" (unknown id, no Resume), or "This trip didn't load" + Try again (the agent didn't answer). A completed trip reopens with its results and its chat (summary first, "Open full
 chat" for the whole conversation); an unfinished one shows a "Resume" button. The technical log is live-only; the
 destination bar is fetched from the reopened trip's `destination`. "Share trip" copies this `?trip=<threadId>` link.
 
@@ -323,11 +334,15 @@ function useTripContext(destination: string | null, origin?: string | null): { s
 
 **As built (the design wins over the sketch above):**
 - **Idle:** "Plan a trip" card with the form (left, 5/12) and the empty Trip Overview (right, 7/12). A fresh run keeps the disabled form
-  until the stream opens, so a `400`/`429` leaves the prompt in place.
+  until the stream opens, so a `400`/`429` leaves the prompt in place. An error from a start ("Couldn't start the trip") or from
+  "Resume" on a trip opened by link ("Couldn't resume this trip") is shown above the form; it is never dropped silently.
 - **Live run** (`Web-Live`, `design-agents-planning.png`): `RunBanners`, then a full-width `RunProgress` card ("Planning your trip · 82% ·
   about 20 s left" + the six phase steps), then Agent Chat on the left (**7/12**) and the live Trip Overview on the right (**5/12**): budget card,
   selected flight, selected hotel, map ("Days 1–3 placed"), "Day by day" list. The agent board, run details and terminal sit behind the chat's
-  "Technical log" button instead of being stacked in the column. A failed or stopped run stays visible, dimmed, under its banner.
+  "Technical log" button instead of being stacked in the column. A failed or stopped run stays visible under its banner, greyed out
+  (`grayscale`, not opacity, so its text keeps AA contrast); its current step stops pulsing and reads "stopped here". The progress
+  card's "Planning your trip" is the page's `h1` while the run is shown.
+- **Page title** follows the view: "5 days in Paris · AI Travel Planner" on a finished trip, "Planning your trip · …" while live.
 - **Finished trip** (`Web-Trip`, `design-trip-overview.png`): "Trip overview" label, "5 days in Paris" heading and subtitle, with the compact
   `BudgetMeter` on the right; below, a 12-column grid: chat summary (3) · selected flights with transfers (6) · selected hotel (3); the map card
   with the selected-day panel beside it (9); the day cards (9). The finished view always shows a day (Day 1 until the user picks another).
@@ -384,6 +399,11 @@ All components are typed with contracts types only. Props listed are the full pu
   the total."), shown under the field with `aria-describedby`.
 - `disabled` while a run is active; when `brief` is set the form collapses to the one-line summary. Enter + ⌘/Ctrl submits.
 - **Rate limit:** while `retryAt` is in the future the submit button is disabled and reads "Plan trip in 0:42" (`useCountdown`); it comes back when the timer ends.
+  The notice's ticking clock is `aria-hidden`; screen readers get `spokenWait()` ("about 2 minutes"), which changes at most once a minute.
+- **As built (TP-38):** the "What the agents understood" fields are buttons named by their visible label and value (WCAG 2.5.3),
+  described by "Click any item to change it". A value that was given but can't be used ("45" days, "-50" budget) stays in its
+  field in an invalid state (red border, alert icon, "1 to 30 days") and the helper line says why, instead of turning back into
+  "Add days". ⌘/Ctrl+Enter right after typing first reads the latest text (the fields follow it after a 300 ms pause), then submits.
 
 ### `TopBar.tsx`
 
@@ -493,6 +513,9 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 - Composes `BudgetMeter`, `FlightHotelCards`, the map and the day tabs. Heading while running: "Trip Overview — fills in as agents decide"; when finished:
   "5 days in Paris", "Tashkent → Paris · planned by 5 agents · re-planned once to fit your budget".
 - Renders only the sections whose data exists; an empty section is absent, not a blank card.
+- Section tabs (Flight · Hotel · Transfer · Days) stick under the header. Their hints ("$420", "5 planned") show only where the tab
+  bar is wide enough (container `@2xl`), never clipped ("$4…"). Switching tabs while scrolled past them scrolls the new section's
+  top into view.
 
 ### `BudgetMeter.tsx`
 
@@ -570,6 +593,7 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 - `hooks/useTripHistory.ts` still keeps a local list (`localStorage`, max 20, also used for "paused" runs). It is merged
   in for trips the server does not know (from before the store, or when the agent is unreachable); only those are
   checked against `GET /api/trips/:id`, and a `404` shows "No longer available" with a remove button.
+- While the agent's list loads the page shows skeleton rows ("Loading your trips…"), not "No trips yet".
 - "Copy link for another device" copies `/trips?owner=<id>`. Opening it adopts that id in the other browser (toast
   "Trips linked") and removes it from the address bar. Anyone with the link sees the list, which the toast says. No
   accounts (ARCHITECTURE.md §9).
@@ -606,7 +630,18 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 - Money always through one `formatUsd()` helper; dates/times through `Intl.DateTimeFormat`.
 - Every async state has a visible representation: idle, loading (skeleton), streaming, completed, failed, aborted.
 - Animations are short (≤300 ms) and disabled under `prefers-reduced-motion`.
-- Target WCAG 2.1 AA: labelled inputs, focus states, contrast, no information by colour alone.
+- Target **WCAG 2.2 AA** (TP-38): labelled inputs, focus states, contrast, no information by colour alone. Never fade text with
+  `opacity` to show an inactive state (it drops below 4.5:1); grey it out instead.
+- Everything clickable shows the pointer cursor (a base rule in `globals.css`; Tailwind v4 dropped it for buttons); disabled controls don't.
+- Touch targets: controls are 40 px for a mouse and grow to 44 px on touch screens with the `pointer-coarse:` variant (`h-11`/`size-11`).
+  Text links (`ExternalLink`) keep their line height and get a 44 px tall tap box from an `::after` on touch screens.
+- A horizontal scroller that hides items (the day strip) fades the edge that has more beyond it.
+- Every page's `<main id="main" tabIndex={-1}>` is the target of the "Skip to main content" link, the first Tab stop.
+  `scroll-padding-top` keeps focused elements clear of the sticky header and section tabs (WCAG 2.4.11).
+- The one modal (Re-plan) wraps Tab itself (`keepTabInside` in `lib/dom.ts`): Base UI's focus guards let focus slip out after one wrap.
+- Every toast goes through `notify()` (`Notice` with placement `toast` and its own Dismiss button), never `toast.success` & co. It
+  marks the toast and its button not dismissible for Sonner: otherwise Sonner sends focus back to where it came from whenever Tab
+  leaves a toast, and Tab loops between the last link of the page and the toast. Toasts still close on their own and by Dismiss.
 
 ---
 
@@ -630,7 +665,12 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
   (`playwright.config.ts`; `next dev` locally, a production build in CI) and runs every test in a `desktop` and a
   375 px `mobile` project: plan a trip → result → reload (chat restored) → "My trips"; the "Copy link for another
   device" link in a fresh browser; no sideways scroll on the start page, the live run, the finished trip and `/trips`.
-- **Not yet:** unit tests for `lib/sse.ts` and the reducer (see `PLAN.md`).
+- `e2e/ux.spec.ts` (TP-38): leaving a live run for "My trips" and coming back catches up; an unusable value says why; keyboard only
+  (skip link → prompt → ⌘/Ctrl+Enter → focus on the result heading); the Re-plan dialog keeps focus and returns it; a link to an unknown
+  trip says so; Tab moves on past a toast.
+- The mock agent answers like the agent for unfinished runs: `/record` and `GET /api/trips/:id` read them as a `failed` trip, `POST …/resume`
+  on a running one is `409`, and on an id that can't be a thread `404`.
+- **Not yet:** unit tests for `lib/sse.ts` and the reducer (see `PLAN.md`); an automated axe scan in e2e (needs `axe-core` as a dev dependency).
 - **By hand:** the mock agent's scenarios `happy`, `overBudget`, `mockData`, `failed`, `dropped`, `invalidPacket`, and
   the prompt tags `#rateLimited`, `#dailyLimit`, `#validationError`, `#unknowncity`, `#noweather`, `#norate`.
 - `test/mock-agent/` and `test/fixtures/` are built with the contracts schemas, so they cannot drift from the protocol.

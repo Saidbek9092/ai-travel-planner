@@ -39,7 +39,7 @@ function LabelParts({ label }: { label: string }) {
   return (
     <>
       <span className="font-semibold">{head}</span>
-      {rest.length > 0 && <span className="font-normal opacity-90"> · {rest.join(' · ')}</span>}
+      {rest.length > 0 && <span className="font-normal"> · {rest.join(' · ')}</span>}
     </>
   );
 }
@@ -74,7 +74,7 @@ function MessageTags({ message, overBudget }: { message: MessagePayload; overBud
           icon={warn ? <AlertTriangleIcon className="size-4" /> : <CircleCheckIcon className="size-4 fill-success text-success-soft" />}
         >
           <span className="font-semibold">{decisionChipLabel(decision, overBudget)}</span>
-          {callout?.tone === 'info' && <span className="opacity-90"> · {callout.label}</span>}
+          {callout?.tone === 'info' && <span> · {callout.label}</span>}
         </Pill>
       )}
       {callout && !(decision && callout.tone === 'info') && (
@@ -141,7 +141,8 @@ function WorkingLine({ progress, animate }: { progress: ProgressPayload | null; 
   const day = draftingDay(progress?.detail);
   const doing = day !== null && progress?.currentStatus === 'planning' ? `drafting Day ${day}` : progress ? WORKING[progress.currentStatus] : 'reading your brief';
   return (
-    <li className="mt-5 flex items-center gap-3" role="status">
+    // Inside the conversation's live region, which announces its changes.
+    <li className="mt-5 flex items-center gap-3">
       <AgentAvatar agent={agent} />
       <p className="inline-flex items-center gap-3 rounded-xl bg-muted px-4 py-2.5 text-[15px] text-ink-2">
         <span className="flex gap-1" aria-hidden="true">
@@ -176,17 +177,20 @@ function Feed({
   const { viewportRef, stuck, onScroll, jumpToLatest } = useStickToBottom(messages.length + (progress?.progressPercent ?? 0));
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
+      {/* The scroller is the live region (a `log` on the list itself would hide its list semantics); focusable to scroll by keyboard. */}
       <div
         ref={viewportRef}
         onScroll={onScroll}
         className="max-h-[70dvh] min-h-32 flex-1 overflow-y-auto px-5 py-6 lg:max-h-none"
         tabIndex={0}
-        aria-label="Conversation, scrollable"
+        role="log"
+        aria-live="polite"
+        aria-label="Conversation"
       >
         {messages.length === 0 && !streaming && (
           <p className="text-[15px] text-muted-foreground">Describe your trip and the agents will walk you through their plan.</p>
         )}
-        <ul role="log" aria-live="polite" aria-label="Conversation">
+        <ul>
           <AnimatePresence initial={false}>
             {messages.map((message, i) => (
               <MessageItem

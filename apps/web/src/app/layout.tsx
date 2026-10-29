@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import Link from 'next/link';
 import { RouteIcon } from 'lucide-react';
 import { SiteNav } from '@/components/SiteNav';
+import { SkipLink } from '@/components/SkipLink';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { HEADER_ACTIONS_ID } from '@/lib/dom';
@@ -28,9 +29,13 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-background text-[15px] leading-[22px] text-foreground">
         <TooltipProvider>
+          <SkipLink />
           <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
             <div className="mx-auto flex h-16 w-full max-w-[1360px] items-center gap-3 px-4 sm:gap-6 sm:px-8 lg:px-8">
-              <Link href="/" className="flex shrink-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              <Link
+                href="/"
+                className="flex shrink-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50 pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
+              >
                 <span className="flex size-8 items-center justify-center rounded-lg bg-foreground text-white">
                   <RouteIcon className="size-4" aria-hidden="true" />
                 </span>

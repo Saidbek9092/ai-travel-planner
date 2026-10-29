@@ -14,3 +14,14 @@ export function formatCountdown(seconds: number): string {
   if (seconds >= 3600) return `${Math.floor(seconds / 3600)}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}`;
   return `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`;
 }
+
+/** The wait in words for screen readers, coarse enough to change at most once a minute: `"about 2 minutes"`. */
+export function spokenWait(seconds: number): string {
+  if (seconds < 60) return 'under a minute';
+  if (seconds < 3600) {
+    const minutes = Math.ceil(seconds / 60);
+    return `about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  }
+  const hours = Math.round(seconds / 3600);
+  return `about ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+}

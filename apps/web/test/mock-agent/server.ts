@@ -34,6 +34,8 @@ interface Run {
   createdAt: string;
 }
 const runs = new Map<string, Run>();
+/** What the agent reports for a run that has not finished (its `/record` and `GET /api/trips/:id` read it as a failed trip). */
+const STOPPED_ERROR = 'Trip planning stopped before it finished, resume to continue';
 
 function cors(res: ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -261,14 +263,19 @@ createServer(async (req, res) => {
   const resume = /^\/api\/trips\/([^/]+)\/resume$/.exec(url.pathname);
   if (req.method === 'POST' && resume) {
     const threadId = resume[1]!;
+    // Like the agent: a run that is still going can't be resumed (the client follows its stream instead), and an id that
+    // can't be a thread is unknown.
+    if (runs.get(threadId)?.done === false) return fail(res, 409, 'CONFLICT', 'This trip is still running');
+    if (!runs.has(threadId) && !/^[0-9a-f-]{36}$/i.test(threadId)) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
     return startRun(res, threadId, scenarios.happy!(threadId), ownerOf(req));
   }
 
   const record = /^\/api\/trips\/([^/]+)\/record$/.exec(url.pathname);
   if (req.method === 'GET' && record) {
     const run = runs.get(record[1]!);
-    if (!run?.result) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
-    return json(res, 200, { result: run.result as ResultPayload, messages: messagesOf(run), createdAt: run.createdAt, updatedAt: run.createdAt } satisfies TripRecord);
+    if (!run) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
+    const result = (run.result as ResultPayload | null) ?? resultPayload(record[1]!, { status: 'failed', error: STOPPED_ERROR });
+    return json(res, 200, { result, messages: messagesOf(run), createdAt: run.createdAt, updatedAt: run.createdAt } satisfies TripRecord);
   }
 
   const lookup = /^\/api\/trips\/([^/]+)$/.exec(url.pathname);
@@ -276,7 +283,7 @@ createServer(async (req, res) => {
     const threadId = lookup[1]!;
     const run = runs.get(threadId);
     if (run) {
-      return run.result ? json(res, 200, run.result) : fail(res, 404, 'NOT_FOUND', 'Trip not finished');
+      return json(res, 200, run.result ?? resultPayload(threadId, { status: 'failed', error: STOPPED_ERROR }));
     }
     if (!/^[0-9a-f-]{36}$/i.test(threadId)) return fail(res, 404, 'NOT_FOUND', 'Trip not found');
     // Unknown but well-formed id (e.g. after a mock restart): pretend it finished, so deep links keep working.
