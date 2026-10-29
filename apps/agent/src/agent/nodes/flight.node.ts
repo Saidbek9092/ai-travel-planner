@@ -4,6 +4,7 @@ import { applyPick, matchesStops, reasonsText, softPreferences } from '../pick.j
 import { describeBreakdown, rankFlights } from '../ranking.js';
 import { formatUsd, llmFallbackLog, log, say, searchFallbackLog, type TravelNode } from '../state.js';
 import { addDays, nightsFor } from '../../utils/dates.js';
+import { iataFor } from '../../tools/airports.js';
 import type { TravelSearchTool } from '../../tools/index.js';
 
 export interface FlightNodeDeps {
@@ -69,6 +70,11 @@ export const flightNode =
     const estimated = tools.name !== 'mock' && found.some((flight) => flight.source === 'mock');
     if (estimated) logs.push(searchFallbackLog(state, 'FlightAgent', 'flight'));
 
+    // A place with no known airport can only be answered with estimates; say which one.
+    const unknownPlaces = tools.name === 'mock' ? [] : [state.origin ?? '', state.destination].filter((place) => place && iataFor(place) === undefined);
+    const unknownWarnings = unknownPlaces.map((place) => `No airport found for "${place}", so flight prices are estimates.`);
+    for (const warning of unknownWarnings) logs.push(log(state, 'FlightAgent', warning, 'warn'));
+
     // First pass proposes; a re-plan pass confirms the pick (only when it actually changed).
     const messages = [];
     if (best) {
@@ -85,7 +91,12 @@ export const flightNode =
       logs,
       messages,
       ...(messages.some((message) => message.decision) && { confirmed: ['flight' as const] }),
-      ...(estimated && !state.warnings.includes(FALLBACK_WARNING) && { warnings: [FALLBACK_WARNING] }),
+      ...(() => {
+        const warnings = [...(estimated && unknownWarnings.length === 0 ? [FALLBACK_WARNING] : []), ...unknownWarnings].filter(
+          (warning) => !state.warnings.includes(warning),
+        );
+        return warnings.length > 0 ? { warnings } : {};
+      })(),
     };
   };
 

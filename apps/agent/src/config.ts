@@ -22,6 +22,8 @@ const EnvSchema = z
     SERPAPI_API_KEY: secret.optional(),
     TAVILY_API_KEY: secret.optional(),
     TOOLS_MODE: z.enum(['auto', 'live', 'mock']).default('auto'),
+    /** How long a flight or hotel search is reused (re-plans and repeat searches). */
+    SEARCH_CACHE_TTL_MS: positiveInt.default(1_800_000),
 
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }).optional(),
 
@@ -37,6 +39,9 @@ const EnvSchema = z
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.WEB_ORIGIN === undefined) {
       ctx.addIssue({ code: 'custom', path: ['WEB_ORIGIN'], message: 'Required in production' });
+    }
+    if (env.NODE_ENV === 'production' && env.DATABASE_URL === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['DATABASE_URL'], message: 'Required in production: resuming a run depends on the Postgres checkpointer' });
     }
     if (env.TOOLS_MODE === 'live' && env.SERPAPI_API_KEY === undefined) {
       ctx.addIssue({ code: 'custom', path: ['SERPAPI_API_KEY'], message: 'Required when TOOLS_MODE=live' });

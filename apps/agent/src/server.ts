@@ -7,6 +7,7 @@ import { createTravelTool } from './tools/index.js';
 import { createLogger } from './utils/logger.js';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
+const READINESS_TIMEOUT_MS = 2_000;
 
 const config = loadConfig();
 const logger = createLogger();
@@ -19,7 +20,23 @@ const graph = buildGraph({
   ...(config.TAVILY_API_KEY && { tavilyApiKey: config.TAVILY_API_KEY }),
 });
 const registry = new RunRegistry({ graph, config, checkpointer: checkpointer.kind, logger });
-const app = createApp({ config, logger, graph, registry });
+
+/** Problems that stop this instance serving trips: an unreachable database or a missing key. Empty = ready. */
+async function readiness(): Promise<string[]> {
+  const problems: string[] = [];
+  if (config.TOOLS_MODE === 'live' && config.SERPAPI_API_KEY === undefined) problems.push('SERPAPI_API_KEY is missing');
+  try {
+    await Promise.race([
+      checkpointer.ping(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out')), READINESS_TIMEOUT_MS).unref()),
+    ]);
+  } catch (error) {
+    problems.push(`database unreachable: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return problems;
+}
+
+const app = createApp({ config, logger, graph, registry, readiness });
 
 const server = app.listen(config.PORT, (error) => {
   if (error) {
@@ -33,6 +50,8 @@ const server = app.listen(config.PORT, (error) => {
     toolsMode: config.TOOLS_MODE,
     checkpointer: checkpointer.kind,
   });
+  // RunRegistry and its replay buffer live in this process, so two instances would lose each other's runs.
+  logger.warn('single-instance mode: runs and replay buffers are held in process memory; do not run more than one agent instance');
 });
 
 /** Stops accepting connections, fails open runs with a "resume" message, closes the pool, exits within 10 s. */

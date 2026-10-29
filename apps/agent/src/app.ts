@@ -17,6 +17,8 @@ export interface AppDeps {
   logger: Logger;
   graph: CompiledTravelGraph;
   registry: RunRegistry;
+  /** Dependency checks behind `/readyz`; each rejects (or returns a reason) when not ready. Defaults to ready. */
+  readiness?: () => Promise<string[]>;
   /** Injected by tests to use low limits; built from `config` otherwise. */
   rateLimiters?: RateLimiters;
 }
@@ -30,6 +32,7 @@ export function createApp({
   logger,
   graph,
   registry,
+  readiness = async () => [],
   rateLimiters = createRateLimiters(config),
 }: AppDeps): Express {
   const app = express();
@@ -50,7 +53,7 @@ export function createApp({
   app.use((req, res, next) => {
     const startedAt = Date.now();
     res.on('finish', () => {
-      if (req.path === '/health') return;
+      if (req.path === '/health' || req.path === '/readyz') return;
       logger.info('request', { method: req.method, path: req.path, status: res.statusCode, durationMs: Date.now() - startedAt });
     });
     next();
@@ -58,6 +61,17 @@ export function createApp({
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
+  });
+
+  // Readiness (can serve traffic: database reachable, keys present) is separate from liveness above.
+  app.get('/readyz', async (_req, res) => {
+    const problems = await readiness().catch((error: unknown) => [error instanceof Error ? error.message : String(error)]);
+    if (problems.length > 0) {
+      logger.warn('not ready', { problems });
+      res.status(503).json({ status: 'unavailable', problems });
+      return;
+    }
+    res.json({ status: 'ready' });
   });
 
   app.use('/api', rateLimiters.generalLimiter);

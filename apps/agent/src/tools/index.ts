@@ -1,6 +1,7 @@
 import type { Config } from '../config.js';
 import { createMockTravelTool } from './mockTravel.tool.js';
 import { createSerpApiTool } from './serpApi.tool.js';
+import { withSearchCache } from './searchCache.js';
 import { ToolUnavailableError, type SearchTool, type TravelSearchTool } from './types.js';
 import { placePhoto } from './placePhotos.js';
 import { geocode, getForecast, mockForecast } from './weather.js';
@@ -33,13 +34,15 @@ export function withFallback(
   };
 }
 
+type SearchConfig = Pick<Config, 'TOOLS_MODE' | 'SERPAPI_API_KEY' | 'NODE_ENV' | 'SEARCH_CACHE_TTL_MS'>;
+
 /** `mock` → offline engine; `live` → SerpAPI only; `auto` → SerpAPI with mock fallback when a key is set, else mock. */
-function createSearchTool(config: Pick<Config, 'TOOLS_MODE' | 'SERPAPI_API_KEY' | 'NODE_ENV'>, onFallback?: (reason: string) => void): SearchTool {
+function createSearchTool(config: SearchConfig, onFallback?: (reason: string) => void): SearchTool {
   const mock = createMockTravelTool(config.NODE_ENV === 'test' ? { delayMs: 0 } : {});
   const key = config.SERPAPI_API_KEY;
 
   if (config.TOOLS_MODE === 'mock' || key === undefined) return mock;
-  const live = createSerpApiTool({ apiKey: key });
+  const live = withSearchCache(createSerpApiTool({ apiKey: key }), config.SEARCH_CACHE_TTL_MS);
   return config.TOOLS_MODE === 'live' ? live : withFallback(live, mock, onFallback);
 }
 
@@ -48,7 +51,7 @@ function createSearchTool(config: Pick<Config, 'TOOLS_MODE' | 'SERPAPI_API_KEY' 
  * provider: only `TOOLS_MODE=mock` swaps it for the fixed fixture.
  */
 export function createTravelTool(
-  config: Pick<Config, 'TOOLS_MODE' | 'SERPAPI_API_KEY' | 'NODE_ENV'>,
+  config: SearchConfig,
   onFallback?: (reason: string) => void,
 ): TravelSearchTool {
   const search = createSearchTool(config, onFallback);

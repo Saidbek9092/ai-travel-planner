@@ -10,6 +10,7 @@ export class TtlCache<T> {
   constructor(
     private readonly ttlMs: number,
     private readonly now: () => number = Date.now,
+    private readonly maxEntries = 500,
   ) {}
 
   async remember(key: string, load: () => Promise<T>): Promise<T> {
@@ -17,7 +18,19 @@ export class TtlCache<T> {
     if (hit && hit.expiresAt > this.now()) return hit.value;
     const value = await load();
     this.entries.set(key, { value, expiresAt: this.now() + this.ttlMs });
+    this.prune();
     return value;
+  }
+
+  /** Drops expired entries, then the oldest ones, so the cache cannot grow without bound. */
+  private prune(): void {
+    if (this.entries.size <= this.maxEntries) return;
+    const now = this.now();
+    for (const [key, entry] of this.entries) if (entry.expiresAt <= now) this.entries.delete(key);
+    for (const key of this.entries.keys()) {
+      if (this.entries.size <= this.maxEntries) break;
+      this.entries.delete(key);
+    }
   }
 }
 
