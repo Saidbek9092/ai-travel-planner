@@ -158,13 +158,19 @@ only re-orders or swaps the stops that depend on the hotel (§8.4 of `apps/agent
 
 | # | Node | Uses LLM | Reads | Writes | Status after |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `supervisorAgent` | Yes (structured output) | `prompt`, request overrides | `origin`, `destination`, `budget`, `durationDays`, `startDate` | `searching` (or `failed`) |
-| 2 | `flightAgent` | No | trip fields, `searchMode` | `flights` (sorted, `[0]` = selected) | `searching` |
-| 3 | `hotelAgent` | No | trip fields, `searchMode` | `hotels` (sorted, `[0]` = selected) | `planning` |
-| 4 | `itineraryPlanner` | Yes (structured output, one call per day) | trip fields, selected flight and hotel, day forecast, `searchMode` | `transfers`, `itinerary`, `dailyExpensesEstimate` | `auditing` |
+| 1 | `supervisorAgent` | Yes (structured output) | `prompt`, request overrides | `origin`, `destination`, `budget`, `durationDays`, `startDate`, `preferences` | `searching` (or `failed`) |
+| 2 | `flightAgent` | Only to pick among soft preferences | trip fields, `preferences`, `searchMode` | `flights` (scored, `[0]` = selected) | `searching` |
+| 3 | `hotelAgent` | Only to pick among soft preferences | trip fields, `preferences`, `searchMode` | `hotels` (scored, `[0]` = selected) | `planning` |
+| 4 | `itineraryPlanner` | Yes (structured output, one call per day) | trip fields, selected flight and hotel, day forecast, `searchMode` | `transfers`, `itinerary` (with place photos), `dailyExpensesEstimate` | `auditing` |
 | 5 | `budgetAuditor` | No (pure arithmetic) | everything | `totalCost`, `passes`, `retryCount`, `searchMode`, `overBudgetBy`, `suggestions`, `warnings` | `completed` or `searching` |
 
-The LLM is used only where language understanding is needed (parsing and planning). Searching and
+Flight and hotel choice (`agent/ranking.ts`, `agent/pick.ts`): code applies hard filters (budget, cheaper mode,
+"direct only"), scores options (price vs budget, travel time, stops, long layovers, red-eyes; hotel price, rating,
+distance to the centre, transit) and keeps the top 5. Without soft preferences the top score wins. With them the LLM
+returns only an index and reason tags (`Flight.picked` / `Hotel.picked`); an invalid answer or LLM error falls back to
+the top score. Place photos (`Place.photoUrl`, `photoCredit`) come from Wikipedia, cached, under a 3 s cap.
+
+The LLM is used only where language understanding is needed (parsing, planning and the preference pick). Searching and
 auditing are deterministic code — cheaper, faster, and unit-testable.
 
 ### 4.3 Budget Auditor rules
@@ -346,6 +352,8 @@ export const PlaceSchema = z.object({
   lng: z.number().min(-180).max(180),
   /** Short hint shown next to the stop, e.g. "Morning". */
   note: z.string().min(1).nullable(),
+  photoUrl: z.url().nullish(),
+  photoCredit: z.object({ name: z.string().min(1), url: z.url() }).nullish(),
 });
 
 export const HotelSchema = z.object({

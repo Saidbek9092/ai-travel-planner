@@ -1,8 +1,8 @@
 'use client';
 
 import type { ItineraryDay, Place, Transfer } from '@ai-travel/contracts';
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { useRef, type KeyboardEvent } from 'react';
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, ImageIcon } from 'lucide-react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { ExternalLink } from '@/components/ExternalLink';
 import { Button } from '@/components/ui/button';
 import { TRANSFER_MODES, WEATHER_ICONS, dayColor, formatTemperature } from '@/lib/labels';
@@ -191,6 +191,24 @@ function PlaceLinks({ place }: { place: Place }) {
   );
 }
 
+/** Fixed-size square, so loading never shifts the layout; a missing or broken photo shows the neutral placeholder. */
+function PlacePhoto({ place }: { place: Place }) {
+  const [failed, setFailed] = useState(false);
+  const url = safeUrl(place.photoUrl);
+  return (
+    <span className="size-14 shrink-0 overflow-hidden rounded-lg">
+      {url && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element -- remote photos come from arbitrary hosts
+        <img src={url} alt="" loading="lazy" width={56} height={56} onError={() => setFailed(true)} className="size-full object-cover" />
+      ) : (
+        <span className="placeholder-hatch flex size-full items-center justify-center text-muted-foreground" aria-hidden="true">
+          <ImageIcon className="size-4" />
+        </span>
+      )}
+    </span>
+  );
+}
+
 function TransferStop({ transfer }: { transfer: Transfer }) {
   const mode = TRANSFER_MODES[transfer.mode];
   const Icon = mode.icon;
@@ -263,11 +281,17 @@ export function DayPanel({
             >
               {i + 1}
             </span>
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
               <span className="block text-[17px] leading-6 font-semibold">{place.name}</span>
               {place.note && <span className="block text-sm text-ink-2">{place.note}</span>}
               <PlaceLinks place={place} />
+              {place.photoUrl && place.photoCredit && safeUrl(place.photoCredit.url) && (
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Photo: <ExternalLink href={safeUrl(place.photoCredit.url)!}>{place.photoCredit.name}</ExternalLink>
+                </span>
+              )}
             </span>
+            <PlacePhoto place={place} />
           </li>
         ))}
         {departure.map((t) => (

@@ -24,6 +24,8 @@ export interface PlannerNodeDeps {
 }
 
 const MAX_PLACES_PER_DAY = 5;
+/** Photos are a bonus: all lookups together may delay the result by at most this long. */
+const PHOTO_BUDGET_MS = 3_000;
 const INDOOR_WEATHER = new Set<DayWeather['icon']>(['rain', 'snow', 'storm']);
 
 // Strict-output-friendly schemas: no min/max constraints, every field present. The contract schemas validate afterwards.
@@ -189,6 +191,22 @@ export const plannerNode =
       writer?.({ kind: 'day', day, of: last, itinerary: [...days, ...(replan ? state.itinerary.slice(day) : [])] });
     }
 
+    // Photos load in parallel under one short cap; a place without one keeps `photoUrl` empty (the UI shows a placeholder).
+    const photoSignal = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(PHOTO_BUDGET_MS)]);
+    const photographed = await Promise.all(
+      days.map(async (day) => ({
+        ...day,
+        places: await Promise.all(
+          day.places.map(async (place) => {
+            if (place.photoUrl) return place;
+            const photo = await tools.getPlacePhoto(place.name, state.destination, photoSignal).catch(() => null);
+            signal?.throwIfAborted();
+            return photo ? { ...place, photoUrl: photo.url, photoCredit: photo.credit } : place;
+          }),
+        ),
+      })),
+    );
+
     for (const model of used) if (model !== llm.primaryModel) logs.push(llmFallbackLog(state, 'Planner', model));
     logs.push(log(state, 'Planner', `Itinerary ready: ${days.length} days in ${state.destination}.`));
 
@@ -201,7 +219,7 @@ export const plannerNode =
     return {
       messages,
       ...(confirmed.length > 0 && { confirmed }),
-      itinerary: days,
+      itinerary: photographed,
       transfers,
       dailyExpensesEstimate,
       itineraryHotel: hotel.name,

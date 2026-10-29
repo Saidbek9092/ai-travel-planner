@@ -24,8 +24,8 @@ export const routeAfterAudit = (state: TravelAgentState) => (state.status === 's
 export function buildGraph({ checkpointer, tools, llm, tavilyApiKey }: GraphDeps) {
   return new StateGraph(TravelAgentStateAnnotation)
     .addNode('supervisorAgent', supervisorNode({ llm }), { retryPolicy: { maxAttempts: 2 } })
-    .addNode('flightAgent', flightNode({ tools }))
-    .addNode('hotelAgent', hotelNode({ tools }))
+    .addNode('flightAgent', flightNode({ tools, llm }))
+    .addNode('hotelAgent', hotelNode({ tools, llm }))
     .addNode('itineraryPlanner', plannerNode({ tools, llm, ...(tavilyApiKey && { tavilyApiKey }) }), { retryPolicy: { maxAttempts: 2 } })
     .addNode('budgetAuditor', budgetNode())
     .addEdge(START, 'supervisorAgent')
