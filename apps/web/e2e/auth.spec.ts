@@ -20,7 +20,9 @@ async function signedInAs(browser: Browser, id: string): Promise<Page> {
 }
 
 test('each account sees only its own trips, and cannot open another account’s link', async ({ browser }) => {
-  const alice = await signedInAs(browser, 'alice');
+  // The mock agent keeps its trips across projects and retries, so each run gets accounts of its own.
+  const run = Math.random().toString(36).slice(2, 8);
+  const alice = await signedInAs(browser, `alice-${run}`);
   await alice.goto('/');
   await alice.getByLabel('Describe your trip').fill(PROMPT);
   await alice.getByRole('button', { name: /Plan my trip/ }).click();
@@ -34,7 +36,7 @@ test('each account sees only its own trips, and cannot open another account’s 
   await expect(alice.getByRole('heading', { level: 1, name: TITLE })).toBeVisible();
 
   // Bob has none, and Alice's link is "not found" for him.
-  const bob = await signedInAs(browser, 'bob');
+  const bob = await signedInAs(browser, `bob-${run}`);
   await bob.goto('/trips');
   await expect(bob.getByText('No trips yet')).toBeVisible();
   await bob.goto(tripUrl);
