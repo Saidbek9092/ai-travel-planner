@@ -11,9 +11,6 @@ next-env.d.ts
 # tooling caches
 .turbo/
 coverage/
-test-results/
-playwright-report/
-playwright/.cache/
 
 # env files (keep the examples)
 .env*

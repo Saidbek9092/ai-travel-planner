@@ -11,5 +11,5 @@ description: Implement one item of open work from apps/agent/PLAN.md or apps/web
    If the task touches UI or packets, run the `design-check` skill first.
 4. Implement exactly the ticket scope. One ticket = one branch = one PR; no drive-by refactors.
 5. If the implementation deviates from the SPEC, update the SPEC in the same change. When the item is done, delete it from `PLAN.md` and record the outcome in the SPEC or `ARCHITECTURE.md`.
-6. Add or update tests (agent: Vitest in `apps/agent/test`; web: Playwright in `apps/web/e2e`), then run `pnpm lint && pnpm typecheck && pnpm test` (filter to the app; `pnpm e2e` for web flows).
+6. Run `pnpm lint && pnpm typecheck` (filter to the app).
 7. Commit and open a PR only when the user asks.

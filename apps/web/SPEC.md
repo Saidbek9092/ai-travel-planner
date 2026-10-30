@@ -91,18 +91,15 @@ apps/web/
 │       ├── owner.ts                # + anonymous owner id (cookie) and the X-Owner-Id header
 │       ├── parseTrip.ts            # + start-page preview parser of the prompt (not the stored-trip migration)
 │       └── sse.ts                  # + framework-free SSE parser
-├── e2e/                            # Playwright specs (§10)
-├── test/                           # mock-agent/ (dev + e2e agent) and fixtures/ (packets built with the contracts)
 ├── components.json                 # shadcn config (style base-nova)
 ├── eslint.config.mjs               # ESLint flat config (eslint-config-next)
-├── playwright.config.ts            # desktop + 375 px mobile projects; starts the mock agent and the app
 ├── .env.example
 ├── next.config.ts
 ├── package.json                    # name: ai-travel-web
 └── tsconfig.json                   # extends ../../tsconfig.base.json, moduleResolution Bundler
 ```
 
-Files marked `+` are not in the blueprint tree; see ARCHITECTURE.md §15 for why they exist.
+Files marked `+` are not in the blueprint tree; see ARCHITECTURE.md §14 for why they exist.
 
 ---
 
@@ -120,7 +117,6 @@ Files marked `+` are not in the blueprint tree; see ARCHITECTURE.md §15 for why
 | `sonner`, `next-themes` | Toasts (shadcn's `Toaster` reads the theme via `next-themes`; we pin `theme="light"`) |
 | `zod` (`catalog:`) | Validation |
 | dev: `eslint`, `eslint-config-next` | Lint (flat config, `eslint.config.mjs`) |
-| dev: `@playwright/test` | End-to-end tests (§10) |
 
 Dependencies are added by the ticket that first needs them (e.g. `framer-motion` in T10, `react-hook-form` in T9,
 `mapbox-gl` in T13), not up front.
@@ -137,8 +133,6 @@ Scripts:
   "dev": "next dev --port ${CONDUCTOR_PORT:-3000}",
   "build": "next build",
   "start": "next start --port ${PORT:-3000}",
-  "e2e": "playwright test",
-  "mock-agent": "node --experimental-transform-types test/mock-agent/server.ts",
   "typecheck": "next typegen && tsc --noEmit",
   "lint": "eslint ."
 }
@@ -353,7 +347,7 @@ function useTripContext(destination: string | null, origin?: string | null): { s
 - **Mobile (375 px and up, TP-36).** Below `lg` the columns stack: destination band (2-column grid, place across the top,
   no icons) → progress card (percent, bar, current step) → chat → Trip Overview with Flight / Hotel / Transfer / Days
   tabs. The finished trip puts the budget bar on its own row under the total. Header actions shrink to icon buttons.
-  Nothing scrolls sideways (e2e `mobile` project). Not built yet, from the Mobile boards: "latest two log lines + Show all
+  Nothing scrolls sideways. Not built yet, from the Mobile boards: "latest two log lines + Show all
   logs" and an "Open map" sheet (`PLAN.md`).
 - The header wordmark stays in the static shell (`page.tsx`); `TopBar`, the nav actions and everything else are rendered by
   `TripDashboard`, because they need client state. The header has no avatar or account menu in v1 (no auth).
@@ -666,28 +660,9 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 
 ---
 
-## 10. Testing
+## 10. Rules for working in this package
 
-- **End to end** (`e2e/trip.spec.ts`, `pnpm e2e`): Playwright starts the mock agent and the web app itself
-  (`playwright.config.ts`; `next dev` locally, a production build in CI) and runs every test in a `desktop` and a
-  375 px `mobile` project: plan a trip → result → reload (chat restored) → "My trips"; the "Copy link for another
-  device" link in a fresh browser; no sideways scroll on the start page, the live run, the finished trip and `/trips`.
-- `e2e/ux.spec.ts` (TP-38): leaving a live run for "My trips" and coming back catches up; an unusable value says why; keyboard only
-  (skip link → prompt → ⌘/Ctrl+Enter → focus on the result heading); the Re-plan dialog keeps focus and returns it; a link to an unknown
-  trip says so; Tab moves on past a toast.
-- The mock agent answers like the agent for unfinished runs: `/record` and `GET /api/trips/:id` read them as a `failed` trip, `POST …/resume`
-  on a running one is `409`, and on an id that can't be a thread `404`.
-- **Not yet:** unit tests for `lib/sse.ts` and the reducer (see `PLAN.md`); an automated axe scan in e2e (needs `axe-core` as a dev dependency).
-- **By hand:** the mock agent's scenarios `happy`, `overBudget`, `mockData`, `failed`, `dropped`, `invalidPacket`, and
-  the prompt tags `#rateLimited`, `#dailyLimit`, `#validationError`, `#unknowncity`, `#noweather`, `#norate`.
-- `test/mock-agent/` and `test/fixtures/` are built with the contracts schemas, so they cannot drift from the protocol.
-
-Before calling a change done: `pnpm lint && pnpm typecheck && pnpm build`, and `pnpm e2e` when a flow changes.
-
----
-
-## 11. Rules for working in this package
-
+- Before calling a change done: `pnpm lint && pnpm typecheck && pnpm build`.
 - Import every cross-service type and schema from `@ai-travel/contracts`. Never declare a local
   `Flight`, `Hotel`, packet type, or a hand-written copy of `TripRequest`.
 - Never read `process.env` outside `lib/env.ts` and `next.config.ts`.
@@ -701,7 +676,7 @@ Before calling a change done: `pnpm lint && pnpm typecheck && pnpm build`, and `
 
 ---
 
-## 12. Decisions
+## 11. Decisions
 
 | # | Question | Decision |
 | --- | --- | --- |
@@ -714,7 +689,7 @@ Before calling a change done: `pnpm lint && pnpm typecheck && pnpm build`, and `
 | 7 | Live Trip Overview | **New `DRAFT` packet** (the trip so far) instead of rebuilding it from `LOG`/`MESSAGE` text. Sections show a "Confirmed" tag when their decision message has arrived. |
 | 8 | Dropped stream | **Reconnect and catch up** (`Last-Event-ID`), as in the design's "Stream dropped — reconnecting" state. The run no longer dies with the connection (agent B25). |
 | 9 | Accounts, avatar, run history | Accounts are optional (TP-42): Google sign-in shows a small avatar and "Sign out" in the header. Without it, "My trips" lives in the agent's `trips` table under an anonymous owner id in a cookie, shareable to another device by link (TP-34). |
-| 12 | Mobile | **Usable at 375 px** (TP-36): the destination band becomes a 2-column grid without icons, the budget bar takes its own row, and the phase steps collapse into a progress bar. The e2e `mobile` project guards against sideways scroll. |
-| 13 | Swapping an agent's pick | **No** (ARCHITECTURE.md §16): the planner is automatic; the traveller steers it with the prompt, the fields and the over-budget actions. |
+| 12 | Mobile | **Usable at 375 px** (TP-36): the destination band becomes a 2-column grid without icons, the budget bar takes its own row, and the phase steps collapse into a progress bar. |
+| 13 | Swapping an agent's pick | **No** (ARCHITECTURE.md §15): the planner is automatic; the traveller steers it with the prompt, the fields and the over-budget actions. |
 | 10 | Stack labels in the design | The design boards say "Next.js 15" and "OpenAI GPT-4o". The repo stays on **Next.js 16** and **Anthropic Claude**; those labels are stale in the design. |
 | 11 | Hotel rating scale | **0–10** (design "8.2 · Very good"); the agent doubles Google Hotels' 0–5. |

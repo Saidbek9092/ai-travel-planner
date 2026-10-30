@@ -10,7 +10,7 @@ const secret = z.string().min(1);
 
 const EnvSchema = z
   .object({
-    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    NODE_ENV: z.enum(['development', 'production']).default('development'),
     PORT: port.optional(),
     CONDUCTOR_PORT: port.optional(),
     WEB_ORIGIN: z.string().optional(),

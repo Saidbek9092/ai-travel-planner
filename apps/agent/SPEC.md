@@ -62,11 +62,9 @@ apps/agent/
 │   │   └── logger.ts              # + structured JSON logger
 │   ├── storage/
 │   │   └── tripStore.ts           # + finished trips + chat for "My trips" (Postgres `trips` table / memory) (§11)
-│   ├── app.ts                     # + createApp(deps): middlewares + routes, no listen (supertest)
+│   ├── app.ts                     # + createApp(deps): middlewares + routes, no listen
 │   ├── server.ts                  # boot: loadConfig → createApp → listen, graceful shutdown
 │   └── config.ts                  # Zod-validated env
-├── test/                          # Vitest (§13); helpers/ has the fake LLM and the in-memory app harness
-├── scripts/eval.ts                # + live prompt evaluation against a running agent (`pnpm eval`, §13)
 ├── .env.example                   # every variable from §4
 ├── package.json                   # name: ai-travel-agent
 ├── tsconfig.json                  # extends ../../tsconfig.base.json, NodeNext, src + test (typecheck)
@@ -74,7 +72,7 @@ apps/agent/
 └── eslint.config.js               # @eslint/js + typescript-eslint, Node globals
 ```
 
-Files marked `+` are not in the blueprint tree; see ARCHITECTURE.md §15 for why they exist.
+Files marked `+` are not in the blueprint tree; see ARCHITECTURE.md §14 for why they exist.
 
 ---
 
@@ -91,7 +89,7 @@ Files marked `+` are not in the blueprint tree; see ARCHITECTURE.md §15 for why
 | `@langchain/anthropic`, `@langchain/core` | `ChatAnthropic`, `withStructuredOutput`, `withFallbacks` |
 | `zod` (`catalog:`) | Validation |
 | `dotenv` | Load `apps/agent/.env` in development (`loadDotenv({ quiet: true })` inside `loadConfig()`) |
-| dev: `typescript`, `tsx`, `vitest`, `supertest` | Build, watch mode, tests |
+| dev: `typescript`, `tsx` | Build, watch mode |
 
 Scripts:
 
@@ -100,7 +98,6 @@ Scripts:
   "dev": "tsx watch src/server.ts",
   "build": "tsc -p tsconfig.build.json",
   "start": "node dist/server.js",
-  "test": "vitest run",
   "typecheck": "tsc --noEmit",
   "lint": "eslint ."
 }
@@ -574,7 +571,7 @@ export async function getForecast(destination: string, startDate: string | null,
 - `utils/ttlCache.ts`, keyed by the normalised destination (trim, lower-case, collapsed spaces): geocode 24 h,
   weather and forecast 30 min, rate 6 h. Failures are never cached.
 - **No mock fallback on failure** — a made-up temperature or rate would look real. `mode: 'mock'`
-  (`TOOLS_MODE=mock`) returns fixed fixtures with `source: 'mock'` for tests and e2e (Paris: 12 °C, partly cloudy, 9–14 °C, "rain Saturday", EUR 0.92,
+  (`TOOLS_MODE=mock`) returns fixed fixtures with `source: 'mock'` when running without live data (Paris: 12 °C, partly cloudy, 9–14 °C, "rain Saturday", EUR 0.92,
   `Europe/Paris`; `getForecast` returns five days with a rainy day 3).
 - `createTravelTool` composes the search tool (SerpAPI / mock) with `getForecast`; the forecast is keyless, so it is live even when search falls back to mock, and only `TOOLS_MODE=mock` swaps it for the fixture.
 - `GET /api/trip-context` lives in `routes/tripContext.ts`; a resume of a thread that is still running answers `409 CONFLICT`.
@@ -617,33 +614,7 @@ registry saves it under the run's owner. A save error is logged and never fails 
 
 ---
 
-## 13. Testing
-
-`pnpm test` (Vitest). No test may call Anthropic, SerpAPI or another vendor: use the fake `LlmFactory`
-(`test/helpers/fakeLlm.ts`), `TOOLS_MODE=mock` and `MemorySaver`. `test/helpers/harness.ts` builds the real graph and
-the whole Express app in memory.
-
-| File | What it proves |
-| --- | --- |
-| `test/budget.node.test.ts` | Cost formula (nights = days − 1, transfers, cents); conditions 1, 2 (retry, `cheaper`, pass number, callout) and 3 (warning, `suggestions`, never fewer than 1 day); confirms only unconfirmed topics; the audit router |
-| `test/runTrip.test.ts` | Full graph run: packets parse, one `RESULT` last, monotonic progress ending at 100, all six decisions confirmed, `Day N of M` progress and `DRAFT`s, rain day callout, over-budget loop runs twice with cheaper passes and `suggestions`, a failed parse confirms nothing, `onResult` gets the result and the whole chat |
-| `test/reconnect.test.ts` | `Run` buffer: replay after `Last-Event-ID` then live without duplicates, cap drops the oldest, monotonic `PROGRESS`; `GET …/stream` replays exactly the missed packets; unknown run → `404` |
-| `test/auth.test.ts` | Session token (round trip, tampered, foreign secret, expired); Google credential check (wrong audience, unverified email, rejected token); login `200`/`401`/`404`; per-account trip list; `404` for another account or a guest; guest trips claimed on sign-in |
-| `test/trips.test.ts` | Memory trip store (first owner and `createdAt` kept, per-owner list, v0 upgrade); `GET /api/trips` by owner id, `…/record` with the chat, `400` without an owner id, `404` record; daily cap `429` with `retryAfterSeconds` |
-| `test/tripStore.postgres.test.ts` | The same store rules against real Postgres. Skipped unless `TEST_DATABASE_URL` is set (CI sets it) |
-
-Still missing (see `PLAN.md`): node tests, SerpAPI mapping and retry, cancel → resume, server/CORS, message builders,
-trip context.
-
-**Live eval** (`scripts/eval.ts`, `pnpm eval`, optional `AGENT_URL`, `--only id,id`): about ten prompts against a
-running agent with real keys: baseline, typos, € and UZS budgets, missing fields, missing origin, past date, injection
-text, a budget that needs both re-plans, direct flights only. Each case checks the `RESULT` (status, destination,
-budget range, days, re-plans, no leaked prompt); exits `1` on any failure. It costs tokens and SerpAPI calls, so it
-is run by hand before a release, never in CI. Token and search numbers are in the agent's `run summary` log lines.
-
----
-
-## 14. Rules for working in this package
+## 13. Rules for working in this package
 
 - Import shared types from `@ai-travel/contracts`; never redefine `Flight`, `Hotel`, `ItineraryDay`, SSE packets.
   A contract change goes into `packages/contracts` first, then both apps are updated in the same PR.
@@ -661,7 +632,7 @@ is run by hand before a release, never in CI. Token and search numbers are in th
 
 ---
 
-## 15. Decisions
+## 14. Decisions
 
 Resolved questions from the build (2026-10-27), kept because the code relies on them.
 

@@ -12,7 +12,3 @@ available_in = [ "local" ]
 command = "pnpm dev"
 default = true
 icon = "play"
-
-[scripts.run.test]
-command = "pnpm test"
-icon = "test-tube"

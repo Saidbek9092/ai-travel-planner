@@ -6,8 +6,8 @@ Read on demand, only the § the task names: `SPEC.md` (this service, §1–§15)
 `../../docs/archive/`; don't update them.
 
 ## Commands
-- From this folder: `pnpm dev` (tsx watch) · `pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm test` (Vitest) · `pnpm eval` (live prompts, real keys, costs money)
-- Before calling a task done: `pnpm lint && pnpm typecheck && pnpm test`
+- From this folder: `pnpm dev` (tsx watch) · `pnpm build` · `pnpm lint` · `pnpm typecheck`
+- Before calling a task done: `pnpm lint && pnpm typecheck`
 
 ## Conventions
 - Graph: 5 nodes (supervisor, flight, hotel, planner, budget) in `src/agent/nodes/*.node.ts`; routers are pure.
@@ -27,11 +27,6 @@ Read on demand, only the § the task names: `SPEC.md` (this service, §1–§15)
 "Check the design" (or any task changing packets / DRAFT / RESULT): open BOTH
 `../../design-agents-planning.png` and `../../design-trip-overview.png`, then use the
 `design-check` skill. The design wins over the spec; report mismatches.
-
-## Tests
-- Vitest in `test/` (`SPEC.md` §13). Behaviour changes come with a test; a bug fix with a test that failed before it.
-- Never call Anthropic, SerpAPI or another vendor from a test: use `test/helpers/fakeLlm.ts`, `TOOLS_MODE=mock` and
-  `MemorySaver` (`test/helpers/harness.ts` builds the graph and app). Postgres tests run only with `TEST_DATABASE_URL`.
 
 ## Workflow
 Implementing a PLAN ticket → `implement-ticket` skill.

@@ -75,14 +75,13 @@ function leg(from: ReturnType<typeof airportFor>, to: ReturnType<typeof airportF
 }
 
 /** Deterministic offline engine. Same query, same options; `cheaper` mode lands at least 15% under the cap. */
-export function createMockTravelTool(options: { delayMs?: number } = {}): SearchTool {
-  const delayMs = options.delayMs ?? DELAY_MS;
+export function createMockTravelTool(): SearchTool {
 
   return {
     name: 'mock',
 
     async searchFlights(query: FlightQuery, signal?: AbortSignal): Promise<Flight[]> {
-      await sleep(delayMs, signal);
+      await sleep(DELAY_MS, signal);
       const rand = sequence(`flight|${query.origin}|${query.destination}|${query.departDate}`);
       const from = airportFor(query.origin);
       const to = airportFor(query.destination);
@@ -107,7 +106,7 @@ export function createMockTravelTool(options: { delayMs?: number } = {}): Search
     },
 
     async searchHotels(query: HotelQuery, signal?: AbortSignal): Promise<Hotel[]> {
-      await sleep(delayMs, signal);
+      await sleep(DELAY_MS, signal);
       const rand = sequence(`hotel|${query.destination}|${query.checkIn}`);
       const count = 3 + Math.floor(rand() * 3);
       const cap =

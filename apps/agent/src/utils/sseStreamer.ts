@@ -3,11 +3,6 @@ import type { Response } from 'express';
 
 const HEARTBEAT_MS = 15_000;
 
-export interface SseStreamerOptions {
-  /** Interval of the `: ping` comment; injectable so tests do not wait 15 s. */
-  heartbeatMs?: number;
-}
-
 /**
  * The only way packets reach the wire. Every packet is validated with `SseEventSchema` and written
  * as `id: n\ndata: <json>\n\n`. Never `res.write` a packet by hand.
@@ -16,17 +11,11 @@ export interface SseStreamerOptions {
  * and keeps `PROGRESS` monotonic before a packet is stored.
  */
 export class SseStreamer {
-  private readonly heartbeatMs: number;
   private heartbeat: NodeJS.Timeout | undefined;
   private closed = false;
   private readonly closeListeners: (() => void)[] = [];
 
-  constructor(
-    private readonly res: Response,
-    { heartbeatMs = HEARTBEAT_MS }: SseStreamerOptions = {},
-  ) {
-    this.heartbeatMs = heartbeatMs;
-  }
+  constructor(private readonly res: Response) {}
 
   /** True once the client went away or `close()` ran. */
   get isClosed(): boolean {
@@ -50,7 +39,7 @@ export class SseStreamer {
     this.res.flushHeaders();
 
     this.res.on('close', () => this.stop());
-    this.heartbeat = setInterval(() => this.write(': ping\n\n'), this.heartbeatMs);
+    this.heartbeat = setInterval(() => this.write(': ping\n\n'), HEARTBEAT_MS);
     this.heartbeat.unref();
   }
 

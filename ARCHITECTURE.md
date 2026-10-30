@@ -48,7 +48,6 @@ separate lookup endpoint as soon as the Supervisor has parsed the destination.
 | Frontend | Next.js 16 (App Router, Turbopack) | RSC shell + client streaming dashboard |
 | UI | Tailwind CSS v4 + shadcn/ui (`base-nova`, Base UI primitives) + Framer Motion | Components and animation |
 | Maps | Mapbox GL (`react-map-gl`) | Interactive itinerary map |
-| Testing | Vitest (contracts, agent), Playwright (web end-to-end against the mock agent) | §14 |
 | Deployment | Render (agent) + Vercel (web) | Independent deploys from one repo |
 
 ---
@@ -459,7 +458,7 @@ A plain JSON route next to the stream routes; it does not touch the graph or the
 
 Unlike flights and hotels there is **no mock fallback on failure**: a made-up temperature or rate in the
 header would look like real data. The UI simply hides the chip that is `null`. With `TOOLS_MODE=mock`
-(tests, e2e) the route returns fixed fixtures with `source: "mock"`.
+the route returns fixed fixtures with `source: "mock"`.
 
 The route sits behind `generalLimiter` (not the stricter run limiter) and needs no secrets. It reports the
 *current* weather and a short outlook. The per-day forecast for the trip's own dates is fetched separately by the
@@ -570,13 +569,13 @@ The files themselves are the reference; this is what each one decides.
 
 | File | Decides |
 | --- | --- |
-| `pnpm-workspace.yaml` | Workspace globs (`apps/*`, `packages/*`), the **catalog** of shared versions (`zod`, `typescript`, `vitest`, `@types/node`; packages reference them as `"catalog:"`), and native postinstall scripts that are skipped |
-| `turbo.json` | Task graph: `build`, `test` and `typecheck` depend on `^build` (contracts first); build outputs; `NEXT_PUBLIC_*` in the build cache key; `CONDUCTOR_PORT` / `PORT` passed to `dev`, `TEST_DATABASE_URL` passed to `test` |
-| Root `package.json` | `packageManager` (pnpm version for Corepack), Node `>=24`, and `dev` / `build` / `test` / `typecheck` / `lint` scripts that call Turborepo |
+| `pnpm-workspace.yaml` | Workspace globs (`apps/*`, `packages/*`), the **catalog** of shared versions (`zod`, `typescript`, `@types/node`; packages reference them as `"catalog:"`), and native postinstall scripts that are skipped |
+| `turbo.json` | Task graph: `build` and `typecheck` depend on `^build` (contracts first); build outputs; `NEXT_PUBLIC_*` in the build cache key; `CONDUCTOR_PORT` / `PORT` passed to `dev` |
+| Root `package.json` | `packageManager` (pnpm version for Corepack), Node `>=24`, and `dev` / `build` / `typecheck` / `lint` scripts that call Turborepo |
 | `tsconfig.base.json` | Shared strict compiler options (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, …) |
 
 Zod 4 is pinned for every package and works with `@langchain/core` 1.3 and `@langchain/anthropic` (see
-`apps/agent/SPEC.md` §15, decision 2). Tooling that only one app uses (ESLint presets, `tsx`, Next.js, Playwright) is
+`apps/agent/SPEC.md` §14, decision 2). Tooling that only one app uses (ESLint presets, `tsx`, Next.js) is
 declared in that app's `package.json`, not in the catalog.
 
 Turborepo 2 runs tasks in strict env mode: environment variables that are not declared are hidden
@@ -595,8 +594,7 @@ generated shadcn/ui components don't compile with it; everything else stays on.
 | `pnpm install` | Install everything, link workspace packages |
 | `pnpm dev` | Build `contracts`, then run `contracts` (watch), agent and web together |
 | `pnpm build` | `contracts` → (`agent` ∥ `web`), cached |
-| `pnpm test` / `pnpm lint` / `pnpm typecheck` | Across all packages, cached (`test` = Vitest in contracts and agent) |
-| `pnpm --filter ai-travel-web e2e` | Playwright end-to-end tests; starts the mock agent and the web app itself |
+| `pnpm lint` / `pnpm typecheck` | Across all packages, cached |
 | `pnpm dev --filter=ai-travel-agent...` | Agent + its dependencies only |
 
 ### 12.4 Ports
@@ -616,7 +614,7 @@ so several workspaces can run `pnpm dev` in parallel. Explicit `PORT` / `WEB_ORI
   The Mac app reads it from `main` on the remote, so it takes effect once merged.
 - Setup script: `corepack enable pnpm && pnpm install`. Corepack ships with Node 24 and provides the pnpm
   version pinned in `packageManager`; the `pnpm` shim must be on `PATH` because Turborepo spawns `pnpm` itself.
-- Run actions: `dev` → `pnpm dev` (local only, uses `CONDUCTOR_PORT`), `test` → `pnpm test`. `run_mode = "concurrent"`.
+- Run actions: `dev` → `pnpm dev` (local only, uses `CONDUCTOR_PORT`). `run_mode = "concurrent"`.
 - Turborepo's local cache is shared across Git worktrees automatically, so new workspaces start warm.
 - Turborepo's strict env mode hides shell variables from tasks, so agent secrets go in `apps/agent/.env`
   (read from disk by dotenv), not in the shell that runs `pnpm dev`.
@@ -669,27 +667,7 @@ code change.
 
 ---
 
-## 14. Testing strategy
-
-No test may call Anthropic, SerpAPI, Tavily or a real provider: the agent tests use a fake `LlmFactory`
-(`apps/agent/test/helpers/fakeLlm.ts`), `TOOLS_MODE=mock` and `MemorySaver`; the web e2e test uses the mock agent.
-
-| Level | What it proves | Where | Tooling |
-| --- | --- | --- | --- |
-| Contracts | Schemas accept design examples and reject malformed packets; old stored results upgrade through `schemaVersion`; error body | `packages/contracts/test/` | Vitest |
-| Agent unit | Budget Auditor: the cost formula and all three conditions, suggestions, which topics it confirms | `apps/agent/test/budget.node.test.ts` | Vitest |
-| Agent integration | Full graph on mock tools: one `RESULT` last, monotonic progress, all six decisions confirmed, per-day `DRAFT`/progress, rain day moved indoors, the over-budget loop runs twice and ends with suggestions, a failed parse confirms nothing | `apps/agent/test/runTrip.test.ts` | Vitest |
-| Agent HTTP | Reconnect with `Last-Event-ID` replays exactly the missed packets; "My trips" list and record by owner id; daily run cap `429` | `apps/agent/test/reconnect.test.ts`, `trips.test.ts` | Vitest + supertest |
-| Agent Postgres | The `trips` table: save, read back, keep first owner, upgrade a v0 row. Runs only with `TEST_DATABASE_URL` (CI starts a Postgres service) | `apps/agent/test/tripStore.postgres.test.ts` | Vitest |
-| Web end to end | Submit a trip → result → reload (chat restored) → "My trips"; the "another device" link; no sideways scroll at 375 px on every screen | `apps/web/e2e/trip.spec.ts` (desktop and `mobile` projects) | Playwright against `test/mock-agent` |
-| Live eval (manual) | About ten prompts against a real agent with real keys: typos, € and UZS, missing fields, past dates, injection text, a budget that cannot be met, direct flights | `apps/agent/scripts/eval.ts` (`pnpm --filter ai-travel-agent eval`) | Costs tokens; never in CI |
-
-CI (`.github/workflows/ci.yml`) runs `pnpm turbo run lint typecheck test build` with a Postgres service, then the
-Playwright job. Still missing: see each app's `PLAN.md`.
-
----
-
-## 15. Additions to the blueprint
+## 14. Additions to the blueprint
 
 Everything above follows the blueprint. These items were added because the blueprint's design needs
 them to work; review them before implementation.
@@ -728,7 +706,7 @@ them to work; review them before implementation.
 
 ---
 
-## 16. Product decisions
+## 15. Product decisions
 
 | Decision | Reason |
 | --- | --- |

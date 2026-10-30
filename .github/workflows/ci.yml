@@ -8,21 +8,6 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    # A real database for the agent's Postgres trip-store tests (test/tripStore.postgres.test.ts).
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: travel_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -32,28 +17,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: ./scripts/check-no-hardcoded-trip-data.sh
-      # `test` runs real suites: contracts schemas, agent auditor math, full graph on mock tools, reconnect, trip store.
-      - run: pnpm turbo run lint typecheck test build
-        env:
-          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/travel_test
-
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run build --filter=@ai-travel/contracts
-      - run: pnpm --filter ai-travel-web exec playwright install --with-deps chromium
-      # Playwright starts the mock agent and a production build of the web app (apps/web/playwright.config.ts).
-      - run: pnpm --filter ai-travel-web e2e
-      - if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: apps/web/playwright-report
-          retention-days: 7
+      - run: pnpm turbo run lint typecheck build

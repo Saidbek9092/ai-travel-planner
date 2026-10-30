@@ -34,11 +34,11 @@ export function withFallback(
   };
 }
 
-type SearchConfig = Pick<Config, 'TOOLS_MODE' | 'SERPAPI_API_KEY' | 'NODE_ENV' | 'SEARCH_CACHE_TTL_MS'>;
+type SearchConfig = Pick<Config, 'TOOLS_MODE' | 'SERPAPI_API_KEY' | 'SEARCH_CACHE_TTL_MS'>;
 
 /** `mock` → offline engine; `live` → SerpAPI only; `auto` → SerpAPI with mock fallback when a key is set, else mock. */
 function createSearchTool(config: SearchConfig, onFallback?: (reason: string) => void): SearchTool {
-  const mock = createMockTravelTool(config.NODE_ENV === 'test' ? { delayMs: 0 } : {});
+  const mock = createMockTravelTool();
   const key = config.SERPAPI_API_KEY;
 
   if (config.TOOLS_MODE === 'mock' || key === undefined) return mock;
