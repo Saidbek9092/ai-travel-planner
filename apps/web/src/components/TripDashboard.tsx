@@ -35,10 +35,15 @@ interface TripDashboardProps {
   initialMessages?: MessagePayload[];
   /** What the server found for `?trip=`: `null` without one, `unavailable` when the agent didn't answer. */
   tripLookup?: 'found' | 'not-found' | 'unavailable' | null;
+  /** Told which trip the dashboard shows now (`null` = the start form), so a trip link for another one can reload it. */
+  onThreadChange?: (threadId: string | null) => void;
 }
 
-export function TripDashboard({ initialThreadId, initialResult, initialMessages = [], tripLookup = null }: TripDashboardProps) {
+export function TripDashboard({ initialThreadId, initialResult, initialMessages = [], tripLookup = null, onThreadChange }: TripDashboardProps) {
   const stream = useAgentStream({ threadId: initialThreadId, result: initialResult, messages: initialMessages });
+  const shownThreadId = stream.threadId;
+  const reportThread = useEffectEvent((id: string | null) => onThreadChange?.(id));
+  useEffect(() => reportThread(shownThreadId), [shownThreadId]);
   // `null` = not chosen yet: Day 1, or today's day if the trip is under way. The choice lives in the URL (`?day=2`, `?day=all`).
   const [chosenDay, setChosenDay] = useState<DaySelection | null>(null);
   const setActiveDay = useCallback((day: DaySelection | null) => {
