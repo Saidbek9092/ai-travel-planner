@@ -52,7 +52,9 @@ export interface TripStore {
    * Counts one new plan against the account's lifetime allowance. Returns `false` (and counts nothing) when `max` plans
    * were already started. Atomic, so two parallel requests cannot both take the last one.
    */
-  consumeRun(userId: string, max: number): Promise<boolean>;
+  consumeRun(key: string, max: number): Promise<boolean>;
+  /** How many plans `key` has started (`0` for an unknown key). */
+  usage(key: string): Promise<number>;
   /** Moves this browser's guest trips to the account. Returns how many moved. */
   claim(userId: string, ownerId: string): Promise<number>;
   close(): Promise<void>;
@@ -95,11 +97,14 @@ export function createMemoryTripStore(): TripStore {
   const runs = new Map<string, number>();
   return {
     kind: 'memory',
-    async consumeRun(userId, max) {
-      const used = runs.get(userId) ?? 0;
+    async consumeRun(key, max) {
+      const used = runs.get(key) ?? 0;
       if (used >= max) return false;
-      runs.set(userId, used + 1);
+      runs.set(key, used + 1);
       return true;
+    },
+    async usage(key) {
+      return runs.get(key) ?? 0;
     },
     async save({ ownerId, userId = null, result, messages }) {
       const now = new Date().toISOString();
@@ -162,6 +167,13 @@ CREATE TABLE IF NOT EXISTS user_runs (
   user_id text PRIMARY KEY,
   runs integer NOT NULL DEFAULT 0
 );
+-- Plans made before the limit existed count too: every account (or, without sign-in, browser) starts at its stored trips.
+-- Rows that already exist are never touched, so this is safe to run on every boot.
+INSERT INTO user_runs (user_id, runs)
+  SELECT COALESCE(user_id, 'owner:' || owner_id), count(*)::int FROM trips
+  WHERE user_id IS NOT NULL OR owner_id IS NOT NULL
+  GROUP BY 1
+ON CONFLICT (user_id) DO NOTHING;
 `;
 
 interface PgRow {
@@ -180,14 +192,18 @@ export async function createPostgresTripStore(connectionString: string): Promise
   await pool.query(SCHEMA_SQL);
   return {
     kind: 'postgres',
-    async consumeRun(userId, max) {
+    async consumeRun(key, max) {
       // One statement: the row is created or bumped only while it is under the cap, so the check and the count cannot race.
       const { rowCount } = await pool.query(
         `INSERT INTO user_runs (user_id, runs) VALUES ($1, 1)
          ON CONFLICT (user_id) DO UPDATE SET runs = user_runs.runs + 1 WHERE user_runs.runs < $2`,
-        [userId, max],
+        [key, max],
       );
       return (rowCount ?? 0) > 0;
+    },
+    async usage(key) {
+      const { rows } = await pool.query<{ runs: number }>('SELECT runs FROM user_runs WHERE user_id = $1', [key]);
+      return rows[0]?.runs ?? 0;
     },
     async save({ ownerId, userId = null, result, messages }) {
       await pool.query(

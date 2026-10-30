@@ -4,6 +4,7 @@ import {
   TripRequestSchema,
   type ClaimTripsResponse,
   type TripListResponse,
+  type UsageResponse,
   type TripRecord,
 } from '@ai-travel/contracts';
 import { randomUUID } from 'node:crypto';
@@ -52,21 +53,37 @@ export function createTripsRouter({ config, graph, registry, runLimiter, trips }
     if (owner?.userId != null && owner.userId !== userOf(res)?.id) throw notFound('Trip not found');
   }
 
+  /** Who the plan allowance belongs to: the account, else (sign-in not set up) the browser's owner id. */
+  function usageKey(req: Request, res: Response): string | null {
+    const user = userOf(res);
+    if (user) return user.id;
+    const owner = ownerIdOf(req);
+    return owner ? `owner:${owner}` : null;
+  }
+
+  /** "2 of 3 plans left". Free to call: it only reads. */
+  router.get('/usage', async (req, res) => {
+    const key = usageKey(req, res);
+    const used = key === null ? 0 : await trips.usage(key);
+    const body: UsageResponse = { used, max: config.USER_MAX_RUNS, remaining: Math.max(0, config.USER_MAX_RUNS - used) };
+    res.json(body);
+  });
+
   router.post('/trips', requireSignIn(config), ...runLimiter, async (req, res) => {
     const parsed = TripRequestSchema.safeParse(req.body);
     if (!parsed.success) throw validationError(parsed.error);
 
-    // Each signed-in account may plan `USER_MAX_RUNS` trips in total (a re-plan is a new plan). Counted after validation,
-    // so a rejected request costs nothing.
-    const userId = userOf(res)?.id ?? null;
-    if (userId !== null && !(await trips.consumeRun(userId, config.USER_MAX_RUNS))) {
+    // Each account may plan `USER_MAX_RUNS` trips in total (a re-plan is a new plan). Counted after validation, so a
+    // rejected request costs nothing. Without sign-in the browser's owner id stands in for the account.
+    const key = usageKey(req, res);
+    if (key !== null && !(await trips.consumeRun(key, config.USER_MAX_RUNS))) {
       throw new AppError('RATE_LIMITED', `You've used all ${config.USER_MAX_RUNS} trip plans included with your account.`, 429);
     }
 
     const threadId = randomUUID();
     const streamer = new SseStreamer(res);
     streamer.open(threadId);
-    registry.start({ threadId, request: parsed.data, ownerId: ownerIdOf(req), userId }).subscribe(streamer);
+    registry.start({ threadId, request: parsed.data, ownerId: ownerIdOf(req), userId: userOf(res)?.id ?? null }).subscribe(streamer);
   });
 
   /** "My trips": the signed-in account's trips, or a guest's trips for the browser's anonymous owner id. Newest first. */

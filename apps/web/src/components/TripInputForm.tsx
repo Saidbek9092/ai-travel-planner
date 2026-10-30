@@ -1,6 +1,6 @@
 'use client';
 
-import { TripRequestSchema, type Interest, type TripRequest } from '@ai-travel/contracts';
+import { TripRequestSchema, type Interest, type TripRequest, type UsageResponse } from '@ai-travel/contracts';
 import { ArrowRightIcon, CheckIcon, CircleAlertIcon, CircleDotIcon, CloudSunIcon, CoinsIcon, ClockIcon, InfoIcon, PlusIcon } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useEffectEvent, useId, useRef, useState, type ReactNode } from 'react';
@@ -88,6 +88,8 @@ interface TripInputFormProps {
   disabled: boolean;
   /** Epoch ms when the rate limit lifts; the submit button counts down until then. */
   retryAt: number | null;
+  /** The plan allowance; the form says how many are left and stops at none. `null` = not known (guest, offline). */
+  usage?: UsageResponse | null;
   /** Notices above the form card (left column). */
   notices?: ReactNode;
   /** Bottom of the input card, under the Plan button. */
@@ -97,8 +99,9 @@ interface TripInputFormProps {
 }
 
 /** The start page's input: one sentence, the fields the agents understood from it, interests and examples. */
-export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer, initialRequest = null }: TripInputFormProps) {
+export function TripInputForm({ onSubmit, disabled, retryAt, usage = null, notices, footer, initialRequest = null }: TripInputFormProps) {
   const waitSeconds = useCountdown(retryAt);
+  const outOfPlans = usage !== null && usage.remaining === 0;
   const { homeCity, setHomeCity } = useHomeCity();
   const [prompt, setPrompt] = useState(initialRequest?.prompt ?? '');
   const [settled, setSettled] = useState(initialRequest?.prompt ?? '');
@@ -219,7 +222,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer, in
       setSettled(prompt);
       return;
     }
-    if (disabled || waitSeconds > 0 || !ready) return;
+    if (disabled || waitSeconds > 0 || !ready || outOfPlans) return;
     const month = overrides.when ? MONTH_NAMES.findIndex((m) => m.toLowerCase().startsWith(overrides.when!.toLowerCase().slice(0, 3))) : parsed.month;
     const request = TripRequestSchema.safeParse({
       prompt: destination && overrides.destination ? `${prompt.trim()} (destination: ${destination})` : prompt.trim() || `${validDays} days in ${destination}, ${formatUsd(validBudget ?? 0)}`,
@@ -241,7 +244,7 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer, in
     submitWhenSettled();
   }, [settled]);
 
-  const canPlan = ready && !disabled && waitSeconds === 0;
+  const canPlan = ready && !disabled && waitSeconds === 0 && !outOfPlans;
 
   return (
     <form
@@ -352,6 +355,13 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer, in
             {waitSeconds > 0 ? `Plan in ${formatCountdown(waitSeconds)}` : 'Plan my trip'} <ArrowRightIcon aria-hidden="true" />
           </Button>
         </div>
+        {usage && (
+          <p role="status" className={cn('text-[13px]', outOfPlans ? 'font-medium text-destructive' : 'text-ink-2')}>
+            {outOfPlans
+              ? `No plans left: you've used all ${usage.max} plans included with your account.`
+              : `${usage.remaining} of ${usage.max} ${usage.max === 1 ? 'plan' : 'plans'} left`}
+          </p>
+        )}
         {waitSeconds > 0 && (
           <Notice
             tone="info"

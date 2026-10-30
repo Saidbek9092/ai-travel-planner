@@ -134,7 +134,7 @@ origins (`https://x.com/` → `https://x.com`) because CORS compares them to the
 | `RATE_LIMIT_WINDOW_MS` | int, default `900000` (15 min) | |
 | `RATE_LIMIT_MAX_RUNS` | int, default `10` | Max trip runs per IP per window |
 | `RATE_LIMIT_DAILY_MAX_RUNS` | int, default `30` | Max trip runs per IP per 24 h, on top of the window (caps one address's LLM spend) |
-| `USER_MAX_RUNS` | int, default `3` | New plans (and re-plans) one signed-in account may start, ever; counted in the `user_runs` table; resume is free. Over the cap: `429 RATE_LIMITED` without `retryAfterSeconds` |
+| `USER_MAX_RUNS` | int, default `3` | New plans (and re-plans) one signed-in account may start, ever; counted in the `user_runs` table (without sign-in, per `X-Owner-Id`); resume is free. On boot, trips stored before the limit existed are counted as plans already used. Over the cap: `429 RATE_LIMITED` without `retryAfterSeconds` |
 | `SEARCH_CACHE_TTL_MS` | int, default `1800000` (30 min) | How long a flight / hotel search is reused |
 | `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` | optional | LangGraph tracing |
 
@@ -168,6 +168,7 @@ Cross-field rules: in `production`, `WEB_ORIGIN` must be set explicitly (no loca
 | `POST /api/trips` | `TripRequestSchema.safeParse(body)`; invalid → `400 VALIDATION_ERROR`. Otherwise `threadId = crypto.randomUUID()`, `registry.start({ threadId, request, ownerId })` (`ownerId` from a valid `X-Owner-Id` header, else `null`; never an error), open SSE and subscribe the response to the run. |
 | `POST /api/auth/google` | `GoogleLoginRequestSchema`; `404` unless `GOOGLE_CLIENT_ID` and `SESSION_SECRET` are set. `auth/google.ts` has Google check the credential (`tokeninfo`: audience = our client id, Google issuer, not expired, verified email) → `401 UNAUTHORIZED` if not acceptable, `502` if Google cannot be reached. Returns `GoogleLoginResponse` with a 30-day HS256 session token (`auth/session.ts`). |
 | `GET /api/trips` | Signed in (`Authorization: Bearer`): that account's trips. Guest: header `X-Owner-Id` must be a UUID, else `400 VALIDATION_ERROR`, and the list is that owner's trips that no account has claimed. Newest first, at most 50. |
+| `GET /api/usage` | `200 UsageResponse` `{ used, max, remaining }` for the signed-in account (else the `X-Owner-Id` browser); read-only, no sign-in needed. The web form shows "2 of 3 plans left" from it. |
 | `POST /api/trips/claim` | Needs a session (`401` otherwise) and a valid `X-Owner-Id`; sets `user_id` on that owner's unclaimed trips and returns `{ claimed }`. |
 | `POST /api/trips/:threadId/resume` | `threadId` must be a UUID and have a checkpoint (`graph.getState`), else `404`. If the run already reached `END` (`state.next` is empty), send its `RESULT` and close. Otherwise `registry.start({ threadId, resume: true })`, open SSE and subscribe. |
 | `GET /api/trips/:threadId/stream` | Reconnect. Unknown or expired run → `404`. Otherwise open SSE, replay the buffered packets with an id greater than the `Last-Event-ID` header (all of them when absent), then follow the live run until its `RESULT`. |
