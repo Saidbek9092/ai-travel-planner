@@ -1,14 +1,20 @@
-import { PickReasonSchema, type Flight, type Hotel, type PickReason, type TripRequest } from '@ai-travel/contracts';
+import { PickReasonSchema, type Flight, type Hotel, type Interest, type PickReason, type TripRequest } from '@ai-travel/contracts';
 import { z } from 'zod';
 import type { LlmFactory } from './llm.js';
 
 /** Hard preferences are code filters; `notes` is the only thing the model ever sees. */
+export type Pace = 'relaxed' | 'balanced' | 'packed';
+
 export interface Preferences {
   directOnly: boolean;
   /** Most stops allowed per direction; `null` = no limit. */
   maxStops: number | null;
   /** Free text such as "travelling with two kids"; `null` when none. */
   notes: string | null;
+  /** How full the days should be. Absent in checkpoints written before it existed: read as `balanced`. */
+  pace?: Pace;
+  /** Interests from the form and the prompt together; absent in older checkpoints. */
+  interests?: Interest[];
 }
 
 const formatUsd = (amount: number) => `$${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;

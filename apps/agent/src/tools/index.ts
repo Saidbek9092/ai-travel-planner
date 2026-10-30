@@ -1,14 +1,21 @@
 import type { Config } from '../config.js';
 import { createMockTravelTool } from './mockTravel.tool.js';
-import { createSerpApiTool } from './serpApi.tool.js';
+import { createSerpApiPlaceCheck, createSerpApiTool } from './serpApi.tool.js';
 import { withSearchCache } from './searchCache.js';
-import { ToolUnavailableError, type SearchTool, type TravelSearchTool } from './types.js';
+import { ToolUnavailableError, type PlaceCheck, type SearchTool, type TravelSearchTool } from './types.js';
 import { placePhoto } from './placePhotos.js';
 import { geocode, getForecast, mockForecast } from './weather.js';
+import { normalizeKey, TtlCache } from '../utils/ttlCache.js';
 
 export * from './types.js';
 
 const USER_AGENT = 'ai-travel-planner/0.1 (place photos)';
+/** Opening hours and closures change slowly; a day keeps repeat plans for the same city cheap. */
+const PLACE_CHECK_TTL_MS = 24 * 60 * 60 * 1000;
+/** One stop's lookup, retries included; a slower answer leaves the stop unchecked rather than holding up the day. */
+const PLACE_CHECK_TIMEOUT_MS = 8_000;
+/** Shared by every run in the process, like the search cache. */
+const placeChecks = new TtlCache<PlaceCheck>(PLACE_CHECK_TTL_MS, Date.now, 2_000);
 
 /** Tries `primary`; when it reports `ToolUnavailableError` (or times out) it calls `onFallback` and answers from `mock`. */
 export function withFallback(
@@ -30,6 +37,9 @@ export function withFallback(
   return {
     name: primary.name,
     searchFlights: (query, signal) => attempt((tool) => tool.searchFlights(query, signal)),
+    // No fallback here: a mock return leg on a live outbound would be an invented flight.
+    completeReturn: (query, flight, options, signal) =>
+      (flight.source === 'mock' ? mock : primary).completeReturn(query, flight, options, signal),
     searchHotels: (query, signal) => attempt((tool) => tool.searchHotels(query, signal)),
   };
 }
@@ -56,10 +66,23 @@ export function createTravelTool(
 ): TravelSearchTool {
   const search = createSearchTool(config, onFallback);
   const deps = { fetch, now: () => new Date() };
+  const lookupPlace = config.TOOLS_MODE !== 'mock' && config.SERPAPI_API_KEY ? createSerpApiPlaceCheck({ apiKey: config.SERPAPI_API_KEY }) : null;
   return {
     name: search.name,
     searchFlights: (query, signal) => search.searchFlights(query, signal),
+    completeReturn: (query, flight, options, signal) => search.completeReturn(query, flight, options, signal),
     searchHotels: (query, signal) => search.searchHotels(query, signal),
+    checkPlace: async (name, destination, near, signal) => {
+      if (!lookupPlace) return null;
+      try {
+        return await placeChecks.remember([name, destination].map(normalizeKey).join('|'), () =>
+          lookupPlace(name, destination, near, AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(PLACE_CHECK_TIMEOUT_MS)])),
+        );
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        return null;
+      }
+    },
     getForecast: async (destination, startDate, days, signal) =>
       config.TOOLS_MODE === 'mock' ? mockForecast(days) : getForecast(destination, startDate, days, deps, signal),
     getPlacePhoto: async (name, destination, signal) => {

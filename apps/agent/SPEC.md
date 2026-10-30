@@ -297,7 +297,9 @@ Registry rules:
    - Shutdown → `RESULT failed` "Server restarting, resume to continue".
    - Timeout or any other error → `LOG { agent: "System", level: "error" }` and
      `RESULT { status: "failed", error: <safe message> }` built from the latest checkpoint, then done.
-     Never leak stack traces or API keys in `error`.
+     Never leak stack traces or API keys in `error`. Missing live data (only in `TOOLS_MODE=live`, where nothing falls back to estimates) names
+     what failed: `No airport could be found for "X". Try the nearest city with an airport, or its 3-letter airport code.` or
+     `Live travel data was not available (SerpAPI returned no usable flights), so nothing was estimated. Please try again later.`
 
 `buildResultPayload` also fills `transfers`, `replans = retryCount`, `passes`, and `suggestions` (§8.4 Budget Auditor).
 
@@ -402,7 +404,9 @@ Every node is `(state: TravelAgentState) => Promise<TravelAgentUpdate>` and:
 ### 8.4 Nodes
 
 **`supervisor.node.ts` — Supervisor** (LLM)
-- Structured output schema: `{ origin: string | null, destination: string | null, budget: number | null, durationDays: number | null, startDate: string | null }`.
+- Structured output schema: `{ origin, destination, budget, durationDays, startDate, directOnly, maxStops, pace, interests, notes }` (nullable
+  except `directOnly` and `interests`). `pace` (`relaxed` / `balanced` / `packed`, default `balanced`) sizes the Planner's days; `interests`
+  (the `Interest` enum, merged with the form's) reach the Planner as `preferences.interests`.
 - System prompt: extract trip parameters only; never invent a budget or duration; return `null` when absent.
 - Merge: request `overrides` win over parsed values. Default `startDate` = today + 30 days.
 - Missing `destination`, `origin`, `budget` or `durationDays` after merge → `{ status: 'failed', error: 'Please include …' }`
@@ -413,13 +417,20 @@ Every node is `(state: TravelAgentState) => Promise<TravelAgentUpdate>` and:
 
 **`flight.node.ts` — Flight Agent** (no LLM)
 - `tools.searchFlights({ origin, destination, departDate, returnDate, mode: searchMode, maxPrice })`.
-  `returnDate = startDate + durationDays`. In `cheaper` mode `maxPrice = flights[0].price` (exclusive).
+  `returnDate = startDate + nights` (the last trip day). In `cheaper` mode `maxPrice = flights[0].price` (exclusive).
+- **Return leg.** Google Flights answers a round-trip search with outbound legs only, so after the pick the node calls
+  `tools.completeReturn(query, pick, { maxStops })` (§10): one more search for the return flights that pair with that outbound; the cheapest
+  wins, then one leaving between 10:00 and 22:00, then the shortest. It sets `return` (with `flightNumbers`), the pair's round-trip price and the
+  more specific booking link. If it fails the return stays `null`, a `warn` log and the warning "The return flight could not be confirmed…"
+  are added, and no other node may borrow the outbound times. A cheaper pass whose completed pair is not cheaper keeps the previous flight.
 - Sort ascending by price. In `cheaper` mode, if nothing cheaper came back, keep the previous `flights`
   and log `No cheaper flight found, keeping $500 option.`
-- Log e.g. `Found a $500 flight on the Tashkent -> Paris route.` Fallback to mock → extra `warn` log with
+- Log e.g. `Found a $950 flight (TK 369 + TK 1833) on the Tashkent -> Paris route.` and `Return: TK 1828 + TK 368, CDG 18:55 → TAS 08:35.`
+  Fallback to mock → extra `warn` log with
   `kind: 'search-fallback'` and a `warnings` entry.
 - Messages — first pass (ordinary): `I found 4 flights — the best option is Uzbekistan Airways at $500. Direct, but that is half the budget.`
-  (the last clause only when the price is over 40% of the budget). Mock data adds "Live prices weren't available, so these are estimates."
+  (the last clause only when the price is over 40% of the budget), then "The flight home leaves CDG at 18:55." for a live return. Mock data adds
+  "Live prices weren't available, so these are estimates."
   Re-plan pass: decision `flight` — `Turkish Airlines via Istanbul is $420. The layover at Istanbul Airport is 1 h 50 m — enough to change gates without rushing. It lands at CDG Terminal 1 at 13:55.`
   with the saving ("saves $80") built from the previous selection. Layover and terminal come from `outbound.stops` / `outbound.terminal`.
 
@@ -431,30 +442,48 @@ Every node is `(state: TravelAgentState) => Promise<TravelAgentUpdate>` and:
 - `status: 'planning'` (the Planner always runs next).
 - Messages — first pass (ordinary): `Hôtel Lumière in Le Marais is $95/night — that pushes the budget.`; re-plan pass: decision `hotel` —
   `Found a great stay near République for $66/night! Rated 8.2, saving us $145.` (saving = previous nightly price − new, × `durationDays`;
-  the `transit` field fills the closing sentence when present).
+  "Nearest station: Gare de Lyon · 7 min walk." closes it when `transit` is set).
 
 **`planner.node.ts` — Planner** (LLM; display name "Itinerary Planner")
-- Inputs: selected flight (arrival time, terminal), selected hotel (`area`, `location`, `transit`), dates, `searchMode`.
+- Inputs: selected flight (arrival time, terminal, the confirmed return or none), selected hotel (`area`, `location`, `transit`, `airport`),
+  dates, `searchMode`, `preferences.pace`, `preferences.interests` and `notes`.
+- **Free hours.** The arrival day is the day the outbound lands (day 2 after an overnight flight; earlier days become "Travel day" with no
+  places). The traveller is free from landing + 60 min (immigration, bags) + the ride, and on the last day until they leave the hotel:
+  return departure − 3 h at the airport − the ride, minus 30 min to collect bags. Without a confirmed return the last day is kept light and the
+  departure note says the time is not confirmed. Less than 90 free minutes → 0–1 places.
 - **Forecast.** `tools.getForecast(destination, startDate, durationDays)` (§10.1) returns one `DayWeather | null` per day. Dates more than
   16 days ahead, or any provider failure, give `null` for every day; the node carries on without weather.
-- **Transfers + spend** (1 structured call): `{ dailyExpensesEstimate, transfers: Transfer[] }` — exactly two transfers: airport → hotel on day 1 and
+- **Transfers + spend** (1 structured call): `{ dailyExpensesEstimate, transfers: Transfer[] }` — exactly two transfers: airport → hotel on the arrival day and
   hotel → airport on the last day, mode from `TransferModeSchema`, `priceUsd` for the whole leg in USD (the prompt converts local fares and keeps the
   local figure in `note`, e.g. "Fixed fare €56"). `standard` mode: the practical choice (a taxi after a late arrival with bags). `cheaper` mode: the
-  cheapest viable mode per leg (train, metro, bus over taxi); never more expensive than the previous pass.
-- **Days** (one structured call per day, sequential): `{ title, places: Place[] }` validated with `ItineraryDaySchema` (2–5 places, `note` such as
+  cheapest viable mode per leg (train, metro, bus over taxi); never more expensive than the previous pass. When the hotel's `airport` is the
+  flight's airport, the ride time is Google's (taxi/shuttle → `taxiMinutes`, train/metro/bus → `transitMinutes`) instead of the model's. The
+  departure note is computed ("Leave the hotel by 15:21 for the 18:55 flight: 3 h at the airport plus a 34-minute ride"), and a model note that
+  contains a number is dropped (an unchecked fare or time).
+- **Days** (one structured call per day, 4 in parallel): `{ title, places: Place[] }` validated with `ItineraryDaySchema` (2 to 4 / 5 / 6 places for
+  `relaxed` / `balanced` / `packed`, meals included; the brief names the weekday, the free hours, interests and pace; `note` such as
   "Morning"). Each call gets the hotel location, the transfers of that day, the previous days (so places are not repeated) and that day's forecast:
   for `rain`, `snow` or `storm` the prompt asks for indoor stops and the title says so. After each day the node validates it (coordinate guard below),
   then writes a custom event `config.writer({ kind: 'day', day, of: N, itinerary })` so the stream shows "Day 4 of 5" and a growing `DRAFT`.
 - **Coordinate guard.** Drop places whose coordinates are more than ~100 km from the day's median point; a day that ends up empty keeps its title
-  and an empty `places` array. Fill `date` from `startDate + day − 1`.
-- **Re-plan pass.** The planner keeps the existing days' places. It re-chooses transfers, then asks the model — per day, only when the hotel `area`
-  changed or the day touches a transfer — to re-order or swap the stops anchored to the hotel ("Re-routing day 3 around the new hotel"). Other days
-  are copied unchanged. The `itinerary` decision is not repeated (it is already in `confirmed`).
+  and an empty `places` array. Fill `date` from `startDate + day − 1`. The airport, a taxi rank and the hotel are never places.
+- **Place check.** Every place is looked up with `tools.checkPlace` (Google Maps via SerpAPI, §10; at most 60 per pass). It is rejected when
+  Google has nothing by that name near it, lists it as temporarily or permanently closed, shows it closed on that weekday, closing within an hour
+  of the arrival-day start, or opening within an hour of the departure-day end. Rejected places go back to the model once with the reasons
+  ("Louvre Museum (closed on Tuesdays)"); replacements are checked again and anything still rejected is dropped. A kept place takes Google's
+  name, coordinates, website and that day's `hours`, with `source: 'serpapi'`. A place that cannot be checked (mock mode, outage, cap) stays as
+  the model gave it with no `source`; in live mode a warning says how many could not be checked. Note that Google lists this week's hours, so a
+  holiday this week can reject a place for that weekday (a safe failure: the stop is swapped).
+- **Re-plan pass.** The planner keeps the existing days' places. It re-chooses transfers, then re-plans the arrival and departure days, only when
+  the hotel or the flight times changed (`itineraryHotel`, `itineraryFlight`), re-ordering or swapping the stops anchored to them. Other days are
+  copied unchanged. The `itinerary` decision is not repeated (it is already in `confirmed`).
 - Optional: when `TAVILY_API_KEY` is set, fetch top attractions first and pass them as context.
 - `status: 'auditing'`.
 - Messages: first pass — an ordinary transfer proposal ("Landing at 13:55 with bags, a taxi is the simplest way in. Paris airport taxis charge a fixed €56…"),
   an ordinary weather message with callout `{ tone: 'info', label: 'Weather prep · Day 3 moved indoors' }` for each day moved indoors, and decision
-  `itinerary` ("Your 5-day plan is ready: Louvre, Eiffel Tower and more."). Re-plan pass — decision `transfers` ("Taxi in, RER B out. About $75 for both.").
+  `itinerary` ("Your 5-day plan is ready: Louvre, Eiffel Tower and more."). When the place check swapped stops, one ordinary message says so
+  ("I checked 13 stops on Google Maps and swapped 2 that would not work on your dates: Louvre Museum (closed on Tuesdays), …"). Re-plan pass —
+  decision `transfers` ("Taxi in, RER B out. About $75 for both.").
 
 **`budget.node.ts` — Budget Auditor** (pure, no I/O)
 - `computeTotalCost(state)` exported separately; round to 2 decimals. Formula: flight + hotel × nights + Σ transfers + daily × days.
@@ -513,23 +542,38 @@ export interface LlmFactory {
 // types.ts
 export interface FlightQuery { origin: string; destination: string; departDate: string; returnDate: string; mode: 'standard' | 'cheaper'; maxPrice?: number }
 export interface HotelQuery  { destination: string; checkIn: string; checkOut: string; mode: 'standard' | 'cheaper'; maxPricePerNight?: number }
-export interface TravelSearchTool {
+export interface SearchTool {
   readonly name: 'serpapi' | 'mock';
   searchFlights(q: FlightQuery, signal?: AbortSignal): Promise<Flight[]>;
+  completeReturn(q: FlightQuery, flight: Flight, options: { maxStops: number | null }, signal?: AbortSignal): Promise<Flight>;
   searchHotels(q: HotelQuery, signal?: AbortSignal): Promise<Hotel[]>;
 }
+export interface TravelSearchTool extends SearchTool {
+  getForecast(…); getPlacePhoto(…); getCenter(…);
+  /** Google Maps facts for a planned stop; null = could not check (mock mode, no key, outage). */
+  checkPlace(name: string, destination: string, near: LatLng, signal?: AbortSignal): Promise<PlaceCheck | null>;
+}
 export class ToolUnavailableError extends Error {}
+export class UnknownAirportError extends ToolUnavailableError {}
 ```
 
 **`serpApi.tool.ts`**
 - Google Flights (`engine=google_flights`, round trip, `currency=USD`) and Google Hotels
   (`engine=google_hotels`) via `fetch`.
-- City → airport code: try the city name first; keep a small lookup map for common cities as a fallback.
+- City → airport: the small table in `airports.ts` (or a 3-letter code) first; any other city is resolved live with
+  `engine=google_flights_autocomplete` to Google's city id (all its airports), cached 7 days. Nothing found → `UnknownAirportError`.
 - Per request `AbortSignal.timeout(10_000)` combined with the run signal.
 - Retry 2× on network errors, `429` and `5xx` with exponential backoff (500 ms, 1500 ms) + jitter; no retry on `4xx`.
-- Map responses through `FlightSchema` / `HotelSchema` (`source: 'serpapi'`); drop items that fail parsing. Flights keep both legs
-  (airports, times, terminal, layovers) and the fare link; hotels keep area, photo, check-in/out times, coordinates and link. Google Hotels'
-  0–5 rating is doubled to the contract's 0–10 scale (one decimal). `transit` is `null` unless the provider returns nearby stations.
+- Map responses through `FlightSchema` / `HotelSchema` (`source: 'serpapi'`); drop items that fail parsing. Flights keep the outbound leg
+  (airports, times, layovers, `flightNumbers` per segment) and the fare link; `return` is `null` because the round-trip search lists outbound
+  legs only. Each option's `departure_token` is kept in the tool (by `flightKey`, at most 500) so `completeReturn` can run the second search
+  (`departure_token=…`) for the chosen outbound. Hotels keep area, photo, check-in/out times, coordinates and link. Google Hotels' 0–5 rating
+  is doubled to the contract's 0–10 scale (one decimal). Google Hotels lists stations, sights and the airport together without saying which
+  is which, so `transit` is only set for a nearby place whose name says it is a station ("Gare de Lyon · 7 min walk", walk ≤ 15 min) and
+  is `null` otherwise; the listed airport becomes `airport` with Google's taxi and public-transport minutes from the hotel.
+- `createSerpApiPlaceCheck` (`engine=google_maps`, `type=search`, `q="<place>, <destination>"`, `ll=@lat,lng,15z`): Google's single match
+  (`place_results`) within 1.5 km, or within 5 km sharing a word of the name; else the best `local_results` name match within 5 km. It
+  returns the name, coordinates, weekday hours, website and whether Google marks it temporarily or permanently closed, or `{ found: false }`.
 - Zero valid results or exhausted retries → `ToolUnavailableError`.
 
 **`mockTravel.tool.ts`**
@@ -540,7 +584,10 @@ export class ToolUnavailableError extends Error {}
 
 **`index.ts`**
 - `withFallback(primary, mock, onFallback)` → a `TravelSearchTool` that catches `ToolUnavailableError`
-  (and timeouts) from the primary, calls `onFallback(reason)` and retries on the mock.
+  (and timeouts) from the primary, calls `onFallback(reason)` and retries on the mock. `completeReturn` has no fallback (a mock return on a
+  live outbound would be an invented flight): a mock flight is completed by the mock, a live one by SerpAPI or not at all.
+- `checkPlace`: `null` in `mock` mode or without a key; otherwise the SerpAPI place check with an 8 s budget per stop, cached 24 h per
+  place and destination in the process; any failure → `null` (the stop stays unchecked, never a failed run).
 - `createTravelTool(config)`: `mock` → mock; `live` → SerpAPI (fails hard); `auto` → SerpAPI with mock fallback
   if `SERPAPI_API_KEY` is set, otherwise mock.
 - Nodes call tools directly in code. Tools are **not** exposed to the LLM for tool-calling.

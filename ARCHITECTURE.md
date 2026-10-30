@@ -159,9 +159,9 @@ only re-orders or swaps the stops that depend on the hotel (§8.4 of `apps/agent
 | # | Node | Uses LLM | Reads | Writes | Status after |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `supervisorAgent` | Yes (structured output) | `prompt`, request overrides | `origin`, `destination`, `budget`, `durationDays`, `startDate`, `preferences` | `searching` (or `failed`) |
-| 2 | `flightAgent` | Only to pick among soft preferences | trip fields, `preferences`, `searchMode` | `flights` (scored, `[0]` = selected) | `searching` |
+| 2 | `flightAgent` | Only to pick among soft preferences | trip fields, `preferences`, `searchMode` | `flights` (scored, `[0]` = selected, with its real return leg) | `searching` |
 | 3 | `hotelAgent` | Only to pick among soft preferences | trip fields, `preferences`, `searchMode` | `hotels` (scored, `[0]` = selected) | `planning` |
-| 4 | `itineraryPlanner` | Yes (structured output, one call per day) | trip fields, selected flight and hotel, day forecast, `searchMode` | `transfers`, `itinerary` (with place photos), `dailyExpensesEstimate` | `auditing` |
+| 4 | `itineraryPlanner` | Yes (structured output, one call per day, one more when a stop fails its check) | trip fields, selected flight and hotel, day forecast, `searchMode`, pace, interests | `transfers`, `itinerary` (places checked on Google Maps, with photos), `dailyExpensesEstimate` | `auditing` |
 | 5 | `budgetAuditor` | No (pure arithmetic) | everything | `totalCost`, `passes`, `retryCount`, `searchMode`, `overBudgetBy`, `suggestions`, `warnings` | `completed` or `searching` |
 
 Flight and hotel choice (`agent/ranking.ts`, `agent/pick.ts`): code applies hard filters (budget, cheaper mode,
@@ -484,6 +484,9 @@ Planner (`tools/weather.ts` `getForecast`, Open-Meteo reaches ~16 days ahead; la
 | LLM falls back to Sonnet 5.5 | A `warn` LOG with `kind: "llm-fallback"`; the UI shows a "Running on fallback model" banner |
 | Live search falls back to the Mock engine | A `warn` LOG with `kind: "search-fallback"` plus a `warnings` entry; cards show an "Estimate" badge |
 | Forecast unavailable or beyond 16 days | The Planner plans without weather; `itinerary[].weather` is `null` and no weather callout is sent |
+| Return-flight search fails | `flights[0].return` stays `null` with a warning; the Planner keeps the last day light and never borrows the outbound times. No mock fallback (it would be an invented flight) |
+| Place check (Google Maps) fails, times out (8 s) or hits the 60-per-pass cap | The stop is kept as the Planner suggested it, without `source`; the UI says "Hours not checked" and a live run adds a warning |
+| `TOOLS_MODE=live` and a search has no answer | Nothing is estimated: `RESULT failed` names what was missing ("No airport could be found for …", "Live travel data was not available (…)") |
 | Run takes too long | Global run timeout (120 s) via `AbortSignal.timeout`, ends with `RESULT failed` |
 | Abuse / spam / LLM bill | `express-rate-limit` per IP on runs: 10 per 15 min **and** 30 per 24 h (`RATE_LIMIT_DAILY_MAX_RUNS`), both `429` with `retryAfterSeconds`; per account, `USER_MAX_RUNS` (default 3) new plans or re-plans in total (`user_runs` table, `429` without `retryAfterSeconds`, resume is free); JSON body limit 10 kb, prompt length cap 1,000 chars. A signed token from the web app was considered and left out: the browser would have to hold its secret, so it would not stop a script |
 | Trip store unreachable | Saving a finished trip is best effort: the error is logged and the run still ends normally; queries give up after 5 s |
@@ -692,6 +695,9 @@ them to work; review them before implementation.
 | `Transfer`, `Planner` chooses airport transfers | The design budgets transfers ($75 in the example) and shows them under the flight; `totalCost` includes them |
 | Rich `Flight` / `Hotel` fields (legs, stops, terminals, area, photo, check-in, transit, location, links), rating 0–10 | The design's flight and hotel cards show them; the old three-field flight could not draw them |
 | Per-day `weather`, `date` and place `note` | "Day by day" shows temperature and conditions per day, and the Planner moves outdoor stops on wet days |
+| Return leg via `completeReturn`, `FlightLeg.flightNumbers` | Google Flights lists only outbound legs for a round trip; without the second search the return times were unknown and got guessed |
+| Place check (`checkPlace`, Google Maps via SerpAPI), `Place.hours`, `Place.source` | Places come from the model; each is confirmed to exist and to be open on its weekday and during the free hours, closed ones are swapped |
+| Free hours on the arrival and departure days, `Hotel.airport`, `preferences.pace` / `interests` | Stops fit after landing and before the 3 h airport buffer, rides use Google's times, and "relaxed" means fewer stops |
 | `DRAFT` packet | The design's Trip Overview "fills in as agents decide", and the destination bar appears during the run, so the browser needs the trip before the `RESULT` |
 | `PROGRESS.detail`, `pass`, `run`; `LOG.kind` | "Day 4 of 5", "pass 2", the run-details panel, checkpoint rows in the log, fallback banners |
 | `passes`, `replans`, `suggestions` in `RESULT` | The "what changed on re-plan" table, "re-planned once", and the "Raise to $1,100 / Try 4 days / Keep these" actions |

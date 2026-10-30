@@ -530,7 +530,9 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 - Index `0` of each list is the agent's selection: highlighted border, "Selected" badge, plus "Confirmed" once its decision exists. Other options appear as
   a "Dropped option" row (airline, stops, price struck through) when the list has more than one entry after a re-plan.
 - **Flight card:** airline, "round trip", price (`formatUsd`), stops ("1 stop · IST" / "Direct"), a route strip per leg — `TAS 06:40 ─ IST 1 h 50 m layover ─ CDG 13:55 · T1`
-  with airport names and `+1 day` when the arrival date differs — and the return leg when present. Below it the transfers of the trip as rows
+  with airport names and `+1 day` when the arrival date differs — and the return leg when present. Each leg's label carries its flight numbers when
+  the provider gave them ("Outbound · Sun 8 Nov · TK 369 · TK 1833"). The price is always round trip, so the card says "round trip" even when
+  the return leg could not be confirmed. Below it the transfers of the trip as rows
   ("Taxi · CDG Terminal 1 → hotel · fixed fare €56 (~$61) · about 45 min", "RER B · Gare du Nord → CDG Terminal 1 · About $14"). Links: "View fare" (`bookingUrl`), "Maps".
 - **Hotel card:** photo (`photoUrl`, a neutral placeholder block when `null`), name, `area`, rating as a score out of 10 with a word from `lib/labels.ts`
   (`ratingWords`: ≥ 9 "Superb", ≥ 8 "Very good", ≥ 7 "Good", else "Fair"), check-in / check-out, `transit`, `$66 × 5 nights = $330`. Links: "View rooms", "Maps".
@@ -538,7 +540,7 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 - **As built (design wins):** the finished cards show no "Dropped option" rows and no separate link rows (the design has neither); the airline
   line links to `bookingUrl` ("View fare") and the hotel's price line to its `bookingUrl` ("View rooms"). Leg times are Geist Sans, airport codes
   Geist Mono. Transfers read "Taxi · CDG Terminal 1 → hotel"; a description that already names the service ("RER B · …") is shown as is. The
-  hotel facts label transit "Metro". The re-plan passes table ("What changed on re-plan") lives in the technical view, not on the budget card.
+  hotel facts label transit "Metro" (the agent only sets it for a named station, e.g. "Gare de Lyon · 7 min walk"). The re-plan passes table ("What changed on re-plan") lives in the technical view, not on the budget card.
 - Staggered entrance animation on first render of a result. Dates and times use `Intl.DateTimeFormat` in the leg's own offset.
 
 ### `ItineraryTimeline.tsx`
@@ -550,7 +552,9 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
 - **Day tabs:** one tab per `itinerary[].day`, "Day 1 · Thu" with date, `weather` (icon, high °C, condition) and the stop count; days not yet planned show "drafting" / "waiting".
   The tab colour is the day's colour (`lib/labels.ts`) and the same number labels its pins on the map.
 - Below the tabs: the selected day's heading ("Day 2 · Museums along the Seine"), weather line, and the stops as a numbered list — name, `note` ("Morning"),
-  coordinates in Geist Mono; the arrival / departure transfer of that day shown as the first / last row with its cost, and "Daily spend ~$30".
+  that day's opening hours when the agent checked the stop on Google Maps ("Open 9 AM–6 PM · Google Maps"), or "Hours not checked" when it could
+  not (`source` absent), coordinates in Geist Mono; the arrival / departure transfer of that day shown as the first / last row with its cost, and
+  "Daily spend ~$30". The arrival day is the earliest transfer's day (`arrivalDay()`, day 2 after an overnight flight), not always day 1.
 - Clicking a tab sets `activeDay` (click again to clear); the map follows. Keyboard accessible (tabs with arrow-key navigation, visible focus ring).
 
 ### `MapboxViewer.tsx`
