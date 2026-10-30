@@ -28,7 +28,15 @@ export const ClaimTripsResponseSchema = z.object({
   claimed: z.number().int().nonnegative(),
 });
 
+/** Response of `GET /api/usage`: how many of the account's plans are used (`USER_MAX_RUNS` in total). */
+export const UsageResponseSchema = z.object({
+  used: z.number().int().nonnegative(),
+  max: z.number().int().positive(),
+  remaining: z.number().int().nonnegative(),
+});
+
 export type AuthUser = z.infer<typeof AuthUserSchema>;
 export type GoogleLoginRequest = z.infer<typeof GoogleLoginRequestSchema>;
 export type GoogleLoginResponse = z.infer<typeof GoogleLoginResponseSchema>;
+export type UsageResponse = z.infer<typeof UsageResponseSchema>;
 export type ClaimTripsResponse = z.infer<typeof ClaimTripsResponseSchema>;

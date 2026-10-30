@@ -422,6 +422,7 @@ Beyond the buffer, `LOG` and `DRAFT` packets are live-only. The chat (`MESSAGE`)
 | `GET /health` | — | `200 {"status":"ok"}` (liveness; Render health check) |
 | `GET /readyz` | — | `200 {"status":"ready"}`, or `503 {"status":"unavailable","problems":[…]}` when Postgres is unreachable or a required key is missing |
 | `POST /api/auth/google` | `GoogleLoginRequest` (`credential`: a Google ID token) | `200 GoogleLoginResponse` (`token`, `expiresAt`, `user`); `401` if Google refuses it or it is for another app; `404` if sign-in is not configured |
+| `GET /api/usage` | `Authorization` or `X-Owner-Id` | `200 UsageResponse` `{ used, max, remaining }`: plans used of `USER_MAX_RUNS` |
 | `POST /api/trips/claim` | `Authorization`, header `X-Owner-Id` | `200 ClaimTripsResponse`: this browser's guest trips now belong to the account; `401` as a guest |
 | `POST /api/trips` | `TripRequest`; header `X-Owner-Id` (optional), `Authorization` (optional) | `200 text/event-stream` + `X-Thread-Id` header |
 | `GET /api/trips/:threadId/stream` | header `Last-Event-ID` (optional) | `200 text/event-stream`: replays missed packets, then follows the live run; `404` if the run is not in the registry |

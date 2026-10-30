@@ -2,9 +2,11 @@ import {
   parseStoredResult,
   TripListResponseSchema,
   TripRecordSchema,
+  UsageResponseSchema,
   type MessagePayload,
   type ResultPayload,
   type TripSummary,
+  type UsageResponse,
 } from '@ai-travel/contracts';
 import { authHeaders, dropSessionIf401 } from '@/lib/auth';
 import { env } from '@/lib/env';
@@ -69,5 +71,19 @@ export async function deleteTrip(threadId: string): Promise<boolean> {
     return response.ok || response.status === 404;
   } catch {
     return false;
+  }
+}
+
+/** How many of the person's trip plans are used ("2 of 3 left"); `null` when the agent cannot be asked (UI-only, offline, older agent). Browser only. */
+export async function fetchUsage(signal?: AbortSignal): Promise<UsageResponse | null> {
+  if (env.agentUrl === null) return null;
+  try {
+    const response = await fetch(`${env.agentUrl}/api/usage`, { headers: { ...ownerHeaders(), ...authHeaders() }, cache: 'no-store', ...(signal && { signal }) });
+    dropSessionIf401(response);
+    if (!response.ok) return null;
+    const parsed = UsageResponseSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
   }
 }
