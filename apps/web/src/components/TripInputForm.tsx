@@ -92,17 +92,19 @@ interface TripInputFormProps {
   notices?: ReactNode;
   /** Bottom of the input card, under the Plan button. */
   footer?: ReactNode;
+  /** Fills the form (Re-plan): the person can change it, nothing starts until they press Plan. */
+  initialRequest?: TripRequest | null;
 }
 
 /** The start page's input: one sentence, the fields the agents understood from it, interests and examples. */
-export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer }: TripInputFormProps) {
+export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer, initialRequest = null }: TripInputFormProps) {
   const waitSeconds = useCountdown(retryAt);
   const { homeCity, setHomeCity } = useHomeCity();
-  const [prompt, setPrompt] = useState('');
-  const [settled, setSettled] = useState('');
+  const [prompt, setPrompt] = useState(initialRequest?.prompt ?? '');
+  const [settled, setSettled] = useState(initialRequest?.prompt ?? '');
   const [overrides, setOverrides] = useState<Overrides>({});
   const [editing, setEditing] = useState<FieldKey | null>(null);
-  const [interests, setInterests] = useState<Interest[]>([]);
+  const [interests, setInterests] = useState<Interest[]>(initialRequest?.interests ?? []);
   const promptId = useId();
 
   // Parsed fields follow the text after a short pause; examples settle at once.

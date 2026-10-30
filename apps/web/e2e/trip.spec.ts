@@ -35,6 +35,23 @@ test('plan a trip, see the result, reload, and find it in My trips', async ({ pa
   await expect(page.getByRole('heading', { level: 1, name: TITLE })).toBeVisible();
 });
 
+test('Re-plan opens the form filled in and waits for Plan; New trip opens it empty', async ({ page }) => {
+  await planTrip(page);
+  const prompt = page.getByLabel('Describe your trip');
+
+  await page.getByRole('button', { name: 'Re-plan' }).click();
+  await page.getByRole('dialog', { name: 'Plan this trip again?' }).getByRole('button', { name: 'Edit and re-plan' }).click();
+  await expect(prompt).toHaveValue(PROMPT);
+  await expect(page.getByRole('region', { name: 'Planning progress' })).toHaveCount(0);
+  await expect(page).not.toHaveURL(/trip=/);
+
+  await page.getByRole('button', { name: /Plan my trip/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: TITLE })).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole('button', { name: 'New trip' }).click();
+  await expect(prompt).toHaveValue('');
+});
+
 test('the "another device" link shows the same trips in a fresh browser', async ({ page, browser, baseURL, context }) => {
   await planTrip(page);
   const threadId = new URL(page.url()).searchParams.get('trip')!;

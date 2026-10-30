@@ -24,6 +24,7 @@ import { useTripContext } from '@/hooks/useTripContext';
 import { useTripHistory } from '@/hooks/useTripHistory';
 import { MAIN_ID, NEW_TRIP_EVENT } from '@/lib/dom';
 import { env } from '@/lib/env';
+import { clearPendingTrip, savePendingTrip, takePendingTrip } from '@/lib/pendingTrip';
 import { agentRows, briefLine, decisionSummaries, defaultDay, phaseStates, requestFromResult, timesWord, tripTitle, type TripView } from '@/lib/trip';
 import { PassesTable, budgetVerdict } from '@/components/BudgetMeter';
 
@@ -91,17 +92,33 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
   };
   const runNow = useEffectEvent(run);
   useEffect(() => {
-    if (!session || !pending) return;
-    // The person just signed in: run the request that was waiting, then release it.
+    if (!session) return;
+    // The person just signed in: run the request that was waiting (in memory, or saved before Google sent the phone away), then release it.
+    const saved = takePendingTrip();
+    const waiting = pending ?? (saved ? ({ kind: 'start', request: saved } as const) : null);
+    if (!waiting) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- `run` sets state through the stream hook
-    runNow(pending);
+    runNow(waiting);
     setPending(null);
   }, [session, pending]);
-  const request = (action: NonNullable<typeof pending>) => (needsSignIn ? setPending(action) : run(action));
+  const request = (action: NonNullable<typeof pending>) => {
+    if (!needsSignIn) return run(action);
+    if (action.kind === 'start') savePendingTrip(action.request);
+    setPending(action);
+  };
   const start = (tripRequest: TripRequest) => request({ kind: 'start', request: tripRequest });
   const resume = () => request({ kind: 'resume' });
   const replanRequest = lastRequest ?? (result ? requestFromResult(result, new Date().toISOString().slice(0, 10)) : null);
   const startOver = () => (replanRequest ? start(replanRequest) : stream.reset());
+  // Re-plan opens the form filled with this trip's details; nothing starts until the person presses Plan.
+  const [prefill, setPrefill] = useState<TripRequest | null>(null);
+  const [formKey, setFormKey] = useState(0);
+  const openForm = (request: TripRequest | null) => {
+    setPrefill(request);
+    setFormKey((key) => key + 1);
+    stream.reset();
+    setActiveDay(null);
+  };
 
   // The tab title names the trip, so history, tabs and screen readers can tell trips apart.
   const pageTitle = view === 'finished' && result ? tripTitle(result) : view === 'live' ? (live ? 'Planning your trip' : 'Planning stopped') : null;
@@ -122,6 +139,7 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
     const onNewTrip = () => {
       reset();
       setActiveDay(null);
+      setPrefill(null);
     };
     window.addEventListener(NEW_TRIP_EVENT, onNewTrip);
     return () => window.removeEventListener(NEW_TRIP_EVENT, onNewTrip);
@@ -204,8 +222,12 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
 
   return (
     <>
-      {env.googleClientId !== null && <SignInDialog open={pending !== null && !session} onOpenChange={(open) => !open && setPending(null)} clientId={env.googleClientId} />}
-      <TripActions status={status} threadId={threadId} canReplan={replanRequest !== null} onStop={stream.cancel} onReplan={startOver} />
+      {env.googleClientId !== null && <SignInDialog open={pending !== null && !session} onOpenChange={(open) => {
+          if (open) return;
+          clearPendingTrip();
+          setPending(null);
+        }} clientId={env.googleClientId} />}
+      <TripActions status={status} threadId={threadId} canReplan={replanRequest !== null} onStop={stream.cancel} onReplan={() => openForm(replanRequest)} onNewTrip={() => openForm(null)} />
       <TopBar
         status={tripContext.status}
         data={tripContext.data}
@@ -218,6 +240,8 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
         {view === 'idle' && (
           <div className="-mt-20">
             <TripInputForm
+              key={formKey}
+              initialRequest={prefill}
               disabled={live || uiOnly}
               retryAt={stream.retryAt}
               onSubmit={start}
