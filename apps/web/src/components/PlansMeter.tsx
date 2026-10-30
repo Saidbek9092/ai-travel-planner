@@ -2,6 +2,8 @@
 
 import type { UsageResponse } from '@ai-travel/contracts';
 import { CircleAlertIcon, SparklesIcon, TicketIcon } from 'lucide-react';
+import { notify } from '@/components/Notice';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUsage } from '@/hooks/useUsage';
 import { cn } from '@/lib/utils';
@@ -71,15 +73,32 @@ export function PlansCard({ usage, className }: { usage: UsageResponse; classNam
         ? 'This is the last plan included with your account. If it stops, resuming it is free.'
         : 'A new trip or a re-plan uses one. Resuming a stopped trip is free.';
   return (
-    <div role="status" className={cn('flex items-center gap-4 rounded-xl border px-4 py-3', tone.surface, className)}>
+    <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border px-4 py-3', tone.surface, className)}>
       <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-full bg-card', tone.text)}>
         <Icon className="size-5" aria-hidden="true" />
       </span>
-      <div className="min-w-0 flex-1">
+      <div role="status" className="min-w-0 flex-1 basis-56">
         <p className={cn('text-[15px] leading-5 font-semibold', tone.text)}>{title}</p>
         <p className="mt-0.5 text-[13px] leading-[18px] text-ink-2">{body}</p>
       </div>
-      <Pips usage={usage} className={cn('shrink-0 max-sm:hidden', tone.text)} />
+      {kind === 'none' ? (
+        // Requesting more is not built yet: the button says so instead of leading nowhere.
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 shrink-0 bg-card px-4 pointer-coarse:h-11"
+          onClick={() =>
+            notify('info', 'Coming soon', {
+              id: 'more-plans',
+              description: 'Requesting more plans is not available yet. Your saved trips stay in My trips.',
+            })
+          }
+        >
+          Request more plans
+        </Button>
+      ) : (
+        <Pips usage={usage} className={cn('shrink-0 max-sm:hidden', tone.text)} />
+      )}
     </div>
   );
 }
