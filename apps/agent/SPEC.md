@@ -67,7 +67,7 @@ apps/agent/
 │   └── config.ts                  # Zod-validated env
 ├── .env.example                   # every variable from §4
 ├── package.json                   # name: ai-travel-agent
-├── tsconfig.json                  # extends ../../tsconfig.base.json, NodeNext, src + test (typecheck)
+├── tsconfig.json                  # extends ../../tsconfig.base.json, NodeNext, src (typecheck)
 ├── tsconfig.build.json            # src only → dist/
 └── eslint.config.js               # @eslint/js + typescript-eslint, Node globals
 ```
@@ -107,7 +107,7 @@ Scripts:
 
 ## 4. Configuration — `src/config.ts`
 
-`parseConfig(env)` is a pure Zod parser (unit-tested); `loadConfig()` loads `.env`, parses `process.env`,
+`parseConfig(env)` is a pure Zod parser; `loadConfig()` loads `.env`, parses `process.env`,
 prints the issues and `process.exit(1)` on failure. `server.ts` calls `loadConfig()` once and **injects** the
 typed `Config` (`createApp({ config, … })`, later `buildGraph`, `runTrip`), so importing a module never
 triggers env parsing. Nothing outside `config.ts` reads `process.env`.
@@ -117,7 +117,7 @@ origins (`https://x.com/` → `https://x.com`) because CORS compares them to the
 
 | Variable | Type / default | Notes |
 | --- | --- | --- |
-| `NODE_ENV` | `development \| test \| production`, default `development` | |
+| `NODE_ENV` | `development \| production`, default `development` | |
 | `PORT` | int; default `CONDUCTOR_PORT + 1` if set, else `4000` | Render sets `PORT` |
 | `CONDUCTOR_PORT` | int, optional | Conductor workspace base port |
 | `WEB_ORIGIN` | comma-separated URLs; default `http://localhost:${CONDUCTOR_PORT ?? 3000}` | CORS allow-list |
@@ -126,7 +126,7 @@ origins (`https://x.com/` → `https://x.com`) because CORS compares them to the
 | `ANTHROPIC_FALLBACK_MODEL` | default `claude-sonnet-5-5` | Fallback model |
 | `SERPAPI_API_KEY` | string, optional | Missing → mock tools in `auto` mode |
 | `TAVILY_API_KEY` | string, optional | Optional place research for the planner |
-| `TOOLS_MODE` | `auto \| live \| mock`, default `auto` | `auto` = live if key present, else mock; tests use `mock` |
+| `TOOLS_MODE` | `auto \| live \| mock`, default `auto` | `auto` = live if key present, else mock |
 | `DATABASE_URL` | URL, optional | Present → `PostgresSaver` and the Postgres `trips` table, else `MemorySaver` and an in-memory trip store. Required in production |
 | `RUN_TIMEOUT_MS` | int, default `120000` | Whole-run timeout |
 | `RUN_REPLAY_TTL_MS` | int, default `600000` (10 min) | How long a finished run's packets stay available for reconnects |
@@ -381,7 +381,7 @@ export const routeAfterAudit      = (s: TravelAgentState) => (s.status === 'sear
 
 - Routers are **pure** and only read state; all decisions and counters are written by nodes.
 - The Planner runs on every pass: a re-plan re-chooses transfers and re-routes the days around the new hotel (§8.4).
-- Dependencies are injected (`buildGraph(deps)`) so tests can pass a fake LLM and mock tools.
+- Dependencies are injected (`buildGraph(deps)`).
 - Node names must never equal a state key (LangGraph throws at compile time).
 
 ### 8.3 Node contract
@@ -455,7 +455,7 @@ Every node is `(state: TravelAgentState) => Promise<TravelAgentUpdate>` and:
   `itinerary` ("Your 5-day plan is ready: Louvre, Eiffel Tower and more."). Re-plan pass — decision `transfers` ("Taxi in, RER B out. About $75 for both.").
 
 **`budget.node.ts` — Budget Auditor** (pure, no I/O)
-- `computeTotalCost(state)` exported separately for unit tests; round to 2 decimals. Formula: flight + hotel × nights + Σ transfers + daily × days.
+- `computeTotalCost(state)` exported separately; round to 2 decimals. Formula: flight + hotel × nights + Σ transfers + daily × days.
 - Every audit appends a `BudgetPass`: `{ pass: retryCount + 1, flight, hotel, transfers, daily, totalCost, flightLabel, hotelLabel }`
   (`flightLabel` "$500 direct" / "$420 via IST" from `outbound.stops`; `hotelLabel` "4 × $95").
 - Applies the three conditions from ARCHITECTURE.md §4.3:
@@ -474,7 +474,7 @@ Every node is `(state: TravelAgentState) => Promise<TravelAgentUpdate>` and:
 `logs` stay technical; `messages` are the friendly stream for the chat panel (ARCHITECTURE.md §4.6).
 
 - Pure functions `(state-derived values) => string`, one per message in the ARCHITECTURE.md §4.6 table. Nodes
-  call them through `say(state, agent, text, { decision, callout })`. **Never ask the LLM to write chat text** — no extra tokens, deterministic tests.
+  call them through `say(state, agent, text, { decision, callout })`. **Never ask the LLM to write chat text** — no extra tokens, deterministic output.
 - All money goes through one `formatUsd()` helper; English only. `@Name` tokens use the agents' display names ("@Flight Agent"); the web app highlights them.
 - A message with `decision: <topic>` is a **confirmed decision**. The first pass only proposes flight, hotel and transfers; the agents confirm their pick in a
   re-plan pass, and the Budget Auditor confirms whatever is still unconfirmed at the end. A later re-plan may confirm a topic again; the web app shows the newest.
@@ -502,7 +502,6 @@ export interface LlmFactory {
   not `optional()`.
 - When the fallback model answers, add a `warn` log with `kind: 'llm-fallback'` (`Primary model unavailable, used claude-sonnet-5-5`);
   the web app turns it into the "Running on fallback model" banner.
-- Tests inject a fake factory returning canned objects — no network calls in tests.
 
 ---
 
@@ -532,10 +531,10 @@ export class ToolUnavailableError extends Error {}
 - Zero valid results or exhausted retries → `ToolUnavailableError`.
 
 **`mockTravel.tool.ts`**
-- Deterministic: prices derived from a hash of `origin + destination + date`, so tests are stable.
+- Deterministic: prices derived from a hash of `origin + destination + date`.
 - Returns 3–5 flights and 3–5 hotels with `source: 'mock'`, fully populated (both legs with one stop, hotel area, check-in 15:00 / check-out 11:00,
   rating 6–9.5, `photoUrl: null`); `cheaper` mode returns options at least 15% below `maxPrice` when one is given.
-- Small artificial delay (≈300 ms, `0` when `NODE_ENV=test`) so the UI stream looks realistic.
+- Small artificial delay (≈300 ms) so the UI stream looks realistic.
 
 **`index.ts`**
 - `withFallback(primary, mock, onFallback)` → a `TravelSearchTool` that catches `ToolUnavailableError`
@@ -584,7 +583,7 @@ export async function getForecast(destination: string, startDate: string | null,
 
 - `config.DATABASE_URL` set → `PostgresSaver.fromConnString(url)`; call `await checkpointer.setup()` on boot
   (idempotent, creates tables).
-- Not set → `new MemorySaver()` (dev/test only; log a warning at boot in `production`).
+- Not set → `new MemorySaver()` (dev only; log a warning at boot in `production`).
 - Retention: not yet (see `PLAN.md`); checkpoints and `trips` rows are small.
 - Resume uses `graph.getState({ configurable: { thread_id } })`; the trip lookups try the trip store first.
 
@@ -628,7 +627,7 @@ registry saves it under the run's owner. A save error is logged and never fails 
 - ESM with `NodeNext`: relative imports use the `.js` extension (`./state.js`).
 - Every new external API gets a timeout, a fallback (mock data or a `null` field, never a failed run) and a `source`
   field on the data it produces (ARCHITECTURE.md §8).
-- Run `pnpm --filter ai-travel-agent lint typecheck test` before committing.
+- Run `pnpm --filter ai-travel-agent lint typecheck` before committing.
 
 ---
 
