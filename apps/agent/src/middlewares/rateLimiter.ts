@@ -12,14 +12,8 @@ export interface RateLimiters {
 
 const DAY_MS = 86_400_000;
 
-interface Options {
-  /** Overrides the general limit (tests). */
-  generalMax?: number;
-}
-
 export function createRateLimiters(
   config: Pick<Config, 'RATE_LIMIT_WINDOW_MS' | 'RATE_LIMIT_MAX_RUNS' | 'RATE_LIMIT_DAILY_MAX_RUNS'>,
-  { generalMax = 100 }: Options = {},
 ): RateLimiters {
   const limiter = (windowMs: number, limit: number, message: string) =>
     rateLimit({
@@ -36,7 +30,7 @@ export function createRateLimiters(
     });
 
   return {
-    generalLimiter: limiter(60_000, generalMax, 'Too many requests, please slow down'),
+    generalLimiter: limiter(60_000, 100, 'Too many requests, please slow down'),
     runLimiter: [
       limiter(config.RATE_LIMIT_WINDOW_MS, config.RATE_LIMIT_MAX_RUNS, 'Too many trips planned from this address, please try again later'),
       limiter(DAY_MS, config.RATE_LIMIT_DAILY_MAX_RUNS, "You've reached today's limit of trips from this address, please try again tomorrow"),

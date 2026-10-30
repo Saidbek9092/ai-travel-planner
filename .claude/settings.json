@@ -9,8 +9,6 @@
       "Read(./**/.next/**)",
       "Read(./**/.turbo/**)",
       "Read(./**/coverage/**)",
-      "Read(./**/test-results/**)",
-      "Read(./**/playwright-report/**)",
       "Read(./**/*.tsbuildinfo)",
       "Read(./**/*.log)",
       "Read(./**/uploads/**)",

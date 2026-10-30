@@ -17,4 +17,4 @@ description: Compare backend or frontend work against the two design PNGs at the
    "try 1 of 2", "1 USD = 0.92 EUR") confirm which packet field supplies it.
 4. Report mismatches as a short list: design says X, spec/code says Y, proposed resolution.
    The design wins over the spec; update the spec in the same change if you follow the design.
-5. Check the same screen at 375 px when the task touches layout (the e2e `mobile` project, or a screenshot).
+5. Check the same screen at 375 px when the task touches layout (a screenshot).

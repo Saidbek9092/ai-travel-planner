@@ -18,4 +18,4 @@ The agent runs on Render (`ARCHITECTURE.md` §13).
    calls are blocked by CORS.
 4. **Production branch:** `main`. Every PR then gets a preview deployment.
 
-CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and build, then the Playwright end-to-end tests.
+CI (`.github/workflows/ci.yml`) runs lint, typecheck and build.

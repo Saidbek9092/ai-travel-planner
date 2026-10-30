@@ -13,7 +13,7 @@ import type { Logger } from '../utils/logger.js';
 
 /** "My trips" shows at most this many, newest first. */
 const LIST_LIMIT = 50;
-/** The memory store is for development and tests; it forgets the oldest trips past this many. */
+/** The memory store is for development; it forgets the oldest trips past this many. */
 const MEMORY_MAX_TRIPS = 1_000;
 /** Every query gives up after this long, so a slow database cannot hold a request or a finished run. */
 const QUERY_TIMEOUT_MS = 5_000;

@@ -7,7 +7,7 @@
 
 | # | Item | Why | Notes |
 | --- | --- | --- | --- |
-| 1 | **Live verification of TP-30 / TP-31 / TP-32 / TP-33–36** (Notion TP-37) | Those changes were checked with mock tools and tests only | Real keys, real Render deploy, Postgres. Includes running `pnpm eval` and the Postgres trip store on the production database |
+| 1 | **Live verification of TP-30 / TP-31 / TP-32 / TP-33–36** (Notion TP-37) | Those changes were checked with mock tools only | Real keys, real Render deploy, Postgres. Includes the Postgres trip store on the production database |
 | 2 | **Remaining tests from SPEC §13** | The first test set (TP-33) covers the auditor, a full graph run, reconnect and the trip store | Still missing: node tests (supervisor merge, flight/hotel "never more expensive"), SerpAPI mapping and retry, run cancel → resume, `server.test.ts` (CORS, 400, window 429), message builders, trip context |
 | 3 | **Retention** | Checkpoints and `trips` rows grow forever | Periodic delete of threads and trips older than 30 days, once production volume is known |
 | 4 | **Dollar cost per run** | `run summary` logs tokens but not money | Needs per-model prices in config; decide in TP-37 (B7) |

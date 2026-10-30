@@ -51,7 +51,7 @@ export const TripContextSchema = z.object({
   timeZone: z.string().min(1).nullable(),
   /** IANA zone of `origin`, when it was given and found. */
   originTimeZone: z.string().min(1).nullable(),
-  /** `mock` only when the agent runs with `TOOLS_MODE=mock` (tests, e2e). */
+  /** `mock` only when the agent runs with `TOOLS_MODE=mock` (running without live data). */
   source: z.enum(['live', 'mock']),
   /** When the agent looked this up. */
   fetchedAt: z.iso.datetime({ offset: true }).nullish(),

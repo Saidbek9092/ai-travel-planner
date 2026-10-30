@@ -7,10 +7,9 @@ export interface Logger {
   error(msg: string, fields?: Fields): void;
 }
 
-/** Structured JSON lines on stdout/stderr. `silent` is for tests. */
-export function createLogger({ silent = false }: { silent?: boolean } = {}): Logger {
+/** Structured JSON lines on stdout/stderr. */
+export function createLogger(): Logger {
   const write = (level: Level, msg: string, fields: Fields = {}) => {
-    if (silent) return;
     const line = JSON.stringify({ time: new Date().toISOString(), level, msg, ...fields });
     if (level === 'error') process.stderr.write(`${line}\n`);
     else process.stdout.write(`${line}\n`);

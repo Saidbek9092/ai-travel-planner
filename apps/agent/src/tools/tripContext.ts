@@ -7,7 +7,7 @@ export interface TripContextDeps extends WeatherDeps {
   mode: 'live' | 'mock';
 }
 
-/** Fixed answer for `TOOLS_MODE=mock` (tests, e2e). */
+/** Fixed answer for `TOOLS_MODE=mock` (running without live data). */
 const MOCK_CONTEXT: TripContext = {
   location: 'Paris, France',
   weather: { temperatureC: 12, condition: 'Partly cloudy', icon: 'partly-cloudy', todayLowC: 9, todayHighC: 14, outlook: 'rain Saturday' },

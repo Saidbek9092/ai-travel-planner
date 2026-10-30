@@ -11,9 +11,6 @@ out/
 .next/
 .turbo/
 coverage/
-test-results/
-playwright-report/
-playwright/.cache/
 *.tsbuildinfo
 next-env.d.ts
 

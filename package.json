@@ -8,7 +8,6 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint"
   },

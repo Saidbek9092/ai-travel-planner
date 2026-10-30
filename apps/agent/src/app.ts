@@ -7,7 +7,7 @@ import type { CompiledTravelGraph } from './agent/graph.js';
 import type { Config } from './config.js';
 import { identify } from './middlewares/auth.js';
 import { createErrorHandler } from './middlewares/errorHandler.js';
-import { createRateLimiters, type RateLimiters } from './middlewares/rateLimiter.js';
+import { createRateLimiters } from './middlewares/rateLimiter.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createPlacesRouter } from './routes/places.js';
 import { createTripContextRouter } from './routes/tripContext.js';
@@ -24,14 +24,10 @@ export interface AppDeps {
   trips: TripStore;
   /** Dependency checks behind `/readyz`; each rejects (or returns a reason) when not ready. Defaults to ready. */
   readiness?: () => Promise<string[]>;
-  /** Injected by tests to use low limits; built from `config` otherwise. */
-  rateLimiters?: RateLimiters;
-  /** Reaches Google to check sign-in tokens; tests inject a fake. */
-  fetch?: typeof fetch;
 }
 
 /**
- * Builds the Express app without listening, so tests can drive it with supertest.
+ * Builds the Express app without listening.
  * Do not add `compression()`: it buffers responses and breaks SSE.
  */
 export function createApp({
@@ -41,10 +37,9 @@ export function createApp({
   registry,
   trips,
   readiness = async () => [],
-  rateLimiters = createRateLimiters(config),
-  fetch: fetchImpl = fetch,
 }: AppDeps): Express {
   const app = express();
+  const rateLimiters = createRateLimiters(config);
 
   // Render runs one proxy in front of the service; rate limiting needs the real client IP.
   app.set('trust proxy', 1);
@@ -86,7 +81,7 @@ export function createApp({
 
   app.use('/api', rateLimiters.generalLimiter);
   app.use('/api', identify(config));
-  app.use('/api', createAuthRouter({ config, fetch: fetchImpl }));
+  app.use('/api', createAuthRouter({ config, fetch }));
   app.use('/api', createTripsRouter({ config, graph, registry, runLimiter: rateLimiters.runLimiter, trips }));
   app.use('/api', createTripContextRouter({ config }));
   app.use('/api', createPlacesRouter({ config }));

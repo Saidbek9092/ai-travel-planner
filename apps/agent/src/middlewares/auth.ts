@@ -27,7 +27,7 @@ export const userOf = (res: Response): AuthUser | null => (res.locals['user'] as
 
 /**
  * Runs cost money, so with sign-in configured (`GOOGLE_CLIENT_ID` + `SESSION_SECRET`) only a signed-in account may start one.
- * Without it (local development, tests) guests stay allowed, as there is no way to sign in.
+ * Without it (local development) guests stay allowed, as there is no way to sign in.
  */
 export function requireSignIn(config: Pick<Config, 'GOOGLE_CLIENT_ID' | 'SESSION_SECRET'>): RequestHandler {
   const enabled = config.GOOGLE_CLIENT_ID !== undefined && config.SESSION_SECRET !== undefined;

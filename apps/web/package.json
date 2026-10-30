@@ -8,9 +8,7 @@
     "build": "next build",
     "start": "next start --port ${PORT:-3000}",
     "typecheck": "next typegen && tsc --noEmit",
-    "lint": "eslint .",
-    "e2e": "playwright test",
-    "mock-agent": "node --experimental-transform-types --disable-warning=ExperimentalWarning test/mock-agent/server.ts"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@ai-travel/contracts": "workspace:*",
@@ -32,7 +30,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4.3.3",
     "@types/mapbox-gl": "^3.5.0",
     "@types/node": "catalog:",
