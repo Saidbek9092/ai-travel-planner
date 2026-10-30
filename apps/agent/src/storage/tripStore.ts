@@ -48,6 +48,11 @@ export interface TripStore {
   ownership(threadId: string): Promise<{ userId: string | null; ownerId: string | null } | null>;
   /** Deletes a stored trip. Returns whether there was one. */
   remove(threadId: string): Promise<boolean>;
+  /**
+   * Counts one new plan against the account's lifetime allowance. Returns `false` (and counts nothing) when `max` plans
+   * were already started. Atomic, so two parallel requests cannot both take the last one.
+   */
+  consumeRun(userId: string, max: number): Promise<boolean>;
   /** Moves this browser's guest trips to the account. Returns how many moved. */
   claim(userId: string, ownerId: string): Promise<number>;
   close(): Promise<void>;
@@ -87,8 +92,15 @@ interface MemoryRow {
 
 export function createMemoryTripStore(): TripStore {
   const rows = new Map<string, MemoryRow>();
+  const runs = new Map<string, number>();
   return {
     kind: 'memory',
+    async consumeRun(userId, max) {
+      const used = runs.get(userId) ?? 0;
+      if (used >= max) return false;
+      runs.set(userId, used + 1);
+      return true;
+    },
     async save({ ownerId, userId = null, result, messages }) {
       const now = new Date().toISOString();
       const previous = rows.get(result.threadId);
@@ -146,6 +158,10 @@ CREATE TABLE IF NOT EXISTS trips (
 CREATE INDEX IF NOT EXISTS trips_owner_created_idx ON trips (owner_id, created_at DESC);
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS user_id text;
 CREATE INDEX IF NOT EXISTS trips_user_created_idx ON trips (user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS user_runs (
+  user_id text PRIMARY KEY,
+  runs integer NOT NULL DEFAULT 0
+);
 `;
 
 interface PgRow {
@@ -164,6 +180,15 @@ export async function createPostgresTripStore(connectionString: string): Promise
   await pool.query(SCHEMA_SQL);
   return {
     kind: 'postgres',
+    async consumeRun(userId, max) {
+      // One statement: the row is created or bumped only while it is under the cap, so the check and the count cannot race.
+      const { rowCount } = await pool.query(
+        `INSERT INTO user_runs (user_id, runs) VALUES ($1, 1)
+         ON CONFLICT (user_id) DO UPDATE SET runs = user_runs.runs + 1 WHERE user_runs.runs < $2`,
+        [userId, max],
+      );
+      return (rowCount ?? 0) > 0;
+    },
     async save({ ownerId, userId = null, result, messages }) {
       await pool.query(
         `INSERT INTO trips (thread_id, owner_id, user_id, result, messages) VALUES ($1, $2, $5, $3, $4)

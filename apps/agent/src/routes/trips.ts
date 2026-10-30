@@ -23,7 +23,7 @@ const ThreadIdSchema = z.uuid();
 const STOPPED_ERROR = 'Trip planning stopped before it finished, resume to continue';
 
 export interface TripsRouterDeps {
-  config: Pick<Config, 'GOOGLE_CLIENT_ID' | 'SESSION_SECRET'>;
+  config: Pick<Config, 'GOOGLE_CLIENT_ID' | 'SESSION_SECRET' | 'USER_MAX_RUNS'>;
   graph: CompiledTravelGraph;
   registry: RunRegistry;
   runLimiter: RateLimiters['runLimiter'];
@@ -52,14 +52,21 @@ export function createTripsRouter({ config, graph, registry, runLimiter, trips }
     if (owner?.userId != null && owner.userId !== userOf(res)?.id) throw notFound('Trip not found');
   }
 
-  router.post('/trips', requireSignIn(config), ...runLimiter, (req, res) => {
+  router.post('/trips', requireSignIn(config), ...runLimiter, async (req, res) => {
     const parsed = TripRequestSchema.safeParse(req.body);
     if (!parsed.success) throw validationError(parsed.error);
+
+    // Each signed-in account may plan `USER_MAX_RUNS` trips in total (a re-plan is a new plan). Counted after validation,
+    // so a rejected request costs nothing.
+    const userId = userOf(res)?.id ?? null;
+    if (userId !== null && !(await trips.consumeRun(userId, config.USER_MAX_RUNS))) {
+      throw new AppError('RATE_LIMITED', `You've used all ${config.USER_MAX_RUNS} trip plans included with your account.`, 429);
+    }
 
     const threadId = randomUUID();
     const streamer = new SseStreamer(res);
     streamer.open(threadId);
-    registry.start({ threadId, request: parsed.data, ownerId: ownerIdOf(req), userId: userOf(res)?.id ?? null }).subscribe(streamer);
+    registry.start({ threadId, request: parsed.data, ownerId: ownerIdOf(req), userId }).subscribe(streamer);
   });
 
   /** "My trips": the signed-in account's trips, or a guest's trips for the browser's anonymous owner id. Newest first. */

@@ -39,6 +39,8 @@ const EnvSchema = z
     RATE_LIMIT_MAX_RUNS: positiveInt.default(10),
     /** Runs one IP may start per 24 h, on top of the window above: caps what one address can spend on the LLM in a day. */
     RATE_LIMIT_DAILY_MAX_RUNS: positiveInt.default(30),
+    /** New plans and re-plans one signed-in account may start, ever. Resuming a stopped run is free. */
+    USER_MAX_RUNS: positiveInt.default(3),
 
     LANGSMITH_TRACING: z.stringbool().default(false),
     LANGSMITH_API_KEY: secret.optional(),
