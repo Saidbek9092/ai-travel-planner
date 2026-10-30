@@ -38,7 +38,11 @@ export async function searchPlaces(query: string, deps: Pick<WeatherDeps, 'fetch
     const places: PlaceSuggestion[] = [];
     const alias = aliasFor(query);
     // "England" has no place of its own, so the country it belongs to leads the list.
-    const hits = [...(alias ? await searchGeocode(alias, 3, deps, signal) : []), ...(await searchGeocode(query, FETCH_COUNT, deps, signal))];
+    const [aliasHits, queryHits] = await Promise.all([
+      alias ? searchGeocode(alias, 3, deps, signal) : [],
+      searchGeocode(query, FETCH_COUNT, deps, signal),
+    ]);
+    const hits = [...aliasHits, ...queryHits];
     for (const hit of hits) {
       const place = toSuggestion(hit);
       if (!place || seen.has(place.label)) continue;
