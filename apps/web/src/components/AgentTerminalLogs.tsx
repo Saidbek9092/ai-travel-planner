@@ -3,7 +3,7 @@
 import type { LogPayload } from '@ai-travel/contracts';
 import { AlertTriangleIcon, ArrowDownIcon, CheckIcon, CircleXIcon, CopyIcon } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { StreamStatus } from '@/hooks/useAgentStream';
 import { useStickToBottom } from '@/hooks/useStickToBottom';
@@ -21,6 +21,42 @@ function asText(log: LogPayload): string {
   const prefix = LOG_LEVEL_STYLES[log.level].prefix;
   return `${formatTime(log.timestamp)}  #${log.step}  ${log.agent}  ${prefix ? `${prefix} ` : ''}${log.message}`;
 }
+
+interface LogRowProps {
+  log: LogPayload;
+  newest: boolean;
+  reduceMotion: boolean;
+}
+
+/** One terminal line. Memoized: log objects never change once received, so only the newest line (and the one it replaces) re-render. */
+const LogRow = memo(function LogRow({ log, newest, reduceMotion }: LogRowProps) {
+  const level = LOG_LEVEL_STYLES[log.level];
+  const Icon = LEVEL_ICONS[log.level];
+  const motionProps = {
+    initial: reduceMotion ? false : { opacity: 0, y: 4 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.15 },
+  } as const;
+  if (log.kind === 'checkpoint') {
+    return (
+      <motion.p {...motionProps} className="px-4 py-0.5 text-white/45">
+        {formatTime(log.timestamp)} <span className="inline-block w-8">—</span> checkpoint · {log.message}
+      </motion.p>
+    );
+  }
+  return (
+    <motion.p {...motionProps} className={cn('px-4 py-0.5 break-words', newest && 'bg-white/[0.06]')}>
+      <span className="text-white/45">{formatTime(log.timestamp)}</span>{' '}
+      <span className="inline-block w-8 text-white/45">#{log.step}</span>{' '}
+      <span className={cn('font-semibold', AGENT_COLORS[log.agent])}>{log.agent}</span>{' '}
+      <span className={level.className}>
+        {Icon && <Icon className="mr-1 inline size-3.5 align-text-bottom" aria-hidden="true" />}
+        {level.prefix && <span className="mr-1 font-semibold">{level.prefix}</span>}
+        {log.message}
+      </span>
+    </motion.p>
+  );
+});
 
 /** Dark terminal of `LOG` packets with auto-scroll toggle and copy. */
 export function AgentTerminalLogs({ logs, status }: AgentTerminalLogsProps) {
@@ -64,42 +100,9 @@ export function AgentTerminalLogs({ logs, status }: AgentTerminalLogsProps) {
         <div role="log" aria-live="polite" aria-label="Technical log" className="flex flex-col py-2 font-mono text-[13px] leading-5">
           {logs.length === 0 && <p className="px-4 text-white/50">Agent output will appear here.</p>}
           <AnimatePresence initial={false}>
-            {logs.map((log, i) => {
-              const level = LOG_LEVEL_STYLES[log.level];
-              const Icon = LEVEL_ICONS[log.level];
-              const newest = i === logs.length - 1;
-              if (log.kind === 'checkpoint') {
-                return (
-                  <motion.p
-                    key={`${i}-${log.timestamp}`}
-                    initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="px-4 py-0.5 text-white/45"
-                  >
-                    {formatTime(log.timestamp)} <span className="inline-block w-8">—</span> checkpoint · {log.message}
-                  </motion.p>
-                );
-              }
-              return (
-                <motion.p
-                  key={`${i}-${log.timestamp}`}
-                  initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className={cn('px-4 py-0.5 break-words', newest && 'bg-white/[0.06]')}
-                >
-                  <span className="text-white/45">{formatTime(log.timestamp)}</span>{' '}
-                  <span className="inline-block w-8 text-white/45">#{log.step}</span>{' '}
-                  <span className={cn('font-semibold', AGENT_COLORS[log.agent])}>{log.agent}</span>{' '}
-                  <span className={level.className}>
-                    {Icon && <Icon className="mr-1 inline size-3.5 align-text-bottom" aria-hidden="true" />}
-                    {level.prefix && <span className="mr-1 font-semibold">{level.prefix}</span>}
-                    {log.message}
-                  </span>
-                </motion.p>
-              );
-            })}
+            {logs.map((log, i) => (
+              <LogRow key={`${i}-${log.timestamp}`} log={log} newest={i === logs.length - 1} reduceMotion={!!reduceMotion} />
+            ))}
           </AnimatePresence>
           {streaming && (
             <span aria-hidden="true" className={cn('mx-4 mt-1 inline-block h-4 w-2 bg-white/70', !reduceMotion && 'animate-pulse')} />
