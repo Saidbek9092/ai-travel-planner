@@ -50,3 +50,17 @@ test('each account sees only its own trips, and cannot open another account’s 
 
   await Promise.all([alice.context().close(), bob.context().close(), guestContext.close()]);
 });
+
+test('the phone sign-in endpoint hands the credential back in the URL fragment, only with a matching CSRF token', async ({ request }) => {
+  const post = (cookie: string | null, field: string) =>
+    request.post('/auth/google', { form: { credential: 'abc.def.ghi', g_csrf_token: field }, headers: cookie ? { cookie: `g_csrf_token=${cookie}` } : {}, maxRedirects: 0 });
+
+  const ok = await post('t1', 't1');
+  expect(ok.status()).toBe(303);
+  expect(new URL(ok.headers()['location']!).hash).toBe('#gsi=abc.def.ghi');
+
+  for (const bad of [await post('t1', 'other'), await post(null, 't1')]) {
+    expect(bad.status()).toBe(303);
+    expect(new URL(bad.headers()['location']!).hash).toBe('#gsi-error');
+  }
+});
