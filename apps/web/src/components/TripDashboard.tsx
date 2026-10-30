@@ -102,6 +102,15 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
   const resume = () => request({ kind: 'resume' });
   const replanRequest = lastRequest ?? (result ? requestFromResult(result, new Date().toISOString().slice(0, 10)) : null);
   const startOver = () => (replanRequest ? start(replanRequest) : stream.reset());
+  // Re-plan opens the form filled with this trip's details; nothing starts until the person presses Plan.
+  const [prefill, setPrefill] = useState<TripRequest | null>(null);
+  const [formKey, setFormKey] = useState(0);
+  const openForm = (request: TripRequest | null) => {
+    setPrefill(request);
+    setFormKey((key) => key + 1);
+    stream.reset();
+    setActiveDay(null);
+  };
 
   // The tab title names the trip, so history, tabs and screen readers can tell trips apart.
   const pageTitle = view === 'finished' && result ? tripTitle(result) : view === 'live' ? (live ? 'Planning your trip' : 'Planning stopped') : null;
@@ -122,6 +131,7 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
     const onNewTrip = () => {
       reset();
       setActiveDay(null);
+      setPrefill(null);
     };
     window.addEventListener(NEW_TRIP_EVENT, onNewTrip);
     return () => window.removeEventListener(NEW_TRIP_EVENT, onNewTrip);
@@ -205,7 +215,7 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
   return (
     <>
       {env.googleClientId !== null && <SignInDialog open={pending !== null && !session} onOpenChange={(open) => !open && setPending(null)} clientId={env.googleClientId} />}
-      <TripActions status={status} threadId={threadId} canReplan={replanRequest !== null} onStop={stream.cancel} onReplan={startOver} />
+      <TripActions status={status} threadId={threadId} canReplan={replanRequest !== null} onStop={stream.cancel} onReplan={() => openForm(replanRequest)} onNewTrip={() => openForm(null)} />
       <TopBar
         status={tripContext.status}
         data={tripContext.data}
@@ -218,6 +228,8 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
         {view === 'idle' && (
           <div className="-mt-20">
             <TripInputForm
+              key={formKey}
+              initialRequest={prefill}
               disabled={live || uiOnly}
               retryAt={stream.retryAt}
               onSubmit={start}

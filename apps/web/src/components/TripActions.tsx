@@ -1,6 +1,6 @@
 'use client';
 
-import { RefreshCwIcon, ShareIcon, SquareIcon } from 'lucide-react';
+import { PlusIcon, RefreshCwIcon, ShareIcon, SquareIcon } from 'lucide-react';
 import { useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { notify } from '@/components/Notice';
@@ -29,10 +29,11 @@ interface TripActionsProps {
   canReplan: boolean;
   onStop: () => void;
   onReplan: () => void;
+  onNewTrip: () => void;
 }
 
-/** Header actions: "Stop planning" while a run is live; "Re-plan" and "Share trip" on a finished trip. */
-export function TripActions({ status, threadId, canReplan, onStop, onReplan }: TripActionsProps) {
+/** Header actions: "Stop planning" while a run is live; "New trip", "Re-plan" and "Share trip" on a finished trip. */
+export function TripActions({ status, threadId, canReplan, onStop, onReplan, onNewTrip }: TripActionsProps) {
   const slot = useSyncExternalStore(noop, findSlot, () => null);
   const [confirming, setConfirming] = useState(false);
   const keepRef = useRef<HTMLButtonElement>(null);
@@ -45,6 +46,11 @@ export function TripActions({ status, threadId, canReplan, onStop, onReplan }: T
       {live && (
         <Button variant="outline" className={`${size} bg-card`} onClick={onStop} title="Stop planning">
           <SquareIcon aria-hidden="true" className="size-3.5" /> <span className="max-sm:sr-only">Stop planning</span>
+        </Button>
+      )}
+      {finished && (
+        <Button variant="outline" className={`${size} bg-card`} onClick={onNewTrip} title="Plan a new trip">
+          <PlusIcon aria-hidden="true" /> <span className="max-sm:sr-only">New trip</span>
         </Button>
       )}
       {finished && canReplan && (
@@ -60,7 +66,7 @@ export function TripActions({ status, threadId, canReplan, onStop, onReplan }: T
       <Dialog open={confirming && finished} onOpenChange={setConfirming}>
         <DialogContent initialFocus={keepRef} onKeyDown={keepTabInside}>
           <DialogTitle>Plan this trip again?</DialogTitle>
-          <DialogDescription>Your current trip will be replaced. Your start details stay the same.</DialogDescription>
+          <DialogDescription>The planner opens with this trip&apos;s details filled in. Change anything you like, then press Plan. This trip stays in My trips.</DialogDescription>
           <DialogFooter>
             <Button
               variant="outline"
@@ -69,7 +75,7 @@ export function TripActions({ status, threadId, canReplan, onStop, onReplan }: T
                 onReplan();
               }}
             >
-              Re-plan
+              Edit and re-plan
             </Button>
             <Button ref={keepRef} onClick={() => setConfirming(false)}>
               Keep this trip
