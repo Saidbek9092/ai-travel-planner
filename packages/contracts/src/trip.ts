@@ -48,6 +48,8 @@ export const FlightLegSchema = z.object({
   terminal: z.string().min(1).nullable(),
   /** Empty array = direct. */
   stops: z.array(FlightStopSchema),
+  /** Marketing flight number of each segment in order, e.g. ["TK 369", "TK 1833"], when the provider reports them. */
+  flightNumbers: z.array(z.string().min(1)).nullish(),
 });
 
 export const FlightSchema = z.object({
@@ -79,6 +81,10 @@ export const PlaceSchema = z.object({
   photoUrl: z.url().nullish(),
   /** Who to credit for the photo, as the source's licence requires. */
   photoCredit: z.object({ name: z.string().min(1), url: z.url() }).nullish(),
+  /** Opening hours on this day as Google Maps lists them, e.g. "9 AM–6 PM"; absent when unknown or not checked. */
+  hours: z.string().min(1).nullish(),
+  /** `serpapi` = name, position and opening day confirmed on Google Maps; absent = the planner's suggestion, not checked. */
+  source: DataSourceSchema.nullish(),
 });
 
 export const HotelSchema = z.object({
@@ -97,6 +103,14 @@ export const HotelSchema = z.object({
   transit: z.string().min(1).nullable(),
   /** For the hotel marker on the map. */
   location: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).nullable(),
+  /** The airport the provider lists near the hotel, with its travel times from the hotel in minutes. */
+  airport: z
+    .object({
+      name: z.string().min(1),
+      taxiMinutes: z.number().int().positive().nullable(),
+      transitMinutes: z.number().int().positive().nullable(),
+    })
+    .nullish(),
   bookingUrl: z.url().nullable(),
   source: DataSourceSchema,
   /** When the tool fetched this option. */

@@ -1,7 +1,7 @@
 import type { Flight, Hotel } from '@ai-travel/contracts';
 import { normalizeKey, TtlCache } from '../utils/ttlCache.js';
 import { recordMetric } from '../utils/runMetrics.js';
-import type { SearchTool } from './types.js';
+import { flightKey, type FlightQuery, type SearchTool } from './types.js';
 
 /**
  * Reuses flight and hotel searches for `ttlMs`. The key holds exactly what the provider request depends on
@@ -10,9 +10,10 @@ import type { SearchTool } from './types.js';
  */
 export function withSearchCache(tool: SearchTool, ttlMs: number): SearchTool {
   const flights = new TtlCache<Flight[]>(ttlMs);
+  const returns = new TtlCache<Flight>(ttlMs);
   const hotels = new TtlCache<Hotel[]>(ttlMs);
 
-  async function cached<T>(cache: TtlCache<T[]>, key: string, load: () => Promise<T[]>): Promise<T[]> {
+  async function cached<T>(cache: TtlCache<T>, key: string, load: () => Promise<T>): Promise<T> {
     let loaded = false;
     const found = await cache.remember(key, async () => ((loaded = true), load()));
     if (!loaded) recordMetric((metrics) => (metrics.searchCacheHits += 1));
@@ -20,13 +21,14 @@ export function withSearchCache(tool: SearchTool, ttlMs: number): SearchTool {
     return structuredClone(found);
   }
 
+  const route = (query: FlightQuery) => [query.origin, query.destination, query.departDate, query.returnDate].map(normalizeKey).join('|');
+
   return {
     name: tool.name,
-    searchFlights: (query, signal) =>
-      cached(
-        flights,
-        [query.origin, query.destination, query.departDate, query.returnDate].map(normalizeKey).join('|'),
-        () => tool.searchFlights(query, signal),
+    searchFlights: (query, signal) => cached(flights, route(query), () => tool.searchFlights(query, signal)),
+    completeReturn: (query, flight, options, signal) =>
+      cached(returns, [route(query), flightKey(flight), options.maxStops ?? 'any'].join('|'), () =>
+        tool.completeReturn(query, flight, options, signal),
       ),
     searchHotels: (query, signal) =>
       cached(hotels, [query.destination, query.checkIn, query.checkOut].map(normalizeKey).join('|'), () =>

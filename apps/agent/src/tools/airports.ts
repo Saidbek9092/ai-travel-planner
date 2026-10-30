@@ -35,3 +35,22 @@ export function iataFor(city: string): string | undefined {
   if (/^[A-Za-z]{3}$/.test(city.trim())) return city.trim().toUpperCase();
   return KNOWN[normalise(city)]?.code;
 }
+
+/** "Airport" in the languages providers answer in; for telling an airport apart from a sight or a station by name. */
+export const AIRPORT_WORD = /(?<!\p{L})(airport|aéroport|aeropuerto|aeroporto|flughafen|havalimanı|lotnisko)(?!\p{L})/iu;
+
+const GENERIC_AIRPORT_WORDS = new Set(['airport', 'aeroport', 'aeropuerto', 'aeroporto', 'flughafen', 'havalimanı', 'international', 'intl', 'de', 'du', 'la', 'le', 'the']);
+const airportTokens = (name: string, city: string) => {
+  const plain = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().split(/[^\p{L}\p{N}]+/u);
+  const skip = new Set(plain(city));
+  return new Set(plain(name).filter((token) => token.length >= 3 && !GENERIC_AIRPORT_WORDS.has(token) && !skip.has(token)));
+};
+
+/**
+ * Whether two provider names mean the same airport: "Paris Charles de Gaulle Airport" and "Aéroport de
+ * Paris-Charles de Gaulle" share "charles". The city's own name does not count, so CDG and Orly stay apart.
+ */
+export function sameAirport(a: string, b: string, city: string): boolean {
+  const right = airportTokens(b, city);
+  return [...airportTokens(a, city)].some((token) => right.has(token));
+}

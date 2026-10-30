@@ -26,6 +26,11 @@ function Appear({ children, index }: { children: ReactNode; index: number }) {
   );
 }
 
+/** `" · TK 369 · TK 1833"`, or nothing when the provider gave no flight numbers. */
+function flightNumbers(leg: FlightLeg): string {
+  return leg.flightNumbers?.length ? ` · ${leg.flightNumbers.join(' · ')}` : '';
+}
+
 function legLabel(leg: FlightLeg): string {
   const stops = leg.stops.map((s) => `${s.airport.code} ${formatDuration(s.layoverMinutes)} layover`).join(', ');
   return `${leg.from.name} ${formatLegTime(leg.departure)} to ${leg.to.name} ${formatLegTime(leg.arrival)}${stops ? `, via ${stops}` : ', direct'}`;
@@ -234,7 +239,7 @@ export function SelectedFlightCard({ flights, transfers, firstDay, confirmed, co
           </h2>
           <span className="ml-auto flex flex-wrap items-center gap-3">
             <span className="text-sm text-ink-2">
-              {flight.airline} · {flight.return ? 'round trip' : 'one way'}
+              {flight.airline} · round trip
             </span>
             {flight.source === 'serpapi' && safeUrl(flight.bookingUrl) && (
               <ExternalLink href={safeUrl(flight.bookingUrl)!} source={sourceLabel(flight.source, 'Flights')}>
@@ -248,7 +253,10 @@ export function SelectedFlightCard({ flights, transfers, firstDay, confirmed, co
         </header>
         <PickedLine reasons={flight.picked} />
         <div className="flex flex-col gap-2.5">
-          <p className="label-mono text-muted-foreground">Outbound · {formatDay(flight.outbound.departure)}</p>
+          <p className="label-mono text-muted-foreground">
+            Outbound · {formatDay(flight.outbound.departure)}
+            {flightNumbers(flight.outbound)}
+          </p>
           <RouteStrip leg={flight.outbound} full />
           {arrivalTransfers.map((t) => (
             <TransferRow key={`${t.day}-${t.description}`} transfer={t} confirmed={confirmedTransfers} />
@@ -256,7 +264,10 @@ export function SelectedFlightCard({ flights, transfers, firstDay, confirmed, co
         </div>
         {flight.return && (
           <div className="flex flex-col gap-2.5 border-t pt-3.5">
-            <p className="label-mono text-muted-foreground">Return · {formatDay(flight.return.departure)}</p>
+            <p className="label-mono text-muted-foreground">
+              Return · {formatDay(flight.return.departure)}
+              {flightNumbers(flight.return)}
+            </p>
             {departureTransfers.map((t) => (
               <TransferRow key={`${t.day}-${t.description}`} transfer={t} confirmed={confirmedTransfers} />
             ))}

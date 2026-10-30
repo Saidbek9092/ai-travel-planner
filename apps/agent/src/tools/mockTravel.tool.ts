@@ -105,6 +105,11 @@ export function createMockTravelTool(): SearchTool {
       );
     },
 
+    /** Mock flights already carry both legs. */
+    async completeReturn(_query: FlightQuery, flight: Flight): Promise<Flight> {
+      return flight;
+    },
+
     async searchHotels(query: HotelQuery, signal?: AbortSignal): Promise<Hotel[]> {
       await sleep(DELAY_MS, signal);
       const rand = sequence(`hotel|${query.destination}|${query.checkIn}`);

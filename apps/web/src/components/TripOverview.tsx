@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { env } from '@/lib/env';
 import { cn, formatUsd } from '@/lib/utils';
-import { budgetParts, draftingDay, timesWord, tripTitle, tripTotal, type TripView } from '@/lib/trip';
+import { arrivalDay, budgetParts, draftingDay, timesWord, tripTitle, tripTotal, type TripView } from '@/lib/trip';
 
 const MapboxViewer = dynamic(() => import('@/components/MapboxViewer'), {
   ssr: false,
@@ -256,7 +256,7 @@ export function LiveOverview({ trip, decisions, progress, selectedDay, onSelectD
               transfers: trip.transfers ?? [],
               durationDays: trip.durationDays ?? 1,
               startDate: trip.startDate ?? null,
-              firstDay: 1,
+              firstDay: arrivalDay(trip.transfers ?? []),
               confirmed: { flight: !!decisions.flight, hotel: !!decisions.hotel, transfers: !!decisions.transfers },
               days: trip.durationDays ? (
                 <DayExplorer
@@ -330,7 +330,7 @@ export function FinishedOverview({ result, decisions, selectedDay, onSelectDay, 
               transfers: result.transfers,
               durationDays: result.durationDays,
               startDate: result.startDate,
-              firstDay: itinerary[0]?.day ?? 1,
+              firstDay: arrivalDay(result.transfers),
               confirmed: { flight: confirmed('flight'), hotel: confirmed('hotel'), transfers: confirmed('transfers') },
               days:
                 itinerary.length > 0 ? (

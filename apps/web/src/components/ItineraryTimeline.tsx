@@ -7,6 +7,7 @@ import { ExternalLink } from '@/components/ExternalLink';
 import { Button } from '@/components/ui/button';
 import { TRANSFER_MODES, WEATHER_ICONS, dayColor, formatTemperature } from '@/lib/labels';
 import { placeLinks, safeUrl } from '@/lib/links';
+import { arrivalDay } from '@/lib/trip';
 import { cn, formatDay, formatDuration, formatUsd } from '@/lib/utils';
 
 const stops = (n: number) => `${n} ${n === 1 ? 'stop' : 'stops'}`;
@@ -200,6 +201,13 @@ export function DayStrip({ itinerary, totalDays, selected, onSelect }: DayStripP
   );
 }
 
+/** Hours come from Google Maps; a stop the agent could not check says so instead of looking confirmed. */
+function PlaceHours({ place }: { place: Place }) {
+  if (place.source !== 'serpapi') return <span className="block text-xs text-muted-foreground">Hours not checked</span>;
+  if (!place.hours) return null;
+  return <span className="block text-xs text-ink-2">Open {place.hours} · Google Maps</span>;
+}
+
 function PlaceLinks({ place }: { place: Place }) {
   const { website, map } = placeLinks(place);
   return (
@@ -266,8 +274,10 @@ export function DayPanel({
 }) {
   const color = dayColor(day.day);
   const dayTransfers = transfers.filter((t) => t.day === day.day);
-  const arrival = day.day === 1 ? dayTransfers : [];
-  const departure = day.day === 1 ? [] : dayTransfers;
+  // An overnight flight lands on day 2, so the arrival day is the earliest transfer's, not always day 1.
+  const isArrivalDay = day.day === arrivalDay(transfers);
+  const arrival = isArrivalDay ? dayTransfers : [];
+  const departure = isArrivalDay ? [] : dayTransfers;
   return (
     <div className="flex h-full flex-col px-6 py-5" aria-live="polite">
       <div className="flex items-center gap-2">
@@ -303,6 +313,7 @@ export function DayPanel({
             <span className="min-w-0 flex-1">
               <span className="block text-[17px] leading-6 font-semibold">{place.name}</span>
               {place.note && <span className="block text-sm text-ink-2">{place.note}</span>}
+              <PlaceHours place={place} />
               <PlaceLinks place={place} />
               {place.photoUrl && place.photoCredit && safeUrl(place.photoCredit.url) && (
                 <span className="mt-0.5 block text-xs text-muted-foreground">

@@ -13,10 +13,10 @@ const EXPENSIVE_FLIGHT_SHARE = 0.4;
 
 const time = (iso: string) => iso.slice(11, 16);
 
-/** "12–17 November" / "28 November – 3 December"; just the day and month when the end is unknown. */
+/** A 6-day trip from 12 November → "12–17 November"; "28 November – 3 December" across months. Day 1 is the start date. */
 export function dateRange(startDate: string, days: number): string {
   const [, startMonth = 1, startDay = 1] = startDate.split('-').map(Number);
-  const [, endMonth = 1, endDay = 1] = addDays(startDate, days).split('-').map(Number);
+  const [, endMonth = 1, endDay = 1] = addDays(startDate, Math.max(0, days - 1)).split('-').map(Number);
   const start = MONTHS[startMonth - 1] ?? '';
   const end = MONTHS[endMonth - 1] ?? '';
   return startMonth === endMonth ? `${startDay}–${endDay} ${start}` : `${startDay} ${start} – ${endDay} ${end}`;
@@ -51,6 +51,7 @@ export function flightProposal(flights: Flight[], budget: number): string {
     const lead = best.outbound.stops.length === 0 ? 'Direct, but that' : 'That';
     parts.push(`${lead} is ${best.price >= budget / 2 ? 'half the budget' : 'a big share of the budget'}.`);
   }
+  if (best.return && best.source !== 'mock') parts.push(`The flight home leaves ${best.return.from.code} at ${time(best.return.departure)}.`);
   if (flights.some((flight) => flight.source === 'mock')) parts.push("Live prices weren't available, so these are estimates.");
   return parts.join(' ');
 }
@@ -77,7 +78,7 @@ export function hotelConfirmed(hotel: Hotel, previous: Hotel | undefined, nights
   if (previous && previous.pricePerNight > hotel.pricePerNight) {
     parts[0] += `, saving us ${formatUsd((previous.pricePerNight - hotel.pricePerNight) * nights)}.`;
   } else parts[0] += '.';
-  if (hotel.transit) parts.push(`Getting around: ${hotel.transit}.`);
+  if (hotel.transit) parts.push(`Nearest station: ${hotel.transit}.`);
   return parts.join(' ');
 }
 
@@ -85,8 +86,10 @@ export function transferProposal(flight: Flight, transfers: Transfer[]): string 
   const [arrival, departure] = transfers;
   if (!arrival) return 'No transfers needed.';
   const intro = `Landing at ${time(flight.outbound.arrival)}, ${arrival.mode === 'taxi' ? 'a taxi is the simplest way in' : `the ${arrival.mode} gets us to the hotel`}.`;
-  const fare = arrival.note ? ` ${arrival.note}.` : '';
-  const back = departure ? ` For the way back: ${departure.mode}, ${formatUsd(departure.priceUsd)}.` : '';
+  const fare = arrival.note ? ` ${arrival.note.replace(/[.\s]+$/, '')}.` : '';
+  const back = departure
+    ? ` For the way back: ${departure.mode}, ${formatUsd(departure.priceUsd)}.${departure.note ? ` ${departure.note.replace(/[.\s]+$/, '')}.` : ''}`
+    : '';
   return `${intro}${fare}${back}`;
 }
 
@@ -103,6 +106,13 @@ export function weatherPrep(day: number, condition: string): { text: string; lab
     text: `${condition} is forecast for Day ${day}, so I moved it indoors.`,
     label: `Weather prep · Day ${day} moved indoors`,
   };
+}
+
+/** "I checked your 14 stops on Google Maps and swapped 3 that are closed on your dates: Louvre Museum (closed on Tuesdays), …". */
+export function placesSwapped(checked: number, swapped: string[]): string {
+  const shown = swapped.slice(0, 3).join(', ');
+  const more = swapped.length > 3 ? ` and ${swapped.length - 3} more` : '';
+  return `I checked ${checked} stops on Google Maps and swapped ${swapped.length} that would not work on your dates: ${shown}${more}.`;
 }
 
 export function itineraryReady(itinerary: ItineraryDay[]): string {

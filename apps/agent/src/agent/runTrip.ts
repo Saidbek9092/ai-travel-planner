@@ -11,11 +11,24 @@ import {
 import type { CompiledTravelGraph } from './graph.js';
 import { initialState, log, MAX_BUDGET_RETRIES, toDraft, type ChatMessage, type LogEntry, type TravelAgentState } from './state.js';
 import { abortMessage } from './runAbort.js';
+import { ToolUnavailableError, UnknownAirportError } from '../tools/types.js';
 import type { Logger } from '../utils/logger.js';
 import { createRunMetrics, withRunMetrics, type RunMetrics } from '../utils/runMetrics.js';
 
 const GENERIC_ERROR = 'Something went wrong while planning your trip. Please try again.';
 const INTERRUPTED_ERROR = 'Trip planning was interrupted before it finished.';
+
+/**
+ * What the traveller sees when live data was missing (only possible with `TOOLS_MODE=live`, where nothing is estimated).
+ * Tool messages name the failed lookup and never carry keys.
+ */
+function failureMessage(error: unknown): string {
+  if (error instanceof UnknownAirportError) {
+    return `No airport could be found for "${error.place}". Try the nearest city with an airport, or its 3-letter airport code.`;
+  }
+  if (error instanceof ToolUnavailableError) return `Live travel data was not available (${error.message}), so nothing was estimated. Please try again later.`;
+  return GENERIC_ERROR;
+}
 
 /** The part of a node's state update that the stream controller reads. */
 interface NodeUpdate extends Partial<TravelAgentState> {
@@ -214,7 +227,7 @@ async function execute(
         stack: error instanceof Error ? error.stack : undefined,
       });
     }
-    await emitFailure();
+    await emitFailure(error);
     summarize(signal?.aborted ? 'aborted' : 'failed');
   }
 
@@ -246,8 +259,8 @@ async function execute(
   }
 
   /** Safe message only: no stack, no keys. The result carries whatever the last checkpoint holds. */
-  async function emitFailure() {
-    const message = abortMessage(signal) ?? (signal?.aborted ? INTERRUPTED_ERROR : GENERIC_ERROR);
+  async function emitFailure(error: unknown) {
+    const message = abortMessage(signal) ?? (signal?.aborted ? INTERRUPTED_ERROR : failureMessage(error));
     try {
       const values: Partial<TravelAgentState> = await graph
         .getState(config)

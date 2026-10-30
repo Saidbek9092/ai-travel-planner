@@ -54,7 +54,7 @@ export const TravelAgentStateAnnotation = Annotation.Root({
   durationDays: replace<number>(() => 0),
   startDate: replace<string | null>(() => null),
   /** What the traveller asked for: hard flags are code filters, `notes` guides the LLM pick. */
-  preferences: replace<Preferences>(() => ({ directOnly: false, maxStops: null, notes: null })),
+  preferences: replace<Preferences>(() => ({ directOnly: false, maxStops: null, notes: null, pace: 'balanced' })),
 
   flights: replace<Flight[]>(() => []),
   hotels: replace<Hotel[]>(() => []),
@@ -63,6 +63,8 @@ export const TravelAgentStateAnnotation = Annotation.Root({
   dailyExpensesEstimate: replace<number>(() => 0),
   /** Name of the hotel the current itinerary was routed around; lets a re-plan spot a hotel change. */
   itineraryHotel: replace<string | null>(() => null),
+  /** `flightKey` plus return times of the flight the arrival and departure days were fitted to; a re-plan re-fits them when it changes. */
+  itineraryFlight: replace<string | null>(() => null),
 
   totalCost: replace<number>(() => 0),
   retryCount: replace<number>(() => 0),
