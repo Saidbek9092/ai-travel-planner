@@ -163,3 +163,30 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Loading screen: a plane crosses a dashed route. At rest (reduced motion) it sits in the middle of the route. */
+@keyframes plane-fly {
+  0% {
+    left: -8%;
+    opacity: 0;
+  }
+  12%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    left: 104%;
+    opacity: 0;
+  }
+}
+@keyframes plane-bob {
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@utility animate-plane-fly {
+  animation: plane-fly 2.8s ease-in-out -1.2s infinite;
+}
+@utility animate-plane-bob {
+  animation: plane-bob 1.4s ease-in-out infinite;
+}

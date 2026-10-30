@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { DeepLinkedTrip } from '@/components/DeepLinkedTrip';
-import { Skeleton } from '@/components/ui/skeleton';
+import { PageSkeleton } from '@/components/PageSkeleton';
 import { fetchStoredTrip } from '@/lib/api';
 
 async function DeepLinkedDashboard({ searchParams }: Pick<PageProps<'/'>, 'searchParams'>) {
@@ -20,14 +20,7 @@ async function DeepLinkedDashboard({ searchParams }: Pick<PageProps<'/'>, 'searc
 
 export default function Page({ searchParams }: PageProps<'/'>) {
   return (
-    // `bg-card`: the skeleton's default `bg-muted` is the page ground, so a loading trip link would look blank.
-    <Suspense
-      fallback={
-        <Skeleton role="status" className="mx-auto m-6 h-96 w-full max-w-7xl rounded-xl border bg-card">
-          <span className="sr-only">Loading…</span>
-        </Skeleton>
-      }
-    >
+    <Suspense fallback={<PageSkeleton />}>
       <DeepLinkedDashboard searchParams={searchParams} />
     </Suspense>
   );

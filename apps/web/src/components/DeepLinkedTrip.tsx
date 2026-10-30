@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { TripDashboard } from '@/components/TripDashboard';
-import { Skeleton } from '@/components/ui/skeleton';
+import { PageSkeleton } from '@/components/PageSkeleton';
 import { fetchStoredTrip, type StoredTrip } from '@/lib/api';
 import { readSession } from '@/lib/auth';
 
@@ -63,11 +63,7 @@ function LinkedTrip(props: Props) {
   }, [mustRecheck, initialThreadId]);
 
   if (recheck === 'checking') {
-    return (
-      <Skeleton role="status" className="mx-auto m-6 h-96 w-full max-w-7xl rounded-xl border bg-card">
-        <span className="sr-only">Loading…</span>
-      </Skeleton>
-    );
+    return <PageSkeleton />;
   }
   if (stored) {
     return <TripDashboard {...props} initialResult={stored.result} initialMessages={stored.messages} tripLookup="found" />;
