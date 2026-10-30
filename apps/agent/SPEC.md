@@ -134,6 +134,7 @@ origins (`https://x.com/` → `https://x.com`) because CORS compares them to the
 | `RATE_LIMIT_WINDOW_MS` | int, default `900000` (15 min) | |
 | `RATE_LIMIT_MAX_RUNS` | int, default `10` | Max trip runs per IP per window |
 | `RATE_LIMIT_DAILY_MAX_RUNS` | int, default `30` | Max trip runs per IP per 24 h, on top of the window (caps one address's LLM spend) |
+| `USER_MAX_RUNS` | int, default `3` | New plans (and re-plans) one signed-in account may start, ever; counted in the `user_runs` table; resume is free. Over the cap: `429 RATE_LIMITED` without `retryAfterSeconds` |
 | `SEARCH_CACHE_TTL_MS` | int, default `1800000` (30 min) | How long a flight / hotel search is reused |
 | `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` | optional | LangGraph tracing |
 

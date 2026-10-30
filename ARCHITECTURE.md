@@ -484,7 +484,7 @@ Planner (`tools/weather.ts` `getForecast`, Open-Meteo reaches ~16 days ahead; la
 | Live search falls back to the Mock engine | A `warn` LOG with `kind: "search-fallback"` plus a `warnings` entry; cards show an "Estimate" badge |
 | Forecast unavailable or beyond 16 days | The Planner plans without weather; `itinerary[].weather` is `null` and no weather callout is sent |
 | Run takes too long | Global run timeout (120 s) via `AbortSignal.timeout`, ends with `RESULT failed` |
-| Abuse / spam / LLM bill | `express-rate-limit` per IP on runs: 10 per 15 min **and** 30 per 24 h (`RATE_LIMIT_DAILY_MAX_RUNS`), both `429` with `retryAfterSeconds`; JSON body limit 10 kb, prompt length cap 1,000 chars. A signed token from the web app was considered and left out: the browser would have to hold its secret, so it would not stop a script |
+| Abuse / spam / LLM bill | `express-rate-limit` per IP on runs: 10 per 15 min **and** 30 per 24 h (`RATE_LIMIT_DAILY_MAX_RUNS`), both `429` with `retryAfterSeconds`; per account, `USER_MAX_RUNS` (default 3) new plans or re-plans in total (`user_runs` table, `429` without `retryAfterSeconds`, resume is free); JSON body limit 10 kb, prompt length cap 1,000 chars. A signed token from the web app was considered and left out: the browser would have to hold its secret, so it would not stop a script |
 | Trip store unreachable | Saving a finished trip is best effort: the error is logged and the run still ends normally; queries give up after 5 s |
 
 **Rule for every new external API** (also in both `CLAUDE.md` files): it gets a **timeout**, a **fallback** (mock data,
