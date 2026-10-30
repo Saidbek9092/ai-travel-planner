@@ -3,6 +3,8 @@
 Describe a trip in one sentence and five AI agents plan it live in front of you: flights, a hotel, a day-by-day
 itinerary on a map, and a cost check against your budget.
 
+**[Try the live demo](https://ai-travel-planner-test.vercel.app)**
+
 > *"5 days in Paris from Tashkent in mid-November, $2,500 all-in. Museums and good food."*
 
 ![Live run: five agents planning a trip](./design-agents-planning.png)
