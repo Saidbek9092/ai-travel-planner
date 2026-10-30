@@ -80,7 +80,7 @@ apps/web/
 │   │   ├── useNow.ts               # + ticking clock (ETA, reconnect wait, local time)
 │   │   └── useStickToBottom.ts     # + shared auto-scroll behaviour of chat and terminal
 │   └── lib/
-│       ├── utils.ts                # cn() (re-exported from the `cn` package) + formatUsd/formatTime/formatDate
+│       ├── utils.ts                # cn() (re-exported from the `cn` package) + formatUsd/formatTime
 │       ├── env.ts                  # + Zod-validated public env → { agentUrl, mapboxToken }
 │       ├── labels.ts               # + agent names/colours, day colours, log styles, status & phase labels, decision labels, weather icons, rating words
 │       ├── links.ts                # + "Maps" and fare/room link helpers
@@ -112,7 +112,6 @@ Files marked `+` are not in the blueprint tree; see ARCHITECTURE.md §14 for why
 | `tailwindcss` v4, `@tailwindcss/turbopack` | Styling |
 | shadcn/ui: `shadcn` (theme CSS), `@base-ui/react` (primitives), `class-variance-authority`, `cn` (class merging, replaces clsx + tailwind-merge), `lucide-react`, `tw-animate-css` | Component kit |
 | `framer-motion` | Log-line, card and timeline animations |
-| `react-hook-form`, `@hookform/resolvers` | Form state + Zod resolver |
 | `mapbox-gl`, `react-map-gl` | Map |
 | `sonner`, `next-themes` | Toasts (shadcn's `Toaster` reads the theme via `next-themes`; we pin `theme="light"`) |
 | `zod` (`catalog:`) | Validation |
@@ -383,8 +382,8 @@ All components are typed with contracts types only. Props listed are the full pu
 { onSubmit: (request: TripRequest) => void; disabled: boolean; retryAt: number | null; brief: DraftPayload | null }
 ```
 
-- `react-hook-form` + `zodResolver(TripRequestSchema)` — the same schema the agent uses — rendered with
-  shadcn `Field` components through `Controller`.
+- Plain `useState` fields validated with `TripRequestSchema.safeParse` — the same schema the agent uses — rendered with
+  shadcn `Field` components.
 - Fields: `prompt` ("Describe your trip", textarea, required, counter up to 1,000), and an optional details group: `origin` ("From"),
   destination hint is part of the prompt, `durationDays` ("Days", 1–30), `budget` ("Budget, USD"), `startDate` (date ≥ today).
 - Empty optional inputs are removed from the payload (not sent as `""`/`NaN`).

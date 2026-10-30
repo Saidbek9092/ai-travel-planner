@@ -28,20 +28,6 @@ export function formatTime(iso: string, timeZone?: string): string {
   }).format(new Date(iso));
 }
 
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * `2026-11-20` → `Nov 20, 2026` (in the viewer's locale unless one is given).
- * Date-only strings are calendar dates, so they are formatted in UTC to avoid shifting a day.
- */
-export function formatDate(iso: string, options: { locale?: string; timeZone?: string } = {}): string {
-  const timeZone = options.timeZone ?? (DATE_ONLY.test(iso) ? 'UTC' : undefined);
-  return new Intl.DateTimeFormat(options.locale, {
-    dateStyle: 'medium',
-    ...(timeZone ? { timeZone } : {}),
-  }).format(new Date(iso));
-}
-
 /** `2026-11-12T06:40:00+05:00` → `06:40`: the clock time in the timestamp's own offset. */
 export function formatLegTime(iso: string): string {
   return iso.slice(11, 16);
