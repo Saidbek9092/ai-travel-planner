@@ -22,7 +22,7 @@ import { useAgentStream } from '@/hooks/useAgentStream';
 import { useSession } from '@/hooks/useSession';
 import { useTripContext } from '@/hooks/useTripContext';
 import { useTripHistory } from '@/hooks/useTripHistory';
-import { useUsage } from '@/hooks/useUsage';
+import { refreshUsage } from '@/hooks/useUsage';
 import { MAIN_ID, NEW_TRIP_EVENT } from '@/lib/dom';
 import { env } from '@/lib/env';
 import { clearPendingTrip, savePendingTrip, takePendingTrip } from '@/lib/pendingTrip';
@@ -89,8 +89,10 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
   // `pending` and starts by itself once they are signed in; the typed trip stays in the form meanwhile.
   const session = useSession();
   const needsSignIn = env.agentUrl !== null && env.googleClientId !== null && !session;
-  // Asked again when the account changes and when a run starts or ends: the plan is counted as the run starts.
-  const usage = useUsage(!uiOnly && !needsSignIn, `${session?.user.id ?? ''}:${live}`);
+  // The plan is counted as a run starts, so read the allowance again when a run starts and when it ends.
+  useEffect(() => {
+    if (!uiOnly && !needsSignIn) refreshUsage();
+  }, [live, uiOnly, needsSignIn]);
   const [pending, setPending] = useState<{ kind: 'start'; request: TripRequest } | { kind: 'resume' } | null>(null);
   const run = (action: NonNullable<typeof pending>) => {
     if (action.kind === 'start') {
@@ -252,7 +254,6 @@ export function TripDashboard({ initialThreadId, initialResult, initialMessages 
               initialRequest={prefill}
               disabled={live || uiOnly}
               retryAt={stream.retryAt}
-              usage={usage}
               onSubmit={start}
               notices={
                 <>

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import Link from 'next/link';
 import { RouteIcon } from 'lucide-react';
 import { AccountMenu } from '@/components/AccountMenu';
+import { PlansMeter } from '@/components/PlansMeter';
 import { SiteNav } from '@/components/SiteNav';
 import { SkipLink } from '@/components/SkipLink';
 import { Toaster } from '@/components/ui/sonner';
@@ -44,6 +45,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
               </Link>
               <SiteNav />
               <div id={HEADER_ACTIONS_ID} className="ml-auto flex items-center gap-2" />
+              <PlansMeter />
               <AccountMenu />
             </div>
           </header>

@@ -1,6 +1,6 @@
 'use client';
 
-import { TripRequestSchema, type Interest, type TripRequest, type UsageResponse } from '@ai-travel/contracts';
+import { TripRequestSchema, type Interest, type TripRequest } from '@ai-travel/contracts';
 import { ArrowRightIcon, CheckIcon, CircleAlertIcon, CircleDotIcon, CloudSunIcon, CoinsIcon, ClockIcon, InfoIcon, PlusIcon } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useEffectEvent, useId, useRef, useState, type ReactNode } from 'react';
@@ -9,7 +9,9 @@ import { PlaceInput } from '@/components/PlaceInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { PlansCard } from '@/components/PlansMeter';
 import { formatCountdown, spokenWait, useCountdown } from '@/hooks/useCountdown';
+import { useUsage } from '@/hooks/useUsage';
 import { useHomeCity } from '@/hooks/useHomeCity';
 import { useNow } from '@/hooks/useNow';
 import { useTripContext } from '@/hooks/useTripContext';
@@ -88,8 +90,6 @@ interface TripInputFormProps {
   disabled: boolean;
   /** Epoch ms when the rate limit lifts; the submit button counts down until then. */
   retryAt: number | null;
-  /** The plan allowance; the form says how many are left and stops at none. `null` = not known (guest, offline). */
-  usage?: UsageResponse | null;
   /** Notices above the form card (left column). */
   notices?: ReactNode;
   /** Bottom of the input card, under the Plan button. */
@@ -99,8 +99,9 @@ interface TripInputFormProps {
 }
 
 /** The start page's input: one sentence, the fields the agents understood from it, interests and examples. */
-export function TripInputForm({ onSubmit, disabled, retryAt, usage = null, notices, footer, initialRequest = null }: TripInputFormProps) {
+export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer, initialRequest = null }: TripInputFormProps) {
   const waitSeconds = useCountdown(retryAt);
+  const usage = useUsage();
   const outOfPlans = usage !== null && usage.remaining === 0;
   const { homeCity, setHomeCity } = useHomeCity();
   const [prompt, setPrompt] = useState(initialRequest?.prompt ?? '');
@@ -338,6 +339,8 @@ export function TripInputForm({ onSubmit, disabled, retryAt, usage = null, notic
           </div>
         </fieldset>
 
+        {usage && <PlansCard usage={usage} />}
+
         <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-5">
           <p
             id={`${promptId}-helper`}
@@ -355,13 +358,6 @@ export function TripInputForm({ onSubmit, disabled, retryAt, usage = null, notic
             {waitSeconds > 0 ? `Plan in ${formatCountdown(waitSeconds)}` : 'Plan my trip'} <ArrowRightIcon aria-hidden="true" />
           </Button>
         </div>
-        {usage && (
-          <p role="status" className={cn('text-[13px]', outOfPlans ? 'font-medium text-destructive' : 'text-ink-2')}>
-            {outOfPlans
-              ? `No plans left: you've used all ${usage.max} plans included with your account.`
-              : `${usage.remaining} of ${usage.max} ${usage.max === 1 ? 'plan' : 'plans'} left`}
-          </p>
-        )}
         {waitSeconds > 0 && (
           <Notice
             tone="info"
