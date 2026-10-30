@@ -171,7 +171,7 @@ returns only an index and reason tags (`Flight.picked` / `Hotel.picked`); an inv
 the top score. Place photos (`Place.photoUrl`, `photoCredit`) come from Wikipedia, cached, under a 3 s cap.
 
 The LLM is used only where language understanding is needed (parsing, planning and the preference pick). Searching and
-auditing are deterministic code — cheaper, faster, and unit-testable.
+auditing are deterministic code — cheaper and faster.
 
 ### 4.3 Budget Auditor rules
 
@@ -239,7 +239,7 @@ interface TravelAgentState {
 
 | Environment | Checkpointer | Selected when |
 | --- | --- | --- |
-| Local / test | `MemorySaver` (in-process, lost on restart) | `DATABASE_URL` not set |
+| Local | `MemorySaver` (in-process, lost on restart) | `DATABASE_URL` not set |
 | Production | `PostgresSaver` (`@langchain/langgraph-checkpoint-postgres`) | `DATABASE_URL` set (required: the agent refuses to start in production without it); run `setup()` once on boot |
 
 - One run = one `thread_id` (`threadId` UUID). A checkpoint is written after every node.
@@ -266,8 +266,8 @@ the store only keeps outcomes.
 the user: short, friendly sentences from the agents that the chat panel shows as a conversation.
 
 - Each node returns its own `messages` next to its `logs`, with the same `step`. A node returns 0–4.
-- Messages are **built by code from state, not by the LLM** — no extra model calls or tokens, deterministic,
-  unit-testable. English only for now.
+- Messages are **built by code from state, not by the LLM** — no extra model calls or tokens, deterministic.
+  English only for now.
 - A message is either an ordinary update (`decision: null`) or a **confirmed decision**
   (`decision: <topic>`). A message can also carry a `callout`, a highlighted tag under the text
   ("Finding cheaper options, try 1 of 2", "Weather prep · Day 3 moved indoors").
@@ -321,7 +321,7 @@ Rules:
   loads a trip by id through `StoredResultSchema`. Live `RESULT` packets always carry the current version.
 - **Error codes** exist only in `ErrorCodeSchema`. The agent's `AppError`, the web app's `ERROR_MESSAGES` (typed
   `Record<ErrorCode | …>`, so a new code fails the web type check until it has a message) and the mock agent all use it.
-- Tests: `packages/contracts/test/schemas.test.ts`. `src/index.ts` re-exports every file; the package builds to `dist/`
+- `src/index.ts` re-exports every file; the package builds to `dist/`
   with `tsc` (ESM + `.d.ts`), and its `dev` script is `tsc --watch`.
 
 ---
@@ -684,7 +684,7 @@ them to work; review them before implementation.
 | POST + `fetch` stream parsing instead of `EventSource` | `EventSource` cannot POST a body |
 | Extra files: `agent/llm.ts`, `agent/runTrip.ts`, `tools/index.ts` (agent); `components/TripDashboard.tsx`, `lib/env.ts`, `lib/sse.ts` (web) | Keep `page.tsx` a Server Component and give the LLM factory, stream controller, tool fallback and SSE parser one home each |
 | `MESSAGE` packet, `messages` in state, `DecisionTopic` | `LOG` is technical by design; the chat needs separate user-facing text and a per-message "confirmed decision" flag. Kept out of `LogPayload` so the terminal view and the chat evolve independently |
-| Messages built by code; agents confirm their own pick in a re-plan pass | No extra LLM cost, deterministic tests. The design shows "Flight confirmed" during the re-plan, so a topic may be confirmed again by a later re-plan; the UI shows the newest |
+| Messages built by code; agents confirm their own pick in a re-plan pass | No extra LLM cost, deterministic output. The design shows "Flight confirmed" during the re-plan, so a topic may be confirmed again by a later re-plan; the UI shows the newest |
 | `GET /api/trip-context`, `src/trip-context.ts` | The top bar needs weather and an exchange rate; the backend had no lookup for either. Separate from the graph because it is not part of planning and must never fail a run |
 | No mock fallback for weather / rate | Fake values in the header would look real; the chip is hidden instead |
 | Extra files: `tools/weather.ts`, `tools/exchangeRate.ts`, `tools/currencies.ts`, `agent/messages.ts` (agent); `components/TopBar.tsx`, `components/AgentChat.tsx`, `hooks/useTripContext.ts` (web) | One home each for the lookups, the message builders, and the two new UI areas |

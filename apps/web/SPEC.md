@@ -197,8 +197,8 @@ export async function* readSseEvents(body: ReadableStream<Uint8Array>, signal?: 
 - Decode with `TextDecoderStream`, keep a string buffer, split events on blank lines (`\n\n`, also accept `\r\n\r\n`).
 - Per event: ignore lines starting with `:` (heartbeats); join all `data:` lines with `\n`; yield `{ id, data }` where `id` is the
   event's `id:` value (or `null`); ignore `event:`/`retry:` fields. The hook keeps the last `id` for `Last-Event-ID`.
-- Must handle events split across chunks at any byte position (multibyte UTF-8 included) — covered by tests.
-- Pure module, no React, no Zod — easy to unit test.
+- Must handle events split across chunks at any byte position (multibyte UTF-8 included).
+- Pure module, no React, no Zod.
 
 ### 5.2 Hook — `hooks/useAgentStream.ts`
 
@@ -253,7 +253,7 @@ Behaviour:
    without duplicates (packets with an id ≤ `lastEventId` are ignored). Success → `streaming`. `404` or five failed attempts → `failed`,
    error "Connection lost", `resume()` available.
 6. `AbortError` from `cancel()` or unmount → status `aborted`, no error toast.
-7. State lives in a `useReducer`; the reducer is exported so it can be unit-tested on its own.
+7. State lives in a `useReducer`; the reducer is exported.
 8. The run starts only from a user action (`start`/`resume`), never from an effect, so React Strict Mode's
    double effects cannot start two runs. The `AbortController` is kept in a ref and aborted on unmount; reconnect timers are cleared too.
 9. **Following a run it did not start** (TP-38; read-only `GET …/stream`, so effects may do it):
@@ -412,7 +412,7 @@ All components are typed with contracts types only. Props listed are the full pu
   **local time** (`lib/time.ts`: `Intl.DateTimeFormat` with `data.timeZone`, e.g. "16:30 · Paris (GMT+1)", second line "4 hrs behind Tashkent · 20:30 there" when
   `originTimeZone` is set; refreshed once a minute).
 - `loading` → four `Skeleton` chips; `idle`, `error`, or no chip with data → renders nothing (no empty bar).
-- `data.source === 'mock'` is a test fixture marker only; do not show it in the UI.
+- `data.source === 'mock'` is a fixture marker only; do not show it in the UI.
 - Each chip has an `aria-label` that reads as a sentence ("Weather in Paris: 12 degrees, partly cloudy"); the icon is decorative (`aria-hidden`) —
   information is never colour or icon alone.
 - Display only: no conversion maths in the browser (the agent returns the rate); time-zone formatting is presentation, done with `Intl`.
@@ -672,7 +672,7 @@ Stacked `Alert`s, each with a title, one sentence and an action where there is o
   budget `passes`: display them, never derive them. Agent status on the board and the phase chips are presentation derived
   from packets, not new facts.
 - Add shadcn components with the CLI (`pnpm dlx shadcn@latest add <name>`); don't hand-edit `components/ui/`.
-- Run `pnpm --filter ai-travel-web test typecheck lint` before committing.
+- Run `pnpm --filter ai-travel-web typecheck lint` before committing.
 
 ---
 
