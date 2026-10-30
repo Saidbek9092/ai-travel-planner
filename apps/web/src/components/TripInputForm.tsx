@@ -9,7 +9,7 @@ import { PlaceInput } from '@/components/PlaceInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { PlansCard } from '@/components/PlansMeter';
+import { PlansCard } from '@/components/PlansCard';
 import { formatCountdown, spokenWait, useCountdown } from '@/hooks/useCountdown';
 import { useUsage } from '@/hooks/useUsage';
 import { useHomeCity } from '@/hooks/useHomeCity';
