@@ -90,10 +90,11 @@ export const plannerNode =
       return data;
     };
 
-    const forecast = await tools
+    // Independent of the transfer call below: start both lookups now and await them once the LLM answers.
+    const forecastPending = tools
       .getForecast(state.destination, startDate, last, signal)
       .catch(() => Array.from<DayWeather | null>({ length: last }).fill(null));
-    const attractions = tavilyApiKey ? await topAttractions(state.destination, tavilyApiKey, signal) : [];
+    const attractionsPending = tavilyApiKey ? topAttractions(state.destination, tavilyApiKey, signal) : Promise.resolve<string[]>([]);
 
     // 1. Transfers + daily spend (one call).
     const arrival = flight.outbound;
@@ -118,6 +119,7 @@ export const plannerNode =
         signal,
       ),
     );
+    const [forecast, attractions] = await Promise.all([forecastPending, attractionsPending]);
     const baseline = priceBaselineFor(state.destination);
     let transfers = transferPlan.transfers.map((transfer) =>
       TransferSchema.parse({
