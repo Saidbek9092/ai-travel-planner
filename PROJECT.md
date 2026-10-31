@@ -377,7 +377,7 @@ carries a doc comment in the source.
 
 | File | Holds |
 | --- | --- |
-| `trip.ts` | `TripRequest` (prompt 3–1000 chars; optional `origin`, `budget`, `durationDays` 1–30, `startDate`, `when`, `interests` ≤ 6), `Flight` / `FlightLeg` / `FlightStop` / `Airport`, `Hotel`, `Transfer` / `TransferMode`, `Place`, `ItineraryDay` / `DayWeather` / `WeatherIcon`, `DataSource` (`serpapi`/`mock`), `AgentName`, `DecisionTopic`, `PickReason`, `Interest`, `TripStatus` |
+| `trip.ts` | `TripRequest` (prompt 3–1000 chars; optional `origin`, `budget`, `durationDays` 1–30, `startDate`, `when`, `interests` ≤ 6), `Flight` / `FlightLeg` / `FlightStop` / `Airport`, `Hotel`, `Transfer` / `TransferMode`, `Place`, `ItineraryDay` (with an optional `note` for a day without stops) / `DayWeather` / `WeatherIcon`, `arrivalDay()` and `spendDays()` (shared by the Budget Auditor and the web breakdown), `DataSource` (`serpapi`/`mock`), `AgentName`, `DecisionTopic`, `PickReason`, `Interest`, `TripStatus` |
 | `sse-events.ts` | `LOG` / `MESSAGE` / `PROGRESS` / `DRAFT` / `RESULT` payloads, `SseEventSchema`, `BudgetPass`, `Suggestions`, `RESULT_SCHEMA_VERSION`, `upgradeResultPayload`, `StoredResultSchema`, `parseStoredResult` |
 | `trip-context.ts` | `TripContextQuery`, `TripContext` (location, weather, currency, exchange rate, time zones, `source`), `PlacesQuery`, `PlacesResponse` |
 | `stored-trips.ts` | `OWNER_ID_HEADER` (`X-Owner-Id`), `OwnerIdSchema`, `TripSummary`, `TripListResponse`, `TripRecord` |
@@ -615,6 +615,14 @@ which fails the run and keeps the previous checkpoint for resume; appends to `co
 - **Free hours.** The arrival day is the day the outbound lands (day 2 after an overnight flight). Free from landing +
   60 min + the ride; on the last day until the hotel departure (return departure − 3 h − ride − 30 min). Without a
   confirmed return the last day stays light. Under 90 free minutes → 0–1 places.
+- **Travel days.** A day before the arrival day is spent on the plane: title "Travel day: flying to Paris", no places,
+  no weather (the destination's forecast does not apply), and a `note` with the flight times ("No activities today:
+  you're on your way to Paris. The flight leaves TAS at 22:10 and lands at CDG on Mon 2 Nov at 06:45; your plan
+  starts on day 2."). It has no daily spend (Budget Auditor).
+- **Empty days.** Any other day that ends with no places gets a `note` saying why: landing too late ("you land at
+  23:30 and reach the hotel around 01:15…"), leaving too early ("you leave the hotel at 10:25 for the 14:00 flight
+  home"), every suggested stop failing the place check, or none given. Text from `agent/messages.ts`
+  (`travelDay`, `emptyDayNote`). Days with places have `note: null`.
 - **Forecast.** `getForecast(destination, startDate, days)`: one `DayWeather | null` per day (≤ 16 days ahead, else
   `null`). Rain, snow or storm days get indoor stops.
 - **Transfers + spend** (1 call): exactly two transfers (airport → hotel on arrival, hotel → airport on the last day).
@@ -642,8 +650,12 @@ which fails the run and keeps the previous checkpoint for resume; appends to `co
 **Budget Auditor** (`budget.node.ts`, pure)
 
 ```
-totalCost = flights[0].price + hotels[0].pricePerNight × nights + Σ transfers.priceUsd + dailyExpensesEstimate × durationDays
+totalCost = flights[0].price + hotels[0].pricePerNight × nights + Σ transfers.priceUsd + dailyExpensesEstimate × spendDays
 ```
+
+`spendDays` (contracts, shared with the web breakdown) = `durationDays − (arrivalDay − 1)`: the days from landing to
+the last day. `arrivalDay` is the earliest transfer's day, so a travel day before an overnight flight lands costs
+nothing on the ground.
 
 | Condition | Action |
 | --- | --- |
@@ -863,7 +875,7 @@ the `?trip=` link.
 | `TripOverview` | Reads `result ?? draft`; sections appear as data arrives, each with "Confirmed" once its decision exists and "Final check pending" until `budget`. Sticky section tabs |
 | `BudgetMeter` | Total vs budget ("$975 of $1,000", "Approved · $25 to spare", "Over by $84"), stacked bar in one hue (flights, hotel, transfers, daily, left) with a tick at the budget, rescaling past 100% |
 | `FlightHotelCards` | Flight: airline (links to the fare), "round trip", price, stops, a route strip per leg (`TAS 06:40 ┄ IST 1 h 50 m ┄ CDG 13:55 · T1`, `+1 day`, flight numbers), transfers below. Hotel: photo or placeholder, name, area, rating /10 with a word (≥ 9 Superb, ≥ 8 Very good, ≥ 7 Good, else Fair), check-in/out, transit, `$66 × 5 nights = $330` (links to rooms). `source: 'mock'` → "Estimate" badge |
-| `ItineraryTimeline` | Day strip ("Day 1 · Thu", weather, stop count; drafting/waiting) with arrow-key navigation; the selected day's stops with notes, Google hours ("Open 9 AM–6 PM · Google Maps") or "Hours not checked", photos, that day's transfer rows and "Daily spend ~$30" |
+| `ItineraryTimeline` | Day strip ("Day 1 · Thu", weather, stop count or "travel day"; drafting/waiting) with arrow-key navigation; a day without stops shows the agent's `note` (a generic line for trips saved before notes existed); the selected day's stops with notes, Google hours ("Open 9 AM–6 PM · Google Maps") or "Hours not checked", photos, that day's transfer rows and "Daily spend ~$30" (not on travel days) |
 | `MapboxViewer` / `SchematicMap` / `MapPins` | Client-only map (`next/dynamic`, `ssr: false`): numbered pins per day in the day's colour (others small and faded), hotel marker, straight-leg route for the selected day, `fitBounds` on change. Without a token the schematic plot draws the same pins and dashed routes |
 | `TripHistoryList` | "My trips": the agent's list (skeleton while loading), merged with local entries the server does not know (checked once; `404` → "No longer available"). "Didn't finish" label, delete. Guests get "Copy link for another device" (`/trips?owner=<id>`, adopted in the other browser with a "Trips linked" toast). With sign-in configured a guest sees a sign-in prompt instead |
 | `AccountMenu` | Google's button (icon-only on phones; redirect mode on iPhone Safari), avatar and "Sign out"; claims this browser's guest trips after sign-in |

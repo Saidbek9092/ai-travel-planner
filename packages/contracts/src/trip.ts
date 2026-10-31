@@ -158,6 +158,8 @@ export const ItineraryDaySchema = z.object({
   /** `null` when the date is beyond the forecast range or the lookup failed. */
   weather: DayWeatherSchema.nullable(),
   places: z.array(PlaceSchema),
+  /** Why a day has no stops (a travel day, landing too late, leaving too early); `null` when it has stops. */
+  note: z.string().min(1).nullish(),
 });
 
 export const TripStatusSchema = z.enum([
@@ -215,3 +217,13 @@ export type ItineraryDay = z.infer<typeof ItineraryDaySchema>;
 export type TripStatus = z.infer<typeof TripStatusSchema>;
 export type AgentName = z.infer<typeof AgentNameSchema>;
 export type TripRequest = z.infer<typeof TripRequestSchema>;
+
+/** The itinerary day the traveller lands on: the earliest transfer's day (day 2 after an overnight flight), else 1. */
+export function arrivalDay(transfers: Pick<Transfer, 'day'>[]): number {
+  return transfers.length > 0 ? Math.min(...transfers.map((transfer) => transfer.day)) : 1;
+}
+
+/** Days with daily spend: from the landing day to the last day. Days spent on the plane cost nothing on the ground. */
+export function spendDays(durationDays: number, transfers: Pick<Transfer, 'day'>[]): number {
+  return Math.max(0, durationDays - (arrivalDay(transfers) - 1));
+}

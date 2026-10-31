@@ -37,6 +37,10 @@ interface DayExplorerProps {
 }
 
 /** Day strip first, then the map and stop list for the selected day ("All days" shows every route, faded). */
+/** "3 stops", or "travel day" for a day spent on the plane before an overnight flight lands. */
+const dayCount = (day: ItineraryDay, transfers: Transfer[]) =>
+  day.day < arrivalDay(transfers) ? 'travel day' : `${day.places.length} ${day.places.length === 1 ? 'stop' : 'stops'}`;
+
 function DayExplorer({ itinerary, totalDays, hotel, transfers, dailySpend, selected, onSelect, drafting, mapHeight }: DayExplorerProps) {
   const day = selected === 'all' ? null : (itinerary.find((d) => d.day === selected) ?? null);
   const index = day ? itinerary.indexOf(day) : -1;
@@ -51,7 +55,7 @@ function DayExplorer({ itinerary, totalDays, hotel, transfers, dailySpend, selec
       <DayStrip itinerary={itinerary} totalDays={totalDays} selected={selected} onSelect={onSelect} />
       {hasPlaces && (
         <div className="flex items-center justify-between gap-2 border-b px-4 pb-3">
-          <span className="text-[13px] text-ink-2">{day ? `Day ${day.day} · ${day.places.length} ${day.places.length === 1 ? 'stop' : 'stops'}` : 'All days'}</span>
+          <span className="text-[13px] text-ink-2">{day ? `Day ${day.day} · ${dayCount(day, transfers)}` : 'All days'}</span>
           <Button variant="outline" className="h-9 bg-card pointer-coarse:h-11" aria-expanded={showMap} aria-controls="day-map" onClick={() => setShowMap((v) => !v)}>
             {showMap ? <MapPinOffIcon aria-hidden="true" /> : <MapIcon aria-hidden="true" />}
             {showMap ? 'Hide map' : 'Show map'}
