@@ -49,7 +49,8 @@ export function TripActions({ status, threadId, canReplan, onStop, onReplan, onN
         </Button>
       )}
       {finished && (
-        <Button variant="outline" className={`${size} bg-card`} onClick={onNewTrip} title="Plan a new trip">
+        // Hidden on phones, where the "Plan a trip" tab beside it does the same and the header has no room.
+        <Button variant="outline" className={`${size} bg-card max-sm:hidden`} onClick={onNewTrip} title="Plan a new trip">
           <PlusIcon aria-hidden="true" /> <span className="max-sm:sr-only">New trip</span>
         </Button>
       )}

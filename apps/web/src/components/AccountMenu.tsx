@@ -113,9 +113,9 @@ export function AccountMenu() {
     <div className="flex items-center gap-2">
       {user.picture ? (
         // eslint-disable-next-line @next/next/no-img-element -- Google profile photo, a small remote avatar
-        <img src={user.picture} alt="" referrerPolicy="no-referrer" width={32} height={32} className="size-8 rounded-full" />
+        <img src={user.picture} alt="" referrerPolicy="no-referrer" width={32} height={32} className="size-8 rounded-full max-sm:hidden" />
       ) : (
-        <span className="flex size-8 items-center justify-center rounded-full bg-muted text-sm font-semibold" aria-hidden="true">
+        <span className="flex size-8 items-center justify-center rounded-full bg-muted text-sm font-semibold max-sm:hidden" aria-hidden="true">
           {(user.name ?? user.email).slice(0, 1).toUpperCase()}
         </span>
       )}
