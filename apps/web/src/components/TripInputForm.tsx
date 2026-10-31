@@ -212,6 +212,16 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer, in
     setEditing(null);
   };
 
+  // Picking an example scrolls to the Plan button and draws the eye to it. `nudge` also keys the button, which restarts the animation.
+  const planButton = useRef<HTMLButtonElement>(null);
+  const [nudge, setNudge] = useState(0);
+  useEffect(() => {
+    if (nudge === 0) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    planButton.current?.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    planButton.current?.focus({ preventScroll: true });
+  }, [nudge]);
+
   const toggleInterest = (interest: Interest) =>
     setInterests((current) => (current.includes(interest) ? current.filter((i) => i !== interest) : [...current, interest]));
 
@@ -354,7 +364,14 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer, in
             )}{' '}
             {helper}
           </p>
-          <Button type="submit" disabled={!canPlan} aria-describedby={`${promptId}-helper`} className="h-12 px-6 text-[16px] disabled:bg-border disabled:text-ink-2 disabled:opacity-100">
+          <Button
+            key={nudge}
+            ref={planButton}
+            type="submit"
+            disabled={!canPlan}
+            aria-describedby={`${promptId}-helper`}
+            className={cn('h-12 px-6 text-[16px] disabled:bg-border disabled:text-ink-2 disabled:opacity-100', nudge > 0 && canPlan && 'plan-attention')}
+          >
             {waitSeconds > 0 ? `Plan in ${formatCountdown(waitSeconds)}` : 'Plan my trip'} <ArrowRightIcon aria-hidden="true" />
           </Button>
         </div>
@@ -397,7 +414,10 @@ export function TripInputForm({ onSubmit, disabled, retryAt, notices, footer, in
                 <button
                   type="button"
                   disabled={disabled}
-                  onClick={() => fill(example.prompt)}
+                  onClick={() => {
+                    fill(example.prompt);
+                    setNudge((n) => n + 1);
+                  }}
                   className="group flex w-full flex-col overflow-hidden rounded-xl border bg-card text-left outline-none transition-colors hover:border-primary focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
                 >
                   <span className="relative block h-36 w-full overflow-hidden bg-muted">
