@@ -3,7 +3,7 @@
 import type { DecisionTopic, Flight, Hotel, ItineraryDay, MessagePayload, ProgressPayload, ResultPayload, Transfer } from '@ai-travel/contracts';
 import dynamic from 'next/dynamic';
 import { BedDoubleIcon, CalendarDaysIcon, CarIcon, MapIcon, MapPinOffIcon, PlaneIcon, type LucideIcon } from 'lucide-react';
-import { useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { BudgetMeter } from '@/components/BudgetMeter';
 import { SelectedFlightCard, SelectedHotelCard, TransfersCard } from '@/components/FlightHotelCards';
 import { DayList, DayPanel, DayStrip, useArrowKeys, type DaySelection } from '@/components/ItineraryTimeline';
@@ -99,8 +99,21 @@ interface SectionTab {
   content: ReactNode;
 }
 
-/** Height of the sticky site header (`h-16`), which the section tabs stick under. */
+/**
+ * Height of the sticky site header (`h-16`), which the section tabs stick under. The panel's `min-h` (screen − header −
+ * tab bar − gap) lets a short section still scroll up until the tab bar reaches the header.
+ */
 const HEADER_PX = 64;
+
+/**
+ * Picking a tab brings the tab bar to just under the header, so the chosen section starts at the top of the screen
+ * wherever the traveller was (above the tabs, on the old section's long tail, or already there).
+ */
+function scrollTabsToTop(tabs: HTMLElement | null) {
+  const top = tabs?.getBoundingClientRect().top ?? HEADER_PX;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (Math.abs(top - HEADER_PX) > 1) window.scrollBy({ top: top - HEADER_PX, behavior: reduce ? 'auto' : 'smooth' });
+}
 
 /** Flight, Hotel, Transfers and Days as tabs: one section at a time. Arrow keys move between tabs. */
 function SectionTabs({ tabs, initial }: { tabs: SectionTab[]; initial: SectionId }) {
@@ -108,13 +121,18 @@ function SectionTabs({ tabs, initial }: { tabs: SectionTab[]; initial: SectionId
   const rootRef = useRef<HTMLDivElement>(null);
   const keys = useArrowKeys(tabs.length);
   const current = tabs.find((t) => t.id === active) ?? tabs[0]!;
+  const scrollAfterRender = useRef(false);
   const select = (id: SectionId) => {
+    if (id === active) return scrollTabsToTop(rootRef.current);
+    // Scroll once the new section is on the page: its height decides how far the page can scroll.
+    scrollAfterRender.current = true;
     setActive(id);
-    // Scrolled past the tabs (they are stuck under the header): show the new section from its top, not from the
-    // middle of the page where the old, longer section left off.
-    const top = rootRef.current?.getBoundingClientRect().top ?? 0;
-    if (top < HEADER_PX) window.scrollBy({ top: top - HEADER_PX });
   };
+  useEffect(() => {
+    if (!scrollAfterRender.current) return;
+    scrollAfterRender.current = false;
+    scrollTabsToTop(rootRef.current);
+  }, [active]);
   return (
     <div ref={rootRef} className="@container flex min-w-0 flex-col gap-5">
       <div role="tablist" aria-label="Trip sections" className="sticky top-16 z-30 -mx-1 flex gap-1 border-b bg-background/95 px-1 backdrop-blur">
@@ -145,7 +163,7 @@ function SectionTabs({ tabs, initial }: { tabs: SectionTab[]; initial: SectionId
           );
         })}
       </div>
-      <div role="tabpanel" id="section-panel" aria-labelledby={`section-tab-${current.id}`} className="min-w-0">
+      <div role="tabpanel" id="section-panel" aria-labelledby={`section-tab-${current.id}`} className="min-w-0 max-lg:min-h-[calc(100dvh-8.5rem)]">
         {current.content}
       </div>
     </div>
