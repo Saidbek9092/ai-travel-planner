@@ -63,7 +63,7 @@
 }
 
 :root {
-  /* "Departure board" tokens (PROJECT.md §10.7). Light theme only. */
+  /* "Departure board" tokens (PROJECT.md §6). Light theme only. */
   --background: #f2f3f5;
   --foreground: #0b1726;
   --ink-2: #3d4a5c;
@@ -139,7 +139,7 @@
   }
 }
 
-/* Label Mono 11/16 caps (PROJECT.md §10.7). */
+/* Label Mono 11/16 caps (PROJECT.md §6). */
 @utility label-mono {
   font-family: var(--font-geist-mono);
   font-size: 11px;

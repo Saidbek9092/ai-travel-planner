@@ -11,7 +11,7 @@ description: Compare backend or frontend work against the two design PNGs at the
      "Confirmed" decision chips and callouts, Trip Overview (budget bar, selected flight/hotel, map, day by day).
    - `design-trip-overview.png` — finished trip: budget-approved card, Agent Chat summary ("Confirmed by the
      agents"), Selected Flights with transfers, Selected Hotel, Map with day panel, Day by day cards.
-2. Read only the matching `PROJECT.md` section (§10 web, §7–§9 agent) and `PROJECT.md` §5 / §8.5 if packets are involved.
+2. Read only the matching `PROJECT.md` section (§6 web, §4–§5 agent) and `PROJECT.md` §7 if packets are involved.
 3. Frontend: list every element in the design the task touches and confirm the component, its data source
    (packet field) and its states exist. Backend: for each visible value (e.g. "saves $80", "Day 4 of 5",
    "try 1 of 2", "1 USD = 0.92 EUR") confirm which packet field supplies it.

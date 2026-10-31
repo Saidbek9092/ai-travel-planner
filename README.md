@@ -138,7 +138,7 @@ duration limits. The agent is a CORS-restricted public API with per-IP rate limi
 ## Deployment
 
 - **Web:** Vercel, root directory `apps/web`. Steps and environment variables: [`apps/web/DEPLOY.md`](./apps/web/DEPLOY.md).
-- **Agent:** Render, with `WEB_ORIGIN` listing the web domains. See `PROJECT.md` §15.
+- **Agent:** Render, with `WEB_ORIGIN` listing the web domains. See `PROJECT.md` §9.
 
 ## Contributing
 
