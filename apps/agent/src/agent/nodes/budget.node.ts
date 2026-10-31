@@ -5,7 +5,7 @@ import { MAX_BUDGET_RETRIES, formatUsd, log, say, type ChatMessage, type TravelA
 const round = (value: number) => Math.round(value * 100) / 100;
 
 /** flight + hotel × days + Σ transfers + daily × days, in USD to the cent. */
-export function computeTotalCost(
+function computeTotalCost(
   state: Pick<TravelAgentState, 'flights' | 'hotels' | 'transfers' | 'dailyExpensesEstimate' | 'durationDays'>,
 ): number {
   const flight = state.flights[0]?.price ?? 0;

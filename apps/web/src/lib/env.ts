@@ -21,7 +21,7 @@ export interface PublicEnv {
   googleClientId: string | null;
 }
 
-export function parsePublicEnv(raw: Record<string, string | undefined>): PublicEnv {
+function parsePublicEnv(raw: Record<string, string | undefined>): PublicEnv {
   const result = PublicEnvSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(`Invalid public environment variables:\n${z.prettifyError(result.error)}`);

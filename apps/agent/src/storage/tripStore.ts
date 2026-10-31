@@ -92,7 +92,7 @@ interface MemoryRow {
   updatedAt: string;
 }
 
-export function createMemoryTripStore(): TripStore {
+function createMemoryTripStore(): TripStore {
   const rows = new Map<string, MemoryRow>();
   const runs = new Map<string, number>();
   return {
@@ -187,7 +187,7 @@ const fromPg = (row: PgRow) =>
   toRecord({ result: row.result, messages: row.messages, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() });
 
 /** `trips` table next to the checkpointer's tables; created on boot. */
-export async function createPostgresTripStore(connectionString: string): Promise<TripStore> {
+async function createPostgresTripStore(connectionString: string): Promise<TripStore> {
   const pool = new pg.Pool({ connectionString, max: 4, connectionTimeoutMillis: QUERY_TIMEOUT_MS, statement_timeout: QUERY_TIMEOUT_MS });
   await pool.query(SCHEMA_SQL);
   return {

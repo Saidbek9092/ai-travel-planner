@@ -31,7 +31,7 @@ export interface GeoPlace {
 }
 
 /** WMO weather code → label and icon bucket. */
-export function describeCode(code: number): { condition: string; icon: WeatherIcon } {
+function describeCode(code: number): { condition: string; icon: WeatherIcon } {
   if (code === 0) return { condition: 'Clear', icon: 'clear' };
   if (code <= 2) return { condition: 'Partly cloudy', icon: 'partly-cloudy' };
   if (code === 3) return { condition: 'Cloudy', icon: 'cloudy' };

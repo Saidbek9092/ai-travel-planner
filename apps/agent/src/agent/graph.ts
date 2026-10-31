@@ -18,8 +18,8 @@ export interface GraphDeps {
   tavilyApiKey?: string;
 }
 
-export const routeAfterSupervisor = (state: TravelAgentState) => (state.status === 'failed' ? END : 'flightAgent');
-export const routeAfterAudit = (state: TravelAgentState) => (state.status === 'searching' ? 'flightAgent' : END);
+const routeAfterSupervisor = (state: TravelAgentState) => (state.status === 'failed' ? END : 'flightAgent');
+const routeAfterAudit = (state: TravelAgentState) => (state.status === 'searching' ? 'flightAgent' : END);
 
 export function buildGraph({ checkpointer, tools, llm, tavilyApiKey }: GraphDeps) {
   return new StateGraph(TravelAgentStateAnnotation)

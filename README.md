@@ -52,7 +52,8 @@ The language model is used only where language understanding is needed (parsing 
 breaking ties between soft preferences). Searching, ranking and the budget audit are deterministic code, which keeps
 runs cheaper, faster and testable.
 
-Full design, the stream protocol and the contracts: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+Full specification (frontend, backend, agents, the stream protocol, contracts, configuration, deployment, open work):
+[`PROJECT.md`](./PROJECT.md). Design rationale: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ## Tech stack
 
@@ -77,10 +78,9 @@ apps/
 packages/
   contracts/    Zod schemas and types shared by both apps (requests, SSE packets, results)
 docs/archive/   Finished tickets (history, not kept current)
-ARCHITECTURE.md System design and source of truth
+PROJECT.md      Project specification and open work
+ARCHITECTURE.md System design rationale
 ```
-
-Each app has its own `SPEC.md` (what it does) and `PLAN.md` (open work).
 
 ## Getting started
 
@@ -93,8 +93,8 @@ cp apps/web/.env.example apps/web/.env.local     # optional, see below
 pnpm dev                                         # starts the agent and the web app
 ```
 
-Open the URL the web app prints. The agent listens on `http://localhost:4000` by default and the web app finds it
-there.
+Open the URL the web app prints (`http://localhost:55360`). The agent listens on `http://localhost:4000` by default
+and the web app finds it there; set `WEB_ORIGIN=http://localhost:55360` in `apps/agent/.env` so CORS allows it.
 
 Everything except the Anthropic key is optional and degrades gracefully:
 
@@ -103,7 +103,7 @@ Everything except the Anthropic key is optional and degrades gracefully:
 | `SERPAPI_API_KEY` | Flights and hotels come from the offline mock engine (`TOOLS_MODE=auto`) |
 | `DATABASE_URL` | Checkpoints and "My trips" are kept in memory and lost on restart |
 | `GOOGLE_CLIENT_ID` + `SESSION_SECRET` | No sign-in; everyone is a guest, limited per browser |
-| `NEXT_PUBLIC_MAPBOX_TOKEN` | The map shows a placeholder |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | A schematic map is drawn instead of Mapbox |
 | `NEXT_PUBLIC_AGENT_URL` (empty) | The web app runs in UI-only mode with the submit button disabled |
 
 For a local Postgres run `docker compose up -d` in `apps/agent` and set
@@ -138,9 +138,9 @@ duration limits. The agent is a CORS-restricted public API with per-IP rate limi
 ## Deployment
 
 - **Web:** Vercel, root directory `apps/web`. Steps and environment variables: [`apps/web/DEPLOY.md`](./apps/web/DEPLOY.md).
-- **Agent:** Render, with `WEB_ORIGIN` listing the web domains. See `ARCHITECTURE.md` §13.
+- **Agent:** Render, with `WEB_ORIGIN` listing the web domains. See `PROJECT.md` §15.
 
 ## Contributing
 
 Branch from `main`, keep changes focused, and run `pnpm lint && pnpm typecheck` before opening a pull request. If
-behaviour changes, update the relevant `SPEC.md` in the same PR.
+behaviour changes, update `PROJECT.md` in the same PR.

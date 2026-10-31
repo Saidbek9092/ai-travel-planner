@@ -99,7 +99,7 @@ function toOrigin(value: string): string | null {
 }
 
 /** Pure parser: blank values (`KEY=` in `.env`) count as unset. Throws `ZodError` on invalid input. */
-export function parseConfig(env: Record<string, string | undefined>): Config {
+function parseConfig(env: Record<string, string | undefined>): Config {
   const present = Object.fromEntries(
     Object.entries(env).filter(([, value]) => value !== undefined && value.trim() !== ''),
   );

@@ -33,7 +33,7 @@ const NEUTRAL_DISTANCE_KM = 6;
 /** No public transport listed nearby. */
 const NO_TRANSIT_POINTS = 0.5;
 /** Hotels rated below this are skipped when anything better exists. */
-export const MIN_PREFERRED_RATING = 7;
+const MIN_PREFERRED_RATING = 7;
 
 export interface Scored<T> {
   item: T;
@@ -69,7 +69,7 @@ export interface FlightContext {
   budget: number;
 }
 
-export function flightScore(flight: Flight, { budget }: FlightContext): Scored<Flight> {
+function flightScore(flight: Flight, { budget }: FlightContext): Scored<Flight> {
   const hours = legs(flight).reduce((sum, leg) => sum + legHours(leg), 0);
   const stops = legs(flight).reduce((sum, leg) => sum + leg.stops.length, 0);
   const layoverHours = Math.max(0, longestLayover(flight) - LONG_LAYOVER_MINUTES) / 60;
@@ -94,7 +94,7 @@ export interface HotelContext {
   center: LatLng | null;
 }
 
-export function hotelScore(hotel: Hotel, { budget, nights, center }: HotelContext): Scored<Hotel> {
+function hotelScore(hotel: Hotel, { budget, nights, center }: HotelContext): Scored<Hotel> {
   const distanceKm = center && hotel.location ? haversineKm(center, hotel.location) : NEUTRAL_DISTANCE_KM;
   const breakdown = {
     price: share(hotel.pricePerNight * nights, budget) * PRICE_POINTS_AT_FULL_BUDGET,
@@ -111,13 +111,13 @@ function byScore<T>(price: (item: T) => number) {
 }
 
 /** Drops flights with a layover over 12 h; keeps them all when that would leave nothing. */
-export function filterFlights(flights: Flight[]): Flight[] {
+function filterFlights(flights: Flight[]): Flight[] {
   const sensible = flights.filter((flight) => longestLayover(flight) <= MAX_LAYOVER_MINUTES);
   return sensible.length > 0 ? sensible : flights;
 }
 
 /** Drops hotels rated below 7; keeps them all when that would leave nothing. */
-export function filterHotels(hotels: Hotel[]): Hotel[] {
+function filterHotels(hotels: Hotel[]): Hotel[] {
   const preferred = hotels.filter((hotel) => hotel.rating >= MIN_PREFERRED_RATING);
   return preferred.length > 0 ? preferred : hotels;
 }
