@@ -122,7 +122,7 @@ flowchart LR
 
 > **Why POST + streamed response instead of `EventSource`?** `EventSource` only supports `GET`
 > and cannot send a JSON body. The web app reads the SSE stream from a `fetch` response body and
-> parses it itself (see `PROJECT.md` §10.4). The wire format is still standard SSE.
+> parses it itself (see `PROJECT.md` §6). The wire format is still standard SSE.
 
 > **Why the browser calls the agent directly:** proxying a long-lived stream through a Vercel
 > function would hit function duration limits. The agent is a public, CORS-restricted API.
@@ -152,7 +152,7 @@ collide with state keys, and the state already has `budget`, `flights`, `hotels`
 On a re-plan the planner runs again. A different hotel moves the start and end of every day, and the cheaper
 pass picks cheaper airport transfers (train instead of taxi), so the design shows the Planner re-routing the days
 ("Re-routing day 3 around the new hotel"). To keep the cost down it reuses the places of the earlier pass and
-only re-orders or swaps the stops that depend on the hotel (`PROJECT.md` §8.4).
+only re-orders or swaps the stops that depend on the hotel (`PROJECT.md` §5).
 
 ### 4.2 Node responsibilities
 
@@ -436,7 +436,7 @@ Beyond the buffer, `LOG` and `DRAFT` packets are live-only. The chat (`MESSAGE`)
 Errors **before** the stream opens are JSON `ErrorBody` (`src/errors.ts`): `{ "error": { "code": "VALIDATION_ERROR", "message": "…" } }`
 with `400 / 404 / 409 / 429 / 500`. A `429` also carries `retryAfterSeconds` in the error object (and the standard
 `Retry-After` header, exposed through CORS) so the form can show a countdown ("Plan trip in 0:42"). Errors **after** the stream opens are a `RESULT` packet with
-`status: "failed"`. Full details in `PROJECT.md` §5.
+`status: "failed"`. Full details in `PROJECT.md` §7.
 
 ### 7.1 Trip context lookup (top bar)
 
@@ -580,7 +580,7 @@ The files themselves are the reference; this is what each one decides.
 | `tsconfig.base.json` | Shared strict compiler options (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, …) |
 
 Zod 4 is pinned for every package and works with `@langchain/core` 1.3 and `@langchain/anthropic` (see
-`PROJECT.md` §17, decision 2). Tooling that only one app uses (ESLint presets, `tsx`, Next.js) is
+`PROJECT.md` §11). Tooling that only one app uses (ESLint presets, `tsx`, Next.js) is
 declared in that app's `package.json`, not in the catalog.
 
 Turborepo 2 runs tasks in strict env mode: environment variables that are not declared are hidden
@@ -634,8 +634,8 @@ backend. Both apps depend on them, so they change in a controlled way:
 | Root config (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.conductor/`, `.gitignore`) | Shared | Small, focused PRs that touch nothing else; merged quickly |
 | `packages/contracts` | Shared (the API contract) | Contracts first, then **both** apps updated in the same PR |
 | `PROJECT.md`, `ARCHITECTURE.md` | Shared | Any PR, limited to the section the change affects |
-| `apps/agent/**` | Backend | Backend work (`PROJECT.md` §18) |
-| `apps/web/**` | Frontend | Frontend work (`PROJECT.md` §18) |
+| `apps/agent/**` | Backend | Backend work (`PROJECT.md` §12) |
+| `apps/web/**` | Frontend | Frontend work (`PROJECT.md` §12) |
 
 Rules:
 
@@ -656,7 +656,7 @@ Rules:
 | Build command | `turbo run build` | `pnpm install --frozen-lockfile && pnpm turbo run build --filter=ai-travel-agent` |
 | Start command | managed by Vercel | `pnpm --filter ai-travel-agent start` |
 | Rebuild only when | Ignored Build Step: `npx turbo-ignore` | Build filters: `apps/agent/**`, `packages/contracts/**`, `pnpm-lock.yaml` |
-| Env vars | `NEXT_PUBLIC_MAPBOX_TOKEN`, `NEXT_PUBLIC_AGENT_URL` (unset = UI-only mode) | see `PROJECT.md` §13.1 |
+| Env vars | `NEXT_PUBLIC_MAPBOX_TOKEN`, `NEXT_PUBLIC_AGENT_URL` (unset = UI-only mode) | see `PROJECT.md` §9 |
 | Health check | — | `GET /health` (liveness); `GET /readyz` also checks Postgres and keys. Exactly **one** instance (§6.5) |
 
 The agent builds from the repo root on purpose: Render auto-deploys only on changes inside the
@@ -667,7 +667,7 @@ Production database: a managed PostgreSQL instance (Render Postgres) for `Postgr
 create their tables on boot.
 
 A web build without `NEXT_PUBLIC_AGENT_URL` runs in *UI-only mode*: the dashboard shows a "planning agent not
-connected" notice and submitting is disabled (see `PROJECT.md` §10.2). Setting the variable switches it on, no
+connected" notice and submitting is disabled (see `PROJECT.md` §6). Setting the variable switches it on, no
 code change.
 
 ---

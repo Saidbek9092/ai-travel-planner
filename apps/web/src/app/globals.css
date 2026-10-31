@@ -63,7 +63,7 @@
 }
 
 :root {
-  /* "Departure board" tokens (PROJECT.md §10.7). Light theme only. */
+  /* "Departure board" tokens (PROJECT.md §6). Light theme only. */
   --background: #f2f3f5;
   --foreground: #0b1726;
   --ink-2: #3d4a5c;
@@ -139,7 +139,7 @@
   }
 }
 
-/* Label Mono 11/16 caps (PROJECT.md §10.7). */
+/* Label Mono 11/16 caps (PROJECT.md §6). */
 @utility label-mono {
   font-family: var(--font-geist-mono);
   font-size: 11px;
@@ -152,6 +152,21 @@
 @utility placeholder-hatch {
   background-color: var(--muted);
   background-image: repeating-linear-gradient(135deg, transparent 0 10px, rgb(11 23 38 / 0.05) 10px 20px);
+}
+/* Draws the eye to the Plan button after an example was picked: a few soft pulses, then it rests. */
+@keyframes plan-attention {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 55%, transparent);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+.plan-attention {
+  animation: plan-attention 1.1s ease-out 3;
 }
 @media (prefers-reduced-motion: reduce) {
   *,
