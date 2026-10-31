@@ -19,7 +19,7 @@ import { dropOutliers } from '../../utils/geo.js';
 import { cleanHours, parseHours } from '../../utils/hours.js';
 import { normalizeKey } from '../../utils/ttlCache.js';
 import type { LlmFactory, StructuredResult } from '../llm.js';
-import { itineraryReady, placesSwapped, transferProposal, transfersConfirmed, weatherPrep } from '../messages.js';
+import { emptyDayNote, itineraryReady, placesSwapped, transferProposal, transfersConfirmed, travelDay, weatherPrep } from '../messages.js';
 import type { Pace } from '../pick.js';
 import { formatUsd, llmFallbackLog, log, say, type ChatMessage, type LogEntry, type TravelNode } from '../state.js';
 
@@ -296,6 +296,13 @@ export const plannerNode =
       return { place: parsed.success ? parsed.data : PlaceSchema.parse({ ...enriched, url: place.url ?? null }), checked: true };
     };
 
+    /** Why a day on the ground has no stops: too little free time after landing or before leaving, failed checks, or none given. */
+    const emptyReason = (short: boolean, window: DayWindow, rejected: boolean): Parameters<typeof emptyDayNote>[0] => {
+      if (short && window.from !== null) return { kind: 'late-arrival', lands: time(arrival.arrival), atHotel: clock(window.from) };
+      if (short && departure && leaveHotelBy !== null) return { kind: 'early-departure', leaveBy: clock(leaveHotelBy), flight: time(departure.departure) };
+      return { kind: rejected ? 'checks-failed' : 'none' };
+    };
+
     const planDay = async (day: number) => {
       const existing = replan ? state.itinerary[day - 1] : undefined;
       if (existing && !reroute(day)) {
@@ -306,13 +313,8 @@ export const plannerNode =
       const date = startDate ? addDays(startDate, day - 1) : null;
       const weather = forecast[day - 1] ?? null;
       if (day < arrivalDay) {
-        planned[day - 1] = ItineraryDaySchema.parse({
-          day,
-          date,
-          title: `Travel day: landing on day ${arrivalDay} at ${time(arrival.arrival)}`,
-          weather,
-          places: [],
-        });
+        // On the plane: no stops, and no destination weather for a day not spent there.
+        planned[day - 1] = ItineraryDaySchema.parse({ day, date, weather: null, places: [], ...travelDay(flight, state.destination, arrivalDay) });
         return stream();
       }
 
@@ -399,9 +401,11 @@ export const plannerNode =
         title: title.trim() || `Day ${day} in ${state.destination}`,
         weather,
         places,
+        note: places.length > 0 ? null : emptyDayNote(emptyReason(short, window, rejections.length > 0)),
       });
       stream();
     };
+
 
     await mapLimit(Array.from({ length: last }, (_, index) => index + 1), DAY_CONCURRENCY, planDay);
 

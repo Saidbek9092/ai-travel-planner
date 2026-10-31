@@ -1,4 +1,4 @@
-import type { AgentName, DecisionTopic, DraftPayload, LogPayload, ProgressPayload, ResultPayload, Transfer, TripRequest } from '@ai-travel/contracts';
+import { spendDays, type AgentName, type DecisionTopic, type DraftPayload, type LogPayload, type ProgressPayload, type ResultPayload, type TripRequest } from '@ai-travel/contracts';
 import { AGENT_ORDER, DECISION_AGENTS, PHASES, TRANSFER_MODES } from '@/lib/labels';
 import { formatUsd, nightsFor } from '@/lib/utils';
 
@@ -19,7 +19,7 @@ export function budgetParts(trip: TripView): BudgetParts {
     flight: trip.flights?.[0]?.price ?? 0,
     hotel: (trip.hotels?.[0]?.pricePerNight ?? 0) * (days ? nightsFor(days) : 0),
     transfers: (trip.transfers ?? []).reduce((sum, t) => sum + t.priceUsd, 0),
-    daily: (trip.dailyExpensesEstimate ?? 0) * days,
+    daily: (trip.dailyExpensesEstimate ?? 0) * spendDays(days, trip.transfers ?? []),
   };
 }
 
@@ -33,10 +33,7 @@ export function tripTotal(trip: TripView, final: boolean): number {
   return p.flight + p.hotel + p.transfers + p.daily;
 }
 
-/** The itinerary day the traveller lands on: the earliest transfer's day (day 2 after an overnight flight), else 1. */
-export function arrivalDay(transfers: Transfer[]): number {
-  return transfers.length > 0 ? Math.min(...transfers.map((transfer) => transfer.day)) : 1;
-}
+export { arrivalDay } from '@ai-travel/contracts';
 
 /** `"Day 4 of 5"` → `4`. */
 export function draftingDay(detail: string | null | undefined): number | null {

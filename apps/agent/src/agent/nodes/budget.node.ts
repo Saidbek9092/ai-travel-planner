@@ -1,17 +1,21 @@
+import { spendDays } from '@ai-travel/contracts';
 import { nightsFor } from '../../utils/dates.js';
 import { budgetFinal, cheapestFound, flightConfirmed, hotelConfirmed, overBudget, transfersConfirmed } from '../messages.js';
 import { MAX_BUDGET_RETRIES, formatUsd, log, say, type ChatMessage, type TravelAgentState, type TravelNode } from '../state.js';
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
-/** flight + hotel × days + Σ transfers + daily × days, in USD to the cent. */
-function computeTotalCost(
-  state: Pick<TravelAgentState, 'flights' | 'hotels' | 'transfers' | 'dailyExpensesEstimate' | 'durationDays'>,
-): number {
+type CostState = Pick<TravelAgentState, 'flights' | 'hotels' | 'transfers' | 'dailyExpensesEstimate' | 'durationDays'>;
+
+/** Daily spend × the days on the ground: a travel day before an overnight flight lands costs nothing. */
+const dailyTotal = (state: CostState) => state.dailyExpensesEstimate * spendDays(state.durationDays, state.transfers);
+
+/** flight + hotel × nights + Σ transfers + daily × days on the ground, in USD to the cent. */
+function computeTotalCost(state: CostState): number {
   const flight = state.flights[0]?.price ?? 0;
   const hotel = (state.hotels[0]?.pricePerNight ?? 0) * nightsFor(state.durationDays);
   const transfers = state.transfers.reduce((sum, transfer) => sum + transfer.priceUsd, 0);
-  return round(flight + hotel + transfers + state.dailyExpensesEstimate * state.durationDays);
+  return round(flight + hotel + transfers + dailyTotal(state));
 }
 
 function flightLabel(state: TravelAgentState): string {
@@ -56,7 +60,7 @@ export const budgetNode = (): TravelNode => async (state) => {
     flight: state.flights[0]?.price ?? 0,
     hotel: round(hotelNightly * nightsFor(state.durationDays)),
     transfers: round(state.transfers.reduce((sum, transfer) => sum + transfer.priceUsd, 0)),
-    daily: round(state.dailyExpensesEstimate * state.durationDays),
+    daily: round(dailyTotal(state)),
     totalCost,
     flightLabel: flightLabel(state),
     hotelLabel: `${nightsFor(state.durationDays)} × ${formatUsd(hotelNightly)}`,

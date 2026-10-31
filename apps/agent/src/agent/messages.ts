@@ -115,6 +115,42 @@ export function placesSwapped(checked: number, swapped: string[]): string {
   return `I checked ${checked} stops on Google Maps and swapped ${swapped.length} that would not work on your dates: ${shown}${more}.`;
 }
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** "2026-11-02" → "Mon 2 Nov". */
+function shortDate(isoDate: string): string {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  return `${WEEKDAYS[date.getUTCDay()]} ${date.getUTCDate()} ${(MONTHS[date.getUTCMonth()] ?? '').slice(0, 3)}`;
+}
+
+/** A day spent on the plane before an overnight flight lands: what the day card says instead of stops. */
+export function travelDay(flight: Flight, destination: string, arrivalDay: number): { title: string; note: string } {
+  const leg = flight.outbound;
+  const via = leg.stops.length > 0 ? ` (${route(flight)})` : '';
+  return {
+    title: `Travel day: flying to ${destination}`,
+    note:
+      `No activities today: you're on your way to ${destination}. The flight leaves ${leg.from.code} at ${time(leg.departure)}${via} ` +
+      `and lands at ${leg.to.code} on ${shortDate(leg.arrival.slice(0, 10))} at ${time(leg.arrival)}; your plan starts on day ${arrivalDay}.`,
+  };
+}
+
+/** Why a day on the ground ended up without stops. Times are "HH:mm". */
+export function emptyDayNote(
+  reason: { kind: 'late-arrival'; lands: string; atHotel: string } | { kind: 'early-departure'; leaveBy: string; flight: string } | { kind: 'checks-failed' } | { kind: 'none' },
+): string {
+  switch (reason.kind) {
+    case 'late-arrival':
+      return `No activities today: you land at ${reason.lands} and reach the hotel around ${reason.atHotel}, so today is just for getting there.`;
+    case 'early-departure':
+      return `No activities today: you leave the hotel at ${reason.leaveBy} for the ${reason.flight} flight home.`;
+    case 'checks-failed':
+      return "No activities today: the stops suggested for this day weren't open while you're free, so it's a free day.";
+    case 'none':
+      return 'No activities planned today: a free day to explore at your own pace.';
+  }
+}
+
 export function itineraryReady(itinerary: ItineraryDay[]): string {
   const names = itinerary.flatMap((day) => day.places.map((place) => place.name));
   const highlights = names.slice(0, 2);

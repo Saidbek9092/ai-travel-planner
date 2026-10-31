@@ -179,7 +179,7 @@ auditing are deterministic code — cheaper and faster.
 totalCost = flights[0].price
           + hotels[0].pricePerNight × durationDays
           + Σ transfers[i].priceUsd
-          + dailyExpensesEstimate × durationDays
+          + dailyExpensesEstimate × spendDays   // days from landing to the last day; a travel day costs nothing
 ```
 
 | Condition | Check | Action |

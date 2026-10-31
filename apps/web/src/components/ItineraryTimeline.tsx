@@ -276,8 +276,13 @@ export function DayPanel({
   const dayTransfers = transfers.filter((t) => t.day === day.day);
   // An overnight flight lands on day 2, so the arrival day is the earliest transfer's, not always day 1.
   const isArrivalDay = day.day === arrivalDay(transfers);
+  // Days before it are spent on the plane: no stops and no spending on the ground.
+  const travelling = day.day < arrivalDay(transfers);
   const arrival = isArrivalDay ? dayTransfers : [];
   const departure = isArrivalDay ? [] : dayTransfers;
+  // The agent says why a day has no stops; trips saved before it did get a generic line.
+  const emptyNote =
+    day.places.length > 0 ? null : (day.note ?? (travelling ? 'No activities today: this is a travel day.' : 'No activities planned for this day.'));
   return (
     <div className="flex h-full flex-col px-6 py-5" aria-live="polite">
       <div className="flex items-center gap-2">
@@ -297,7 +302,8 @@ export function DayPanel({
       </div>
       <h3 className="mt-5 text-2xl leading-8 font-semibold">{day.title}</h3>
       {day.weather && <p className="mt-4 self-start rounded-full bg-muted px-3 py-1 text-[15px] text-ink-2">{weatherText(day)}</p>}
-      <ol className="mt-5 flex flex-col gap-3.5">
+      {emptyNote && <p className="mt-5 rounded-lg border border-dashed px-4 py-3 text-[15px] text-ink-2">{emptyNote}</p>}
+      <ol className="mt-5 flex flex-col gap-3.5 empty:hidden">
         {arrival.map((t) => (
           <TransferStop key={t.description} transfer={t} />
         ))}
@@ -328,7 +334,7 @@ export function DayPanel({
           <TransferStop key={t.description} transfer={t} />
         ))}
       </ol>
-      {dailySpend !== null && (
+      {dailySpend !== null && !travelling && (
         <p className="mt-auto flex justify-between border-t pt-4 text-[15px] text-ink-2">
           Daily spend <span className="font-mono text-foreground">~{formatUsd(dailySpend)}</span>
         </p>

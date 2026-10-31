@@ -104,13 +104,26 @@ export function TripHistoryList() {
   return <TripList />;
 }
 
+/** Placeholder rows shaped like the real ones (title, date, Delete) and like the note under them, so the list does not jump when it loads. */
 function HistorySkeleton() {
   return (
-    <div className="flex flex-col gap-3" role="status">
+    <div className="flex flex-col gap-6" role="status">
       <span className="sr-only">Loading your trips…</span>
-      {[0, 1, 2].map((i) => (
-        <Skeleton key={i} className="h-[70px] rounded-xl border bg-card" />
-      ))}
+      <div aria-hidden="true" className="flex flex-col gap-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+              <Skeleton className="h-5 w-44 max-w-full bg-border/70" />
+              <Skeleton className="h-3.5 w-28 bg-border/70" />
+            </div>
+            <Skeleton className="h-11 w-24 rounded-lg bg-border/70 max-sm:w-11" />
+          </div>
+        ))}
+        <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
+          <Skeleton className="size-5 shrink-0 rounded-md bg-border/70 max-sm:hidden" />
+          <Skeleton className="h-4 w-full max-w-md bg-border/70" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -155,8 +168,8 @@ function TripList() {
 
   return (
     <div className="flex flex-col gap-6" aria-busy={loading}>
-      {trips.length === 0 && loading ? (
-        // Not "No trips yet" before the agent has answered.
+      {loading ? (
+        // Not "No trips yet" (or a half-filled list that then jumps) before the agent has answered.
         <HistorySkeleton />
       ) : trips.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed bg-card/60 p-10 text-center text-ink-2">
