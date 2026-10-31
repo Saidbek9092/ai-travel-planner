@@ -93,7 +93,7 @@ export function initialState({ prompt, ...overrides }: TripRequest): TravelAgent
 }
 
 /** Step number for the node that is about to run: the last log's step + 1, or 1. */
-export function nextStep(state: Pick<TravelAgentState, 'logs'>): number {
+function nextStep(state: Pick<TravelAgentState, 'logs'>): number {
   return (state.logs.at(-1)?.step ?? 0) + 1;
 }
 

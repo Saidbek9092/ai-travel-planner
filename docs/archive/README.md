@@ -5,8 +5,8 @@ source of truth: statements such as "tests are paused" or "not started" describe
 
 | File | What it was |
 | --- | --- |
-| `agent-plan-2026-10.md` | `apps/agent/PLAN.md` Part 1: tickets B1–B25 (the agent spec, Part 2, is now `apps/agent/SPEC.md`) |
-| `web-plan-2026-10.md` | `apps/web/PLAN.md` tickets T1–T26 (`apps/web/SPEC.md` §12 held a copy of the same plan) |
+| `agent-plan-2026-10.md` | The agent's plan, Part 1: tickets B1–B25 (the agent spec, Part 2, is now part of `PROJECT.md`) |
+| `web-plan-2026-10.md` | The web app's plan: tickets T1–T26 |
 
-Living documents: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) (system), `apps/*/SPEC.md` (each app), `apps/*/PLAN.md`
-(open work only).
+Living documents: [`PROJECT.md`](../../PROJECT.md) (the project spec and open work) and
+[`ARCHITECTURE.md`](../../ARCHITECTURE.md) (design rationale).

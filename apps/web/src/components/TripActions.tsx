@@ -13,7 +13,7 @@ const noop = () => () => undefined;
 const findSlot = () => document.getElementById(HEADER_ACTIONS_ID);
 
 /** Copies the `?trip=` link; the link reopens the finished trip. */
-export async function shareTrip(threadId: string) {
+async function shareTrip(threadId: string) {
   const url = `${window.location.origin}/?trip=${encodeURIComponent(threadId)}`;
   try {
     await navigator.clipboard.writeText(url);

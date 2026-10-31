@@ -2,7 +2,7 @@ import type { AuthUser } from '@ai-travel/contracts';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
-export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const PayloadSchema = z.object({
   sub: z.string().min(1),

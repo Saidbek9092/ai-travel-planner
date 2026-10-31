@@ -18,7 +18,7 @@ const PLACE_CHECK_TIMEOUT_MS = 8_000;
 const placeChecks = new TtlCache<PlaceCheck>(PLACE_CHECK_TTL_MS, Date.now, 2_000);
 
 /** Tries `primary`; when it reports `ToolUnavailableError` (or times out) it calls `onFallback` and answers from `mock`. */
-export function withFallback(
+function withFallback(
   primary: SearchTool,
   mock: SearchTool,
   onFallback: (reason: string) => void = () => {},

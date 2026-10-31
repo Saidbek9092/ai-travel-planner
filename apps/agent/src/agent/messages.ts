@@ -14,7 +14,7 @@ const EXPENSIVE_FLIGHT_SHARE = 0.4;
 const time = (iso: string) => iso.slice(11, 16);
 
 /** A 6-day trip from 12 November → "12–17 November"; "28 November – 3 December" across months. Day 1 is the start date. */
-export function dateRange(startDate: string, days: number): string {
+function dateRange(startDate: string, days: number): string {
   const [, startMonth = 1, startDay = 1] = startDate.split('-').map(Number);
   const [, endMonth = 1, endDay = 1] = addDays(startDate, Math.max(0, days - 1)).split('-').map(Number);
   const start = MONTHS[startMonth - 1] ?? '';
@@ -23,7 +23,7 @@ export function dateRange(startDate: string, days: number): string {
 }
 
 /** 110 → "1 h 50 m", 120 → "2 h", 45 → "45 m". */
-export function duration(minutes: number): string {
+function duration(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return [h > 0 ? `${h} h` : '', m > 0 ? `${m} m` : ''].filter(Boolean).join(' ');

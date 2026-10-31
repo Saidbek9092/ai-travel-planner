@@ -1,4 +1,4 @@
-export const TIMEOUT_MESSAGE = 'Trip planning took too long, resume to continue';
+const TIMEOUT_MESSAGE = 'Trip planning took too long, resume to continue';
 export const SHUTDOWN_MESSAGE = 'Server restarting, resume to continue';
 export const CANCEL_MESSAGE = 'Run stopped';
 

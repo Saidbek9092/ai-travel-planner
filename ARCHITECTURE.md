@@ -1,9 +1,9 @@
 # AI Travel Planner — Technical Architecture
 
-> Source of truth for the whole system. Component-level specifications live in
-> [`apps/agent/SPEC.md`](./apps/agent/SPEC.md) (backend) and [`apps/web/SPEC.md`](./apps/web/SPEC.md) (frontend);
-> open work in each app's `PLAN.md`; finished tickets in [`docs/archive/`](./docs/archive/) (history, not kept current).
-> Each fact lives in one place: when two documents disagree, this one wins for the system, the app spec for its app.
+> The system design and the reasons behind it. The complete specification of the project as built (frontend,
+> backend, agents, configuration, deployment) and the open work are in [`PROJECT.md`](./PROJECT.md); finished
+> tickets in [`docs/archive/`](./docs/archive/) (history, not kept current). When the two disagree, the code wins,
+> then `PROJECT.md`.
 > Derived from *Enterprise Multi-Agent AI Travel Planner — Architecture Blueprint* (2026-10-25).
 
 ---
@@ -122,7 +122,7 @@ flowchart LR
 
 > **Why POST + streamed response instead of `EventSource`?** `EventSource` only supports `GET`
 > and cannot send a JSON body. The web app reads the SSE stream from a `fetch` response body and
-> parses it itself (see `apps/web/SPEC.md` §5). The wire format is still standard SSE.
+> parses it itself (see `PROJECT.md` §10.4). The wire format is still standard SSE.
 
 > **Why the browser calls the agent directly:** proxying a long-lived stream through a Vercel
 > function would hit function duration limits. The agent is a public, CORS-restricted API.
@@ -152,7 +152,7 @@ collide with state keys, and the state already has `budget`, `flights`, `hotels`
 On a re-plan the planner runs again. A different hotel moves the start and end of every day, and the cheaper
 pass picks cheaper airport transfers (train instead of taxi), so the design shows the Planner re-routing the days
 ("Re-routing day 3 around the new hotel"). To keep the cost down it reuses the places of the earlier pass and
-only re-orders or swaps the stops that depend on the hotel (§8.4 of `apps/agent/SPEC.md`).
+only re-orders or swaps the stops that depend on the hotel (`PROJECT.md` §8.4).
 
 ### 4.2 Node responsibilities
 
@@ -436,7 +436,7 @@ Beyond the buffer, `LOG` and `DRAFT` packets are live-only. The chat (`MESSAGE`)
 Errors **before** the stream opens are JSON `ErrorBody` (`src/errors.ts`): `{ "error": { "code": "VALIDATION_ERROR", "message": "…" } }`
 with `400 / 404 / 409 / 429 / 500`. A `429` also carries `retryAfterSeconds` in the error object (and the standard
 `Retry-After` header, exposed through CORS) so the form can show a countdown ("Plan trip in 0:42"). Errors **after** the stream opens are a `RESULT` packet with
-`status: "failed"`. Full details in `apps/agent/SPEC.md` §5.
+`status: "failed"`. Full details in `PROJECT.md` §5.
 
 ### 7.1 Trip context lookup (top bar)
 
@@ -541,20 +541,21 @@ say where a value came from ("Estimate", "Live").
 ```text
 ai-travel-planner/
 ├── apps/
-│   ├── agent/                  # ai-travel-agent → Render   (spec: SPEC.md, open work: PLAN.md)
-│   └── web/                    # ai-travel-web   → Vercel   (spec: SPEC.md, open work: PLAN.md)
+│   ├── agent/                  # ai-travel-agent → Render
+│   └── web/                    # ai-travel-web   → Vercel
 ├── docs/archive/               # finished tickets, history only
 ├── packages/
 │   └── contracts/              # @ai-travel/contracts (Zod schemas + types)
 │       └── src/{index.ts, trip.ts, sse-events.ts, trip-context.ts, stored-trips.ts, errors.ts}
 ├── ARCHITECTURE.md             # this file
+├── PROJECT.md                  # project specification and open work
 ├── package.json                # root scripts → turbo
 ├── pnpm-workspace.yaml         # apps/*, packages/* + catalog
 ├── turbo.json                  # task pipeline
 └── tsconfig.base.json          # shared strict TS config
 ```
 
-Per-app trees are in `apps/agent/SPEC.md` §2 and `apps/web/SPEC.md` §2.
+The full tree is in `PROJECT.md` §3.
 
 ---
 
@@ -579,7 +580,7 @@ The files themselves are the reference; this is what each one decides.
 | `tsconfig.base.json` | Shared strict compiler options (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, …) |
 
 Zod 4 is pinned for every package and works with `@langchain/core` 1.3 and `@langchain/anthropic` (see
-`apps/agent/SPEC.md` §14, decision 2). Tooling that only one app uses (ESLint presets, `tsx`, Next.js) is
+`PROJECT.md` §17, decision 2). Tooling that only one app uses (ESLint presets, `tsx`, Next.js) is
 declared in that app's `package.json`, not in the catalog.
 
 Turborepo 2 runs tasks in strict env mode: environment variables that are not declared are hidden
@@ -632,9 +633,9 @@ backend. Both apps depend on them, so they change in a controlled way:
 | --- | --- | --- |
 | Root config (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.conductor/`, `.gitignore`) | Shared | Small, focused PRs that touch nothing else; merged quickly |
 | `packages/contracts` | Shared (the API contract) | Contracts first, then **both** apps updated in the same PR |
-| `ARCHITECTURE.md` | Shared | Any PR, limited to the section the change affects |
-| `apps/agent/**` | Backend | Backend work (`apps/agent/PLAN.md`) |
-| `apps/web/**` | Frontend | Frontend work (`apps/web/PLAN.md`) |
+| `PROJECT.md`, `ARCHITECTURE.md` | Shared | Any PR, limited to the section the change affects |
+| `apps/agent/**` | Backend | Backend work (`PROJECT.md` §18) |
+| `apps/web/**` | Frontend | Frontend work (`PROJECT.md` §18) |
 
 Rules:
 
@@ -655,7 +656,7 @@ Rules:
 | Build command | `turbo run build` | `pnpm install --frozen-lockfile && pnpm turbo run build --filter=ai-travel-agent` |
 | Start command | managed by Vercel | `pnpm --filter ai-travel-agent start` |
 | Rebuild only when | Ignored Build Step: `npx turbo-ignore` | Build filters: `apps/agent/**`, `packages/contracts/**`, `pnpm-lock.yaml` |
-| Env vars | `NEXT_PUBLIC_MAPBOX_TOKEN`, `NEXT_PUBLIC_AGENT_URL` (unset = UI-only mode) | see `apps/agent/SPEC.md` §4 |
+| Env vars | `NEXT_PUBLIC_MAPBOX_TOKEN`, `NEXT_PUBLIC_AGENT_URL` (unset = UI-only mode) | see `PROJECT.md` §13.1 |
 | Health check | — | `GET /health` (liveness); `GET /readyz` also checks Postgres and keys. Exactly **one** instance (§6.5) |
 
 The agent builds from the repo root on purpose: Render auto-deploys only on changes inside the
@@ -666,7 +667,7 @@ Production database: a managed PostgreSQL instance (Render Postgres) for `Postgr
 create their tables on boot.
 
 A web build without `NEXT_PUBLIC_AGENT_URL` runs in *UI-only mode*: the dashboard shows a "planning agent not
-connected" notice and submitting is disabled (see `apps/web/SPEC.md` §4.1). Setting the variable switches it on, no
+connected" notice and submitting is disabled (see `PROJECT.md` §10.2). Setting the variable switches it on, no
 code change.
 
 ---

@@ -11,7 +11,7 @@ export class ProviderDownError extends Error {
   }
 }
 
-export function isProviderDown(provider: string, now = Date.now()): boolean {
+function isProviderDown(provider: string, now = Date.now()): boolean {
   const until = openUntil.get(provider);
   if (until === undefined) return false;
   if (until > now) return true;

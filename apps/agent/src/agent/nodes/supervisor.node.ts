@@ -13,7 +13,7 @@ export interface SupervisorNodeDeps {
 
 const DEFAULT_START_OFFSET_DAYS = 30;
 
-export const ParsedTripSchema = z.object({
+const ParsedTripSchema = z.object({
   origin: z.string().nullable(),
   destination: z.string().nullable(),
   budget: z.number().nullable(),

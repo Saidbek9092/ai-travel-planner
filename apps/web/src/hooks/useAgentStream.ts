@@ -59,11 +59,11 @@ export type AgentStreamAction =
   | { type: 'ABORTED' }
   | { type: 'RESET' };
 
-export const MAX_RECONNECTS = 5;
+const MAX_RECONNECTS = 5;
 /** Wait before each reconnect attempt, in ms. */
-export const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000] as const;
+const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000] as const;
 
-export const initialStreamState: AgentStreamState = {
+const initialStreamState: AgentStreamState = {
   status: 'idle',
   threadId: null,
   logs: [],
@@ -94,13 +94,13 @@ const ERROR_MESSAGES: Record<ClientErrorCode, string> = {
   CONNECTION_LOST: 'Connection lost',
 };
 
-export function errorMessage(code: string, serverMessage?: string): string {
+function errorMessage(code: string, serverMessage?: string): string {
   // The daily cap words its own reason ("today's limit"); show it instead of the generic line.
   if ((code === 'VALIDATION_ERROR' || code === 'RATE_LIMITED') && serverMessage) return serverMessage;
   return ERROR_MESSAGES[code as ClientErrorCode] ?? ERROR_MESSAGES.INTERNAL;
 }
 
-export function agentStreamReducer(state: AgentStreamState, action: AgentStreamAction): AgentStreamState {
+function agentStreamReducer(state: AgentStreamState, action: AgentStreamAction): AgentStreamState {
   switch (action.type) {
     case 'START':
       return {

@@ -27,7 +27,7 @@ export interface RunRegistryDeps {
  * a dropped connection never stops it. Every packet is stored in a ring buffer so a late subscriber
  * can replay what it missed.
  */
-export class Run {
+class Run {
   private readonly buffer: StoredEvent[] = [];
   private readonly subscribers = new Set<SseStreamer>();
   private readonly controller = new AbortController();

@@ -21,7 +21,7 @@ const formatUsd = (amount: number) => `$${amount.toLocaleString('en-US', { maxim
 const duration = (minutes: number) => `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} m` : ''}`;
 
 /** Options the model chooses from; the rest of the ranked list is only a fallback. */
-export const SHORTLIST_SIZE = 5;
+const SHORTLIST_SIZE = 5;
 
 /** Soft preferences = parsed notes plus the interests ticked on the start page. */
 export function softPreferences(preferences: Preferences, interests: TripRequest['interests']): string | null {
@@ -29,7 +29,7 @@ export function softPreferences(preferences: Preferences, interests: TripRequest
   return parts.length > 0 ? parts.join('. ') : null;
 }
 
-export const PickSchema = z.object({
+const PickSchema = z.object({
   index: z.number(),
   reasons: z.array(PickReasonSchema),
 });
@@ -60,7 +60,7 @@ const hotelLine = (hotel: Hotel, index: number) =>
  * Asks the model to choose from a shortlist. Returns `null` for anything unusable (the caller keeps the top-scored
  * option); an abort (Stop or timeout) is re-thrown. `isAllowed` rejects a pick that breaks a rule such as "cheaper".
  */
-export async function pickFromShortlist<T extends Flight | Hotel>(args: {
+async function pickFromShortlist<T extends Flight | Hotel>(args: {
   llm: LlmFactory;
   kind: 'flight' | 'hotel';
   shortlist: T[];
