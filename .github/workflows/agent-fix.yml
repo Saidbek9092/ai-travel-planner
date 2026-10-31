@@ -1,0 +1,110 @@
+name: Agent - Apply Review Feedback
+
+# Closes the loop: when the AI Reviewer requests changes on an agent PR, the
+# Coder Agent is re-invoked with that review as input and pushes a fixup
+# commit to the same branch (not a new PR). Capped at 3 rounds — past that,
+# it stops and flags the PR for a human instead of thrashing forever.
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: agent-fix-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  fix:
+    if: >
+      github.event.review.state == 'changes_requested' &&
+      contains(github.event.pull_request.labels.*.name, 'ai-agent') &&
+      !contains(github.event.pull_request.labels.*.name, 'needs-human')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+    steps:
+      - name: Count previous attempts
+        id: attempts
+        run: |
+          count=$(gh pr view ${{ github.event.pull_request.number }} \
+            -R ${{ github.repository }} --json labels \
+            --jq '[.labels[].name | select(startswith("agent-attempt-"))] | length')
+          next=$((count + 1))
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Give up and flag for a human
+        if: steps.attempts.outputs.next > 3
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} -R ${{ github.repository }} \
+            --body "The Coder Agent has made 3 fix attempts without a clean review. Flagging for a human — see the review history above for what's still open."
+          gh pr edit ${{ github.event.pull_request.number }} -R ${{ github.repository }} \
+            --add-label "needs-human" --remove-label "ai-agent"
+
+      - name: Checkout PR branch
+        if: steps.attempts.outputs.next <= 3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.AGENT_PAT }}
+
+      - uses: pnpm/action-setup@v4
+        if: steps.attempts.outputs.next <= 3
+      - uses: actions/setup-node@v4
+        if: steps.attempts.outputs.next <= 3
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Label this attempt
+        if: steps.attempts.outputs.next <= 3
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} -R ${{ github.repository }} \
+            --add-label "agent-attempt-${{ steps.attempts.outputs.next }}"
+
+      - name: Git identity
+        if: steps.attempts.outputs.next <= 3
+        run: |
+          git config user.name "ai-travel-coder-agent"
+          git config user.email "coder-agent@users.noreply.github.com"
+
+      - name: Coder Agent — apply review feedback (Claude Code)
+        if: steps.attempts.outputs.next <= 3
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--max-turns 40 --allowedTools Read,Write,Edit,Bash,Grep,Glob"
+          prompt: |
+            This PR received REQUEST_CHANGES from the AI Reviewer Agent. This
+            is fix attempt ${{ steps.attempts.outputs.next }} of 3. Here is
+            the reviewer's feedback:
+
+            ${{ github.event.review.body }}
+
+            Fix exactly what it asks — nothing broader. Stay inside the
+            original ticket's scope (see the PR description for the ticket).
+            Run `pnpm turbo run lint typecheck` (filtered to the affected
+            app(s)) and fix anything it flags. Then commit with
+            `git add -A && git commit` describing what you changed and why.
+            Do not push — the workflow does that next.
+
+            If you believe the reviewer's request is mistaken (contradicts
+            PROJECT.md/ARCHITECTURE.md, or is out of scope for this ticket),
+            make no commit and instead end your final message with exactly:
+            `AGENT_STATUS: DISPUTED` followed by your reasoning, so a human
+            can arbitrate.
+
+      - name: Push fixup commit
+        if: steps.attempts.outputs.next <= 3
+        run: |
+          if [ -n "$(git log origin/${{ github.event.pull_request.head.ref }}..HEAD --oneline 2>/dev/null)" ]; then
+            git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          else
+            gh pr comment ${{ github.event.pull_request.number }} -R ${{ github.repository }} \
+              --body "The Coder Agent did not make a fixup commit for this review round — check the agent-fix.yml job log for AGENT_STATUS: DISPUTED or another blocker."
+          fi

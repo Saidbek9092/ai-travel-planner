@@ -1,0 +1,158 @@
+name: Agent - Implement Ticket
+
+# Coder Agent. Fires from a Notion task (via repository_dispatch, sent by the
+# bridge described in docs/agent-pipeline.md) or manually. It opens exactly
+# one PR for exactly one ticket, then gets out of the way — review and
+# merge-or-fix-back happen in agent-review.yml and agent-fix.yml.
+
+on:
+  repository_dispatch:
+    types: [notion-task]
+  workflow_dispatch:
+    inputs:
+      ticket_id:
+        description: "Ticket id (Notion page id, or a PROJECT.md §12 row key)"
+        required: true
+      title:
+        description: "Short ticket title (used for the branch name and PR title)"
+        required: true
+      body:
+        description: "Full ticket description / acceptance criteria"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: agent-implement-${{ github.event.client_payload.ticket_id || inputs.ticket_id }}
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # A PAT, not the default GITHUB_TOKEN: a PR opened with the default
+          # token does not trigger pull_request workflows (agent-review.yml
+          # would never run). Add this as a repo secret — see docs/agent-pipeline.md.
+          token: ${{ secrets.AGENT_PAT }}
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Resolve ticket payload
+        id: ticket
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            {
+              echo "ticket_id<<EOF"
+              echo "${{ github.event.client_payload.ticket_id }}"
+              echo "EOF"
+              echo "title<<EOF"
+              echo "${{ github.event.client_payload.title }}"
+              echo "EOF"
+              echo "body<<EOF"
+              echo "${{ github.event.client_payload.body }}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "ticket_id<<EOF"
+              echo "${{ inputs.ticket_id }}"
+              echo "EOF"
+              echo "title<<EOF"
+              echo "${{ inputs.title }}"
+              echo "EOF"
+              echo "body<<EOF"
+              echo "${{ inputs.body }}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Slug + branch name
+        id: branch
+        run: |
+          slug=$(echo "${{ steps.ticket.outputs.title }}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed 's/-\+/-/g; s/^-//; s/-$//' | cut -c1-40)
+          echo "name=agent/${slug}-${{ steps.ticket.outputs.ticket_id }}" >> "$GITHUB_OUTPUT"
+
+      - name: Git identity
+        run: |
+          git config user.name "ai-travel-coder-agent"
+          git config user.email "coder-agent@users.noreply.github.com"
+          git checkout -b "${{ steps.branch.outputs.name }}"
+
+      - name: Coder Agent (Claude Code)
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--max-turns 40 --allowedTools Read,Write,Edit,Bash,Grep,Glob"
+          prompt: |
+            You are the Coder Agent in an automated pipeline. Follow this
+            repository's `.claude/skills/implement-ticket/SKILL.md` exactly,
+            for this ticket:
+
+            Ticket id: ${{ steps.ticket.outputs.ticket_id }}
+            Title: ${{ steps.ticket.outputs.title }}
+
+            Description / acceptance criteria:
+            ${{ steps.ticket.outputs.body }}
+
+            Rules:
+            - Implement exactly this ticket's scope. No drive-by refactors.
+            - Read only the PROJECT.md / ARCHITECTURE.md sections this ticket
+              touches, as the skill says. Run the design-check skill first if
+              this touches UI or SSE packets.
+            - If the ticket is already done, or its stated dependencies are
+              not merged, stop and explain why instead of forcing a change.
+            - Run `pnpm turbo run lint typecheck` (filtered to the affected
+              app(s)) and fix anything it flags before finishing.
+            - When the ticket is implemented, update PROJECT.md §12 per the
+              skill's step 5, then commit your changes with `git add -A &&
+              git commit`. Do not push and do not open a PR — the workflow
+              does that next. Write a clear commit message: a short title
+              line, then what changed and why.
+            - If you cannot complete the ticket, commit nothing and instead
+              end your final message with exactly: `AGENT_STATUS: BLOCKED`
+              followed by the reason on the next line.
+
+      - name: Check whether the agent produced a commit
+        id: outcome
+        run: |
+          if git log --oneline -1 "${{ steps.branch.outputs.name }}" >/dev/null 2>&1 && \
+             [ -n "$(git log origin/main..HEAD --oneline 2>/dev/null)" ]; then
+            echo "has_commit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_commit=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push branch and open PR
+        if: steps.outcome.outputs.has_commit == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_PAT }}
+        run: |
+          git push origin "${{ steps.branch.outputs.name }}"
+          gh pr create \
+            --title "${{ steps.ticket.outputs.title }}" \
+            --body "Implements ticket \`${{ steps.ticket.outputs.ticket_id }}\`.
+
+          ${{ steps.ticket.outputs.body }}
+
+          ---
+          Opened automatically by the Coder Agent. Will not merge until \`CI\` passes and the AI Reviewer approves." \
+            --label "ai-agent" \
+            --base main \
+            --head "${{ steps.branch.outputs.name }}"
+          gh pr merge "${{ steps.branch.outputs.name }}" --auto --squash || \
+            echo "::warning::Could not enable auto-merge — enable 'Allow auto-merge' in repo settings and a branch-protection rule requiring the CI and review checks."
+
+      - name: Report a blocked ticket
+        if: steps.outcome.outputs.has_commit != 'true'
+        run: |
+          echo "::warning::Coder Agent made no commit for ticket ${{ steps.ticket.outputs.ticket_id }} — check the job log above for AGENT_STATUS: BLOCKED and its reason."

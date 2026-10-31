@@ -1,0 +1,65 @@
+name: Agent - AI Review
+
+# AI Reviewer Agent. Runs on every push to a PR opened by the Coder Agent
+# (label `ai-agent`) and leaves a real GitHub PR review — APPROVE or
+# REQUEST_CHANGES — using the default GITHUB_TOKEN. That review is a
+# distinct identity from the PAT the Coder Agent used to open the PR, so it
+# can satisfy a branch-protection "require approvals" rule.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: agent-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: contains(github.event.pull_request.labels.*.name, 'ai-agent')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: AI Reviewer Agent (Claude Code)
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--max-turns 25 --allowedTools Read,Grep,Glob,Bash(git *),Bash(pnpm *),Bash(gh pr *)"
+          prompt: |
+            You are the AI Reviewer Agent reviewing PR #${{ github.event.pull_request.number }}
+            in this repo, opened by the Coder Agent. Be a strict, concrete reviewer —
+            this PR auto-merges the moment you approve it and CI is green, so there
+            is no human in the loop after you.
+
+            Do this:
+            1. Read the PR description and diff (`git diff origin/main...HEAD`).
+            2. Read the PROJECT.md / ARCHITECTURE.md sections the diff actually
+               touches. If the diff touches UI or SSE packet shapes, run the
+               design-check skill against the two design PNGs.
+            3. Check: does the diff match only the stated ticket scope (no
+               drive-by changes)? Does it respect the Zod-at-every-boundary and
+               "config.ts is the only process.env reader" rules? Any hardcoded
+               trip data (scripts/check-no-hardcoded-trip-data.sh should pass)?
+               Is PROJECT.md §12 updated correctly if this finishes an item?
+            4. Run `pnpm turbo run lint typecheck` yourself and treat any
+               failure as a blocking issue even if CI hasn't reported yet.
+            5. Decide APPROVE or REQUEST_CHANGES. Then actually submit it:
+               - Approve: `gh pr review ${{ github.event.pull_request.number }} --approve -b "<1-3 sentence summary of what you checked>"`
+               - Changes needed: `gh pr review ${{ github.event.pull_request.number }} --request-changes -b "<numbered list of concrete, actionable fixes — exact file/line where you can>"`
+            You must end by actually running one of those two `gh pr review`
+            commands — a verdict that isn't submitted doesn't count.
