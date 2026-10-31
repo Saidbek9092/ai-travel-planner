@@ -32,10 +32,10 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         <TooltipProvider>
           <SkipLink />
           <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-            <div className="mx-auto flex h-16 w-full max-w-[1360px] items-center gap-3 px-4 sm:gap-6 sm:px-8 lg:px-8">
+            <div className="mx-auto flex h-16 w-full max-w-[1360px] items-center gap-2 px-4 sm:gap-6 sm:px-8 lg:px-8">
               <Link
                 href="/"
-                className="flex shrink-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50 pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
+                className="flex shrink-0 items-center gap-2.5 rounded-lg max-sm:hidden outline-none focus-visible:ring-3 focus-visible:ring-ring/50 pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
               >
                 <span className="flex size-8 items-center justify-center rounded-lg bg-foreground text-white">
                   <RouteIcon className="size-4" aria-hidden="true" />

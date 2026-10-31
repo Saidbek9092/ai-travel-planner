@@ -123,6 +123,11 @@
   html {
     @apply font-sans;
   }
+  /* Safety net, as on apple.com: nothing can make the page scroll sideways. `clip` (not `hidden`) keeps sticky headers working. */
+  html,
+  body {
+    overflow-x: clip;
+  }
   /* Tailwind v4 dropped the pointer cursor on buttons; everything clickable shows it, disabled controls don't. */
   button:not(:disabled, [aria-disabled='true']),
   [role='button']:not([aria-disabled='true']),
